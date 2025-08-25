@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # 后端服务（使用Maven本地构建）
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.local
+    container_name: jimuqu-devops-backend-local
+    restart: unless-stopped
+    environment:
+      - SPRING_PROFILES_ACTIVE=local
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    ports:
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./backend/target:/app/target
+      - ./backend/logs:/app/logs
+    networks:
+      - devops-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      timeout: 5s
+      retries: 5
+      interval: 30s
+
+  # 前端开发服务
+  frontend-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: jimuqu-devops-frontend-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - devops-network
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8080
+
+networks:
+  devops-network:
+    driver: bridge
+    name: jimuqu-devops-network-local

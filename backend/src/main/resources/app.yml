@@ -1,0 +1,50 @@
+server.port: 8080
+
+solon.app:
+  name: 'jimuqu-devops'
+  group: 'com.jimuqu'
+
+# 数据库配置（开发环境使用内存数据库）
+# solon.dataSources.main:
+#   driver: com.mysql.cj.jdbc.Driver
+#   url: jdbc:mysql://localhost:3306/jimuqu_devops?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+#   username: root
+#   password: 123456
+#   connectionTimeout: 30000
+#   idleTimeout: 600000
+#   maxLifetime: 1800000
+#   maximumPoolSize: 20
+#   minimumIdle: 5
+
+# Docker 配置
+docker:
+  host: unix:///var/run/docker.sock  # Linux/Mac
+  # host: tcp://localhost:2375      # Windows
+  maxConcurrentBuilds: 3
+  workspaceBasePath: /tmp/jimuqu-devops/workspace
+  
+# Git 配置
+git:
+  defaultBranch: main
+  timeout: 300
+  
+# SSH 配置
+ssh:
+  connectionTimeout: 30000
+  commandTimeout: 300000
+  
+# 通知配置
+notification:
+  enabled: true
+  retryTimes: 3
+  timeout: 10000
+  
+solon.logging:
+  appender:
+    console:
+      level: INFO
+    file:
+      level: INFO
+      path: logs/
+      maxFileSize: 50MB
+      maxHistory: 30
