@@ -2,15 +2,15 @@
 
 </p>
 <p align="center">
-  <a href="https://tdesign.tencent.com/starter/vue-next/#/dashboard/base" target="_blank">
-    <img alt="TDesign Logo" width="200" src="https://tdesign.gtimg.com/starter/brand-logo.svg">
+  <a href="https://jimuqu.com" target="_blank">
+    <img alt="Jimuqu DevOps Logo" width="200" src="https://tdesign.gtimg.com/starter/brand-logo.svg">
   </a>
 </p>
 
 <p align="center">
   <a href="https://nodejs.org/en/about/releases/"><img src="https://img.shields.io/node/v/vite.svg" alt="node compatibility"></a>
-  <a href="https://github.com/Tencent/tdesign-vue-next/blob/develop/LICENSE">
-    <img src="https://img.shields.io/npm/l/tdesign-vue-next.svg?sanitize=true" alt="License">
+  <a href="https://github.com/chengliang4810/jimuqu-devops/blob/master/LICENSE">
+    <img src="https://img.shields.io/npm/l/jimuqu-devops.svg?sanitize=true" alt="License">
   </a>
 </p>
 

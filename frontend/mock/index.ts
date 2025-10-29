@@ -334,27 +334,27 @@ export default [
                   },
                 },
                 {
-                  path: 'TDesign',
-                  name: 'TDesign',
+                  path: 'Jimuqu',
+                  name: 'Jimuqu',
                   component: 'IFrame',
                   meta: {
-                    frameSrc: 'https://tdesign.tencent.com/vue-next/getting-started',
+                    frameSrc: 'https://jimuqu.com',
                     title: {
-                      zh_CN: 'TDesign 文档（内嵌）',
-                      en_US: 'TDesign (IFrame)',
+                      zh_CN: '积木区DevOps（内嵌）',
+                      en_US: 'Jimuqu DevOps (IFrame)',
                     },
                   },
                 },
                 {
-                  path: 'TDesign2',
-                  name: 'TDesign2',
+                  path: 'Jimuqu2',
+                  name: 'Jimuqu2',
                   component: 'IFrame',
                   meta: {
-                    frameSrc: 'https://tdesign.tencent.com/vue-next/getting-started',
+                    frameSrc: 'https://jimuqu.com',
                     frameBlank: true,
                     title: {
-                      zh_CN: 'TDesign 文档（外链',
-                      en_US: 'TDesign Doc(Link)',
+                      zh_CN: '积木区DevOps（外链）',
+                      en_US: 'Jimuqu DevOps Doc(Link)',
                     },
                   },
                 },

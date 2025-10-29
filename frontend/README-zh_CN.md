@@ -3,15 +3,15 @@
 
 </p>
 <p align="center">
-  <a href="https://tdesign.tencent.com/starter/vue-next/#/dashboard/base" target="_blank">
-    <img alt="TDesign Logo" width="200" src="https://tdesign.gtimg.com/starter/brand-logo.svg">
+  <a href="https://jimuqu.com" target="_blank">
+    <img alt="积木区DevOps Logo" width="200" src="https://tdesign.gtimg.com/starter/brand-logo.svg">
   </a>
 </p>
 
 <p align="center">
   <a href="https://nodejs.org/en/about/releases/"><img src="https://img.shields.io/node/v/vite.svg" alt="node compatibility"></a>
-  <a href="https://github.com/Tencent/tdesign-vue-next/blob/develop/LICENSE">
-    <img src="https://img.shields.io/npm/l/tdesign-vue-next.svg?sanitize=true" alt="License">
+  <a href="https://github.com/chengliang4810/jimuqu-devops/blob/master/LICENSE">
+    <img src="https://img.shields.io/npm/l/jimuqu-devops.svg?sanitize=true" alt="License">
   </a>
 </p>
 
@@ -24,7 +24,7 @@
 - **项目官网**: https://jimuqu.com
 - **项目仓库**: https://github.com/chengliang4810/jimuqu-devops
 
-TDesign Vue Next Starter 是一个基于 TDesign，使用 `Vue3`、`Vite`、`Pinia`、`TypeScript` 开发，可进行个性化主题配置，旨在提供项目开箱即用的、配置式的中后台项目。
+积木区DevOps前端项目是基于 TDesign Vue Next 构建的现代化中后台项目，使用 `Vue3`、`Vite`、`Pinia`、`TypeScript` 开发，支持个性化主题配置，旨在提供项目开箱即用的、配置式的DevOps管理界面。
 
 <p>
   <a href="http://tdesign.tencent.com/starter/vue-next/">在线预览</a>
@@ -98,7 +98,7 @@ npm run stylelint:fix
 
 ### 如何贡献
 
-非常欢迎您的贡献！提交您的 [Issue](https://github.com/tencent/tdesign-vue-next-starter/issues/new/choose) 或者提交 [Pull Request](https://github.com/Tencent/tdesign-vue-next-starter/pulls)。
+非常欢迎您的贡献！提交您的 [Issue](https://github.com/chengliang4810/jimuqu-devops/issues/new/choose) 或者提交 [Pull Request](https://github.com/chengliang4810/jimuqu-devops/pulls)。
 
 #### 贡献提交规范
 
@@ -118,5 +118,5 @@ npm run stylelint:fix
 
 ### 开源协议
 
-TDesign 遵循 [MIT 协议](https://github.com/Tencent/tdesign-vue-next-starter/LICENSE)。
+积木区DevOps 遵循 [MIT 协议](https://github.com/chengliang4810/jimuqu-devops/blob/master/LICENSE)。
 
