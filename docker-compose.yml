@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  # Redis服务（用作队列和缓存）
+  redis:
+    image: redis:7-alpine
+    container_name: devops-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  # FastAPI Web服务
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: devops-web
+    ports:
+      - "8000:8000"
+    environment:
+      # 管理员账户（建议修改为强密码）
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: admin123
+
+      # 数据库配置
+      DATABASE_URL: sqlite:///./devops.db
+
+      # Redis配置
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+
+      # 日志级别
+      LOG_LEVEL: INFO
+
+      # 允许调试（开发环境）
+      DEBUG: "true"
+    volumes:
+      # 挂载Docker socket（用于编译时的Docker操作）
+      - /var/run/docker.sock:/var/run/docker.sock
+      # 挂载本地目录（可选，用于持久化数据）
+      - app-data:/app/data
+      - logs:/app/logs
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  # Celery Worker（处理部署任务）
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: devops-worker
+    command: celery -A worker.tasks worker --loglevel=info --concurrency=2
+    environment:
+      DATABASE_URL: sqlite:///./devops.db
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      LOG_LEVEL: INFO
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - app-data:/app/data
+      - logs:/app/logs
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  # Celery Flower（监控面板，可选）
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: devops-flower
+    command: celery -A worker.tasks flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      - redis
+    restart: unless-stopped
+    profiles:
+      - monitoring  # 使用命令 docker-compose --profile monitoring up 启动
+
+volumes:
+  redis-data:
+    driver: local
+  app-data:
+    driver: local
+  logs:
+    driver: local
+
+networks:
+  default:
+    driver: bridge
