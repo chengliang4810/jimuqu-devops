@@ -11,7 +11,7 @@
       <login />
     </div>
 
-    <footer class="copyright">Copyright @ 2024-2025 积木区DevOps (jimuqu.com). All Rights Reserved</footer>
+    <footer class="copyright">Copyright @ 2025 积木区DevOps (jimuqu.com). All Rights Reserved</footer>
   </div>
 </template>
 <script setup lang="ts">

@@ -1,5 +1,5 @@
 <template>
-  <div :class="`${prefix}-footer`">Copyright © 2024-{{ new Date().getFullYear() }} 积木区DevOps (jimuqu.com). All Rights Reserved</div>
+  <div :class="`${prefix}-footer`">Copyright © 2025 积木区DevOps (jimuqu.com). All Rights Reserved</div>
 </template>
 <script setup lang="ts">
 import { prefix } from '@/config/global';
