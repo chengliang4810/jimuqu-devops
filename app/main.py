@@ -8,6 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBasic
 import logging
 from pathlib import Path
+from datetime import datetime, timedelta
+import jwt
+from pydantic import BaseModel
 
 from app.config import settings, create_directories
 from app.database import get_db, create_tables
@@ -43,6 +46,90 @@ app.include_router(projects.router)
 app.include_router(deployments.router)
 app.include_router(webhook.router)
 app.include_router(websocket_router)
+
+
+# 登录模型
+class LoginRequest(BaseModel):
+    userName: str
+    password: str
+
+
+class LoginToken(BaseModel):
+    token: str
+    refreshToken: str
+
+
+class UserInfo(BaseModel):
+    userId: str
+    userName: str
+    roles: list
+    buttons: list
+
+
+# 登录API
+@app.post("/auth/login")
+async def login(request: LoginRequest):
+    """用户登录"""
+    # 验证用户名和密码
+    if request.userName != settings.ADMIN_USERNAME or request.password != settings.ADMIN_PASSWORD:
+        return JSONResponse(
+            status_code=200,
+            content={
+                "code": "1001",
+                "msg": "用户名或密码错误",
+                "data": None
+            }
+        )
+
+    # 生成token
+    expire = datetime.utcnow() + timedelta(days=7)
+    refresh_expire = datetime.utcnow() + timedelta(days=30)
+
+    token_data = {
+        "sub": request.userName,
+        "exp": expire
+    }
+    refresh_token_data = {
+        "sub": request.userName,
+        "exp": refresh_expire,
+        "type": "refresh"
+    }
+
+    # 使用简单密钥（生产环境应该使用更安全的方式）
+    secret_key = "jimuqu-devops-secret-key"
+
+    token = jwt.encode(token_data, secret_key, algorithm="HS256")
+    refresh_token = jwt.encode(refresh_token_data, secret_key, algorithm="HS256")
+
+    return JSONResponse(
+        content={
+            "code": "0000",
+            "msg": "登录成功",
+            "data": {
+                "token": token,
+                "refreshToken": refresh_token
+            }
+        }
+    )
+
+
+# 获取用户信息API
+@app.get("/auth/getUserInfo")
+async def get_user_info():
+    """获取当前用户信息"""
+    return JSONResponse(
+        content={
+            "code": "0000",
+            "msg": "获取成功",
+            "data": {
+                "userId": "admin",
+                "userName": settings.ADMIN_USERNAME,
+                "roles": ["R_SUPER", "R_ADMIN"],
+                "buttons": []
+            }
+        }
+    )
+
 
 # 挂载根路径到前端页面
 @app.get("/", include_in_schema=False)

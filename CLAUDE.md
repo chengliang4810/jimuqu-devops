@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```mermaid
 graph TB
     subgraph "前端层"
-        A[Vue3 + TDesign前端] --> B[http://localhost:5173]
+        A[Vue3 + Naive UI前端] --> B[http://localhost:5173]
     end
 
     subgraph "API层"
@@ -49,7 +49,7 @@ graph TB
 docker-compose up -d
 
 # 手动启动前端
-cd frontend
+cd ui
 pnpm install
 pnpm dev
 ```
@@ -57,7 +57,7 @@ pnpm dev
 ### 前端开发命令
 
 ```bash
-cd frontend
+cd ui
 
 # 开发服务器
 pnpm dev
@@ -66,19 +66,22 @@ pnpm dev
 pnpm build
 
 # 类型检查
-pnpm build:type
+pnpm typecheck
 
 # 代码检查
 pnpm lint
 
-# 代码修复
-pnpm lint:fix
+# 生成路由
+pnpm gen-route
 
-# 样式检查
-pnpm stylelint
+# Git提交
+pnpm commit
 
-# 样式修复
-pnpm stylelint:fix
+# 清理文件
+pnpm cleanup
+
+# 预览构建结果
+pnpm preview
 ```
 
 ### 后端开发命令
@@ -128,156 +131,141 @@ alembic revision --autogenerate -m "描述"
 - **app/websocket.py**: WebSocket实时日志推送
 - **worker/tasks.py**: Celery异步任务
 
-### 前端架构 (Vue3 + TDesign)
+### 前端架构 (Vue3 + Naive UI)
 
-基于 **lithe-admin** 框架：
+基于 **SoybeanAdmin** 框架：
 
-- **技术栈**: Vue 3.5 + TypeScript + Vite 6 + TDesign + Pinia
+- **技术栈**: Vue 3.5 + TypeScript + Vite 7 + Naive UI + UnoCSS + Pinia
+- **项目架构**: pnpm monorepo 单体仓库架构
 - **目录结构**:
-  - `src/pages/`: 页面组件
+  - `src/views/`: 页面组件（基于文件路由自动生成）
   - `src/components/`: 通用组件
-  - `src/stores/`: Pinia状态管理
+  - `src/store/`: Pinia状态管理
+  - `src/service/`: API请求封装
+  - `src/router/`: 路由配置（支持自动化路由）
+  - `src/typings/`: TypeScript类型定义
+  - `src/hooks/`: 自定义Hooks
   - `src/utils/`: 工具函数
-  - `src/api/`: API接口封装
+  - `packages/`: 内部包管理（alova、axios、hooks、materials、utils等）
 
-### 前端模板系统
+### 前端路由系统
 
-项目使用了完整的模板系统，所有新页面开发**必须**参考 `frontend/templates/` 目录中的模板。
+项目使用 **Elegant Router** 自动化文件路由系统：
 
-#### 模板类型和用途
+- **路由生成**: 基于文件结构自动生成路由配置
+- **路由文件**: `src/router/elegant/routes.ts` 自动生成
+- **页面映射**: `src/views/` 目录下的Vue文件自动映射为路由
+- **路由守卫**: 支持权限控制、进度条、标题等路由守卫
+- **动态路由**: 支持前端静态路由和后端动态路由
 
-```mermaid
-graph TD
-    A[页面需求分析] --> B{选择模板类型}
+#### 路由文件结构
 
-    B -->|数据监控| C[Dashboard模板]
-    B -->|信息录入| D[Form模板]
-    B -->|数据展示| E[List模板]
-    B -->|详情查看| F[Detail模板]
-    B -->|用户认证| G[Login模板]
-    B -->|结果反馈| H[Result模板]
-    B -->|用户管理| I[User模板]
-
-    C --> C1[base: 基础仪表板]
-    C --> C2[detail: 详细仪表板]
-
-    D --> D1[base: 基础表单]
-    D --> D2[step: 步骤表单]
-
-    E --> E1[base: 基础列表]
-    E --> E2[card: 卡片列表]
-    E --> E3[filter: 筛选列表]
-    E --> E4[tree: 树形列表]
-
-    F --> F1[base: 基础详情]
-    F --> F2[advanced: 高级详情]
-    F --> F3[deploy: 部署详情]
-    F --> F4[secondary: 次要详情]
-
-    H --> H1[success/fail: 成功失败]
-    H --> H2[403/404/500: 错误页面]
-    H --> H3[network-error: 网络错误]
-    H --> H4[maintenance: 系统维护]
+```
+src/views/
+├── _builtin/           # 内置页面（403、404、500、login等）
+│   ├── 403/index.vue
+│   ├── 404/index.vue
+│   ├── 500/index.vue
+│   └── login/index.vue
+├── home/               # 首页
+│   └── index.vue
+└── [feature-name]/     # 功能模块
+    └── index.vue
 ```
 
-#### 模板使用流程
+### 前端状态管理
 
-1. **需求分析**: 明确页面功能需求和交互逻辑
-2. **模板选择**: 根据功能需求选择合适的模板类型
-3. **代码复制**: 从 `frontend/templates/pages/` 复制对应模板到 `src/pages/`
-4. **配置修改**: 修改页面配置、路由、API接口等
-5. **样式调整**: 根据设计稿调整页面样式和布局
-6. **功能扩展**: 添加业务逻辑和自定义功能
-7. **测试验证**: 完成功能测试和兼容性测试
+使用 **Pinia** 进行状态管理：
 
-#### 核心模板详解
+- **模块化**: 每个功能模块独立store
+- **类型安全**: 完整的TypeScript类型定义
+- **持久化**: 支持本地存储持久化
+- **核心模块**:
+  - `auth`: 用户认证和权限管理
+  - `route`: 路由信息和菜单管理
+  - `theme`: 主题配置和样式管理
+  - `app`: 应用全局状态
+  - `tab`: 标签页管理
 
-**Dashboard模板** (`frontend/templates/pages/dashboard/`)
-- **用途**: 数据可视化、监控面板、统计分析页面
-- **特点**: 图表展示、数据卡片、实时更新
-- **组件**: TopPanel、MiddleChart、RankList、OutputOverview
-- **技术**: ECharts + TDesign + 响应式布局
+### 前端样式系统
 
-**Form模板** (`frontend/templates/pages/form/`)
-- **用途**: 数据录入、信息配置、设置页面
-- **特点**: 表单验证、文件上传、步骤式表单
-- **组件**: 基础表单、步骤表单、多种输入控件
-- **验证**: 完整的表单验证规则和错误处理
+使用 **UnoCSS** 原子化CSS框架：
 
-**List模板** (`frontend/templates/pages/list/`)
-- **用途**: 数据展示、列表管理、搜索过滤
-- **特点**: 表格展示、分页、排序、筛选、批量操作
-- **组件**: 基础列表、卡片列表、筛选列表、树形列表
-- **功能**: 搜索、高级筛选、虚拟滚动、数据缓存
+- **原子化**: 基于类的原子化CSS
+- **主题系统**: 支持深色/浅色主题切换
+- **响应式**: 内置响应式设计支持
+- **组件库**: Naive UI组件库
+- **主题配置**: `src/theme/settings.ts` 统一主题配置
 
-#### 开发规范
+### 前端组件系统
 
-**命名规范**:
-- 组件名：`UserProfile.vue` (PascalCase)
-- 文件名：`user-profile.vue` (kebab-case)
-- 常量：`API_BASE_URL` (UPPER_SNAKE_CASE)
-- 变量：`userName` (camelCase)
+#### 内置组件包
 
-**代码结构**:
+项目包含多个内部组件包：
+
+- **@sa/materials**: 布局组件（AdminLayout、PageTab、SimpleScrollbar）
+- **@sa/hooks**: 自定义Hooks（useRequest、useTable、useBoolean等）
+- **@sa/utils**: 工具函数库
+- **@sa/axios**: HTTP请求封装
+- **@sa/alova**: 数据获取库
+
+#### 组件开发规范
+
 ```vue
 <script setup lang="ts">
 // 1. 导入依赖
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import { defineStore } from 'pinia';
 
-// 2. 定义类型
-interface Props {
-  title: string;
-}
-
-// 3. 组件配置
+// 2. 组件配置
 defineOptions({
   name: 'ComponentName',
 });
 
-// 4. 响应式数据
-const data = ref();
+// 3. 类型定义
+interface Props {
+  title: string;
+  disabled?: boolean;
+}
 
-// 5. 生命周期
+// 4. Props和Emits
+const props = withDefaults(defineProps<Props>(), {
+  disabled: false,
+});
+
+const emit = defineEmits<{
+  change: [value: string];
+  click: [event: MouseEvent];
+}>();
+
+// 5. 响应式数据
+const count = ref(0);
+const isVisible = ref(false);
+
+// 6. 计算属性
+const doubledCount = computed(() => count.value * 2);
+
+// 7. 方法
+const handleClick = () => {
+  count.value++;
+  emit('change', count.value.toString());
+};
+
+// 8. 生命周期
 onMounted(() => {
   // 初始化逻辑
 });
 </script>
-```
 
-**样式规范**:
-- 使用TDesign CSS变量：`var(--td-comp-padding-xl)`
-- 响应式设计：桌面端、平板端、移动端适配
-- 样式隔离：使用 `scoped` CSS
+<template>
+  <div class="component-wrapper">
+    <!-- 模板内容 -->
+  </div>
+</template>
 
-#### 最佳实践
-
-**✅ 推荐做法**:
-- 保持与模板相同的代码结构
-- 使用TypeScript类型定义
-- 遵循Vue 3 Composition API规范
-- 添加适当的错误处理和加载状态
-- 使用语义化HTML和无障碍访问
-
-**❌ 避免做法**:
-- 直接修改模板文件
-- 硬编码业务数据
-- 忽略类型安全
-- 破坏组件结构
-- 缺少错误处理
-
-#### 文件组织结构
-
-```
-src/pages/feature-name/
-├── index.vue              # 主页面文件
-├── components/            # 页面专用组件
-│   ├── ComponentA.vue
-│   └── ComponentB.vue
-├── constants.ts           # 常量定义
-├── types.ts              # 类型定义
-├── api.ts                # API接口
-├── utils.ts              # 工具函数
-└── index.less            # 样式文件
+<style scoped>
+/* 组件样式 */
+</style>
 ```
 
 ## 关键配置
@@ -336,11 +324,14 @@ LOG_LEVEL=INFO
 
 ### 前端开发
 
-- **页面开发**: 必须使用 `frontend/templates/` 中的模板
+- **页面开发**: 基于文件路由系统，在 `src/views/` 目录下创建页面
 - **组件命名**: PascalCase
 - **文件命名**: kebab-case
 - **状态管理**: 使用Pinia，每个模块独立store
-- **API调用**: 在store中封装，避免组件直接调用
+- **API调用**: 在 `src/service/` 中封装API请求
+- **样式开发**: 使用UnoCSS原子化类和Naive UI组件
+- **类型安全**: 严格的TypeScript类型检查
+- **代码规范**: 集成ESLint和Prettier，遵循SoybeanJS规范
 - **菜单设计**: 前端左侧菜单只制作一级菜单，不使用二级菜单的方式。所有功能模块都应该在一级菜单中直接访问，避免复杂的嵌套菜单结构
 
 ### 后端开发
@@ -387,11 +378,19 @@ docker-compose logs -f redis
 2. 在前端 `src/constants/` 中添加语言选项
 3. 更新项目配置表单
 
-### 添加新的通知方式
+### 添加新页面
 
-1. 在 `worker/tasks.py` 中扩展通知逻辑
-2. 在项目配置中添加通知设置
-3. 实现对应的通知服务
+1. 在 `src/views/` 目录下创建新的页面文件夹和index.vue
+2. 使用 `pnpm gen-route` 自动生成路由配置
+3. 在路由meta中配置页面标题、图标等信息
+4. 如需权限控制，在meta中添加权限配置
+
+### 添加新组件
+
+1. 通用组件放在 `src/components/` 目录
+2. 页面专用组件放在对应页面的 `components/` 子目录
+3. 使用TypeScript定义组件Props和Emits类型
+4. 遵循Vue 3 Composition API规范
 
 ## 性能优化
 
