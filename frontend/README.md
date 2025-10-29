@@ -14,8 +14,14 @@
   </a>
 </p>
 
-English | [简体中文](./README-zh_CN.md) 
+English | [简体中文](./README-zh_CN.md)
+
 ### Introduction
+
+**Jimuqu DevOps Platform (jimuqu-devops)** Frontend Project - A modern DevOps automated deployment platform frontend interface based on TDesign Vue Next.
+
+- **Official Website**: https://jimuqu.com
+- **Project Repository**: https://github.com/chengliang4810/jimuqu-devops
 
 TDesign Vue Next Starter is a TDesign-based developed with `Vue 3`, `Vite`, `Pinia`, `TypeScript`. It can be customized theme configuration, and aims to provide project out-of-the-box, configuration-style middle and background projects.
 

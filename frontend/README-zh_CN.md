@@ -15,9 +15,14 @@
   </a>
 </p>
 
-简体中文 | [English](./README.md) 
+简体中文 | [English](./README.md)
 
 ### 项目简介
+
+**积木区DevOps (jimuqu-devops)** 前端项目 - 基于 TDesign Vue Next 的现代化DevOps自动化部署平台前端界面。
+
+- **项目官网**: https://jimuqu.com
+- **项目仓库**: https://github.com/chengliang4810/jimuqu-devops
 
 TDesign Vue Next Starter 是一个基于 TDesign，使用 `Vue3`、`Vite`、`Pinia`、`TypeScript` 开发，可进行个性化主题配置，旨在提供项目开箱即用的、配置式的中后台项目。
 

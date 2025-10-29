@@ -1,8 +1,9 @@
 {
-  "name": "jimu-devops-frontend",
+  "name": "jimuqu-devops-frontend",
   "version": "1.0.0",
-  "description": "devops前端",
+  "description": "积木区DevOps前端平台 - Jimuqu DevOps Platform Frontend",
   "type": "module",
+  "homepage": "https://jimuqu.com",
   "scripts": {
     "dev:mock": "vite --open --mode mock",
     "dev": "vite --open --mode development",
