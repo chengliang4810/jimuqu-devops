@@ -32,6 +32,7 @@ export const views: Record<LastLevelRouteKey, RouteComponent | (() => Promise<Ro
   function_tab: () => import("@/views/function/tab/index.vue"),
   "function_toggle-auth": () => import("@/views/function/toggle-auth/index.vue"),
   home: () => import("@/views/home/index.vue"),
+  hosts: () => import("@/views/hosts/index.vue"),
   manage_menu: () => import("@/views/manage/menu/index.vue"),
   manage_role: () => import("@/views/manage/role/index.vue"),
   "manage_user-detail": () => import("@/views/manage/user-detail/[id].vue"),
@@ -62,5 +63,6 @@ export const views: Record<LastLevelRouteKey, RouteComponent | (() => Promise<Ro
   "pro-naive_form_step": () => import("@/views/pro-naive/form/step/index.vue"),
   "pro-naive_table_remote": () => import("@/views/pro-naive/table/remote/index.vue"),
   "pro-naive_table_row-edit": () => import("@/views/pro-naive/table/row-edit/index.vue"),
+  projects: () => import("@/views/projects/index.vue"),
   "user-center": () => import("@/views/user-center/index.vue"),
 };

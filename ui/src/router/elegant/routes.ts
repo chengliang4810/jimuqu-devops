@@ -214,6 +214,17 @@ export const generatedRoutes: GeneratedRoute[] = [
     }
   },
   {
+    name: 'hosts',
+    path: '/hosts',
+    component: 'layout.base$view.hosts',
+    meta: {
+      title: 'hosts',
+      i18nKey: 'route.hosts',
+      icon: 'mdi:server',
+      order: 2
+    }
+  },
+  {
     name: 'iframe-page',
     path: '/iframe-page/:url',
     component: 'layout.base$view.iframe-page',
@@ -246,7 +257,7 @@ export const generatedRoutes: GeneratedRoute[] = [
       title: 'manage',
       i18nKey: 'route.manage',
       icon: 'carbon:cloud-service-management',
-      order: 9,
+      order: 10,
       roles: ['R_ADMIN']
     },
     children: [
@@ -690,6 +701,15 @@ export const generatedRoutes: GeneratedRoute[] = [
         ]
       }
     ]
+  },
+  {
+    name: 'projects',
+    path: '/projects',
+    component: 'layout.base$view.projects',
+    meta: {
+      title: 'projects',
+      i18nKey: 'route.projects'
+    }
   },
   {
     name: 'user-center',

@@ -262,6 +262,7 @@ const local: App.I18n.Schema = {
     'manage_user-detail': '用户详情',
     manage_role: '角色管理',
     manage_menu: '菜单管理',
+    hosts: '主机管理',
     'multi-menu': '多级菜单',
     'multi-menu_first': '菜单一',
     'multi-menu_first_child': '菜单一子菜单',
@@ -630,6 +631,53 @@ const local: App.I18n.Schema = {
         iconType: {
           iconify: 'iconify图标',
           local: '本地图标'
+        }
+      },
+      host: {
+        title: '主机管理',
+        name: '主机名称',
+        host: '主机地址',
+        port: '端口',
+        username: '用户名',
+        description: '描述',
+        group: '主机分组',
+        tags: '标签',
+        status: '连接状态',
+        osInfo: '系统信息',
+        lastConnected: '最后连接',
+        isActive: '状态',
+        testConnection: '测试连接',
+        addHost: '新增主机',
+        editHost: '编辑主机',
+        searchKeyword: '搜索关键词',
+        form: {
+          name: '请输入主机名称',
+          host: '请输入主机地址(IP或域名)',
+          port: '请输入SSH端口',
+          username: '请输入SSH用户名',
+          description: '请输入主机描述',
+          group: '请输入主机分组',
+          tags: '请输入主机标签，多个标签用逗号分隔',
+          status: '请选择连接状态',
+          isActive: '请选择状态',
+          searchPlaceholder: '支持搜索主机名称、地址、描述、用户名',
+          tips: '建议优先使用SSH密钥认证，更安全可靠',
+          portInvalid: '端口号必须在1-65535之间'
+        },
+        auth: {
+          title: 'SSH认证配置',
+          keyPath: 'SSH私钥路径',
+          keyPathPlaceholder: '请输入SSH私钥文件路径，如: ~/.ssh/id_rsa',
+          password: 'SSH密码',
+          passwordPlaceholder: '请输入SSH密码（建议使用密钥认证）'
+        },
+        organization: {
+          title: '分组和标签'
+        },
+        status: {
+          notConnected: '未连接',
+          normal: '正常',
+          abnormal: '异常'
         }
       }
     }

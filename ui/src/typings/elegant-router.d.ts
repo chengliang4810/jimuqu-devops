@@ -50,6 +50,7 @@ declare module "@elegant-router/types" {
     "function_tab": "/function/tab";
     "function_toggle-auth": "/function/toggle-auth";
     "home": "/home";
+    "hosts": "/hosts";
     "iframe-page": "/iframe-page/:url";
     "login": "/login/:module(pwd-login)?";
     "manage": "/manage";
@@ -95,6 +96,7 @@ declare module "@elegant-router/types" {
     "pro-naive_table": "/pro-naive/table";
     "pro-naive_table_remote": "/pro-naive/table/remote";
     "pro-naive_table_row-edit": "/pro-naive/table/row-edit";
+    "projects": "/projects";
     "user-center": "/user-center";
   };
 
@@ -149,12 +151,14 @@ declare module "@elegant-router/types" {
     | "alova"
     | "function"
     | "home"
+    | "hosts"
     | "iframe-page"
     | "login"
     | "manage"
     | "multi-menu"
     | "plugin"
     | "pro-naive"
+    | "projects"
     | "user-center"
   >;
 
@@ -191,6 +195,7 @@ declare module "@elegant-router/types" {
     | "function_tab"
     | "function_toggle-auth"
     | "home"
+    | "hosts"
     | "manage_menu"
     | "manage_role"
     | "manage_user-detail"
@@ -221,6 +226,7 @@ declare module "@elegant-router/types" {
     | "pro-naive_form_step"
     | "pro-naive_table_remote"
     | "pro-naive_table_row-edit"
+    | "projects"
     | "user-center"
   >;
 

@@ -27,3 +27,12 @@ export const menuIconTypeRecord: Record<Api.SystemManage.IconType, App.I18n.I18n
 };
 
 export const menuIconTypeOptions = transformRecordToOption(menuIconTypeRecord);
+
+// Host management related constants
+export const hostStatusRecord: Record<Api.Host.HostStatus, App.I18n.I18nKey> = {
+  '未连接': 'page.host.status.notConnected',
+  '正常': 'page.host.status.normal',
+  '异常': 'page.host.status.abnormal'
+};
+
+export const hostStatusOptions = transformRecordToOption(hostStatusRecord);

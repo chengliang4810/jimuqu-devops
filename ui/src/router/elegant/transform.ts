@@ -196,6 +196,7 @@ const routeMap: RouteMap = {
   "function_tab": "/function/tab",
   "function_toggle-auth": "/function/toggle-auth",
   "home": "/home",
+  "hosts": "/hosts",
   "iframe-page": "/iframe-page/:url",
   "login": "/login/:module(pwd-login)?",
   "manage": "/manage",
@@ -241,6 +242,7 @@ const routeMap: RouteMap = {
   "pro-naive_table": "/pro-naive/table",
   "pro-naive_table_remote": "/pro-naive/table/remote",
   "pro-naive_table_row-edit": "/pro-naive/table/row-edit",
+  "projects": "/projects",
   "user-center": "/user-center"
 };
 

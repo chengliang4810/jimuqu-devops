@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from app.config import settings, create_directories
 from app.database import get_db, create_tables
 from app.auth import get_current_active_user
-from app.api import projects, deployments, webhook
+from app.api import projects, deployments, webhook, hosts
 from app.websocket import router as websocket_router
 
 # 创建应用
@@ -45,6 +45,7 @@ if static_dir.exists():
 app.include_router(projects.router)
 app.include_router(deployments.router)
 app.include_router(webhook.router)
+app.include_router(hosts.router)
 app.include_router(websocket_router)
 
 

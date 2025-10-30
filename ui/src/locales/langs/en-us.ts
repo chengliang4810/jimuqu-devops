@@ -265,6 +265,7 @@ const local: App.I18n.Schema = {
     'manage_user-detail': 'User Detail',
     manage_role: 'Role Manage',
     manage_menu: 'Menu Manage',
+    hosts: 'Host Manage',
     'multi-menu': 'Multi Menu',
     'multi-menu_first': 'Menu One',
     'multi-menu_first_child': 'Menu One Child',
@@ -633,6 +634,53 @@ const local: App.I18n.Schema = {
         iconType: {
           iconify: 'Iconify Icon',
           local: 'Local Icon'
+        }
+      },
+      host: {
+        title: 'Host Management',
+        name: 'Host Name',
+        host: 'Host Address',
+        port: 'Port',
+        username: 'Username',
+        description: 'Description',
+        group: 'Host Group',
+        tags: 'Tags',
+        status: 'Connection Status',
+        osInfo: 'OS Info',
+        lastConnected: 'Last Connected',
+        isActive: 'Status',
+        testConnection: 'Test Connection',
+        addHost: 'Add Host',
+        editHost: 'Edit Host',
+        searchKeyword: 'Search Keyword',
+        form: {
+          name: 'Please enter host name',
+          host: 'Please enter host address (IP or domain)',
+          port: 'Please enter SSH port',
+          username: 'Please enter SSH username',
+          description: 'Please enter host description',
+          group: 'Please enter host group',
+          tags: 'Please enter host tags, separated by commas',
+          status: 'Please select connection status',
+          isActive: 'Please select status',
+          searchPlaceholder: 'Search host name, address, description, username',
+          tips: 'SSH key authentication is recommended for better security',
+          portInvalid: 'Port must be between 1-65535'
+        },
+        auth: {
+          title: 'SSH Authentication',
+          keyPath: 'SSH Key Path',
+          keyPathPlaceholder: 'Enter SSH private key path, e.g: ~/.ssh/id_rsa',
+          password: 'SSH Password',
+          passwordPlaceholder: 'Enter SSH password (key auth recommended)'
+        },
+        organization: {
+          title: 'Group & Tags'
+        },
+        status: {
+          notConnected: 'Not Connected',
+          normal: 'Normal',
+          abnormal: 'Abnormal'
         }
       }
     }

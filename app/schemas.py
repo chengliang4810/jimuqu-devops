@@ -126,3 +126,68 @@ class DashboardStats(BaseModel):
     today_deployments: int
     success_rate: float
     average_duration: int
+
+
+# ===== 主机管理模型 =====
+class HostBase(BaseModel):
+    """主机基础模型"""
+    name: str = Field(..., description="主机名称", min_length=1, max_length=100)
+    description: Optional[str] = Field(None, description="主机描述")
+    host: str = Field(..., description="主机地址(IP或域名)", min_length=1, max_length=100)
+    port: int = Field(22, description="SSH端口", ge=1, le=65535)
+    username: str = Field(..., description="SSH用户名", min_length=1, max_length=50)
+    ssh_key_path: Optional[str] = Field(None, description="SSH私钥路径")
+    ssh_password: Optional[str] = Field(None, description="SSH密码")
+    tags: Optional[str] = Field(None, description="主机标签,逗号分隔")
+    group: Optional[str] = Field(None, description="主机分组")
+
+
+class HostCreate(HostBase):
+    """创建主机"""
+    pass
+
+
+class HostUpdate(BaseModel):
+    """更新主机"""
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = None
+    host: Optional[str] = Field(None, min_length=1, max_length=100)
+    port: Optional[int] = Field(None, ge=1, le=65535)
+    username: Optional[str] = Field(None, min_length=1, max_length=50)
+    ssh_key_path: Optional[str] = None
+    ssh_password: Optional[str] = None
+    tags: Optional[str] = None
+    group: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class HostResponse(HostBase):
+    """主机响应模型"""
+    id: int
+    status: str = Field(..., description="连接状态")
+    last_connected_at: Optional[datetime] = None
+    os_type: Optional[str] = None
+    os_version: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class HostListResponse(BaseModel):
+    """主机列表响应"""
+    hosts: List[HostResponse]
+    total: int
+    page: int
+    size: int
+    pages: int
+
+
+class HostTestConnection(BaseModel):
+    """主机连接测试"""
+    success: bool
+    message: str
+    response_time: Optional[float] = None
+    os_info: Optional[dict] = None
