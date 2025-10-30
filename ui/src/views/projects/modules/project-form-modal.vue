@@ -190,7 +190,7 @@ async function handleSubmit() {
   <ConfigProvider :locale="zhCN">
     <div class="color-#000">
       <div class="flex flex-col items-center justify-center">
-        <div class="flex justify-center w-full mb-8">
+        <div class="flex justify-center w-full mb-8 ml-200px">
           <NSteps :current="step" class="max-w-2xl">
             <NStep title="基本配置" />
             <NStep title="通知配置" />

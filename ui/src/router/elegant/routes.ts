@@ -708,7 +708,9 @@ export const generatedRoutes: GeneratedRoute[] = [
     component: 'layout.base$view.projects',
     meta: {
       title: 'projects',
-      i18nKey: 'route.projects'
+      i18nKey: 'route.projects',
+      icon: 'mdi:rocket-launch',
+      order: 3
     }
   },
   {
