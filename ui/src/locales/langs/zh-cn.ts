@@ -643,7 +643,7 @@ const local: App.I18n.Schema = {
         description: '描述',
         group: '主机分组',
         tags: '标签',
-        status: '连接状态',
+        connectionStatus: '连接状态',
         osInfo: '系统信息',
         lastConnected: '最后连接',
         isActive: '状态',

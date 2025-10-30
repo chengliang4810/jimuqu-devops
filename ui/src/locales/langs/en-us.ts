@@ -646,7 +646,7 @@ const local: App.I18n.Schema = {
         description: 'Description',
         group: 'Host Group',
         tags: 'Tags',
-        status: 'Connection Status',
+        connectionStatus: 'Connection Status',
         osInfo: 'OS Info',
         lastConnected: 'Last Connected',
         isActive: 'Status',
