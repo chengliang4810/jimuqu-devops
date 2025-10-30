@@ -122,3 +122,20 @@ logs/
 data/
 uploads/
 *.pid
+
+# Frontend (ui directory)
+ui/node_modules/
+ui/dist/
+ui/dist-ssr/
+ui/coverage/
+ui/*.local
+ui/.DS_Store
+ui/.VSCodeCounter
+ui/.idea/
+ui/package-lock.json
+ui/yarn.lock
+ui/pnpm-lock.yaml
+ui/.env.local
+ui/.env.production
+ui/.env.test
+ui/.env.development
