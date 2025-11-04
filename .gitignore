@@ -102,7 +102,7 @@ vite.config.ts.*
 **/backend/deploy/
 **/backend/docker-compose.override.yml
 
-# 操作系统 - Windows
+# Windows - 系统和临时文件
 Thumbs.db
 ehthumbs.db
 Desktop.ini
@@ -113,6 +113,7 @@ $RECYCLE.BIN/
 *.msm
 *.msp
 *.lnk
+nul
 
 # 操作系统 - macOS
 .DS_Store
