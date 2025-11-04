@@ -6,32 +6,32 @@ import { defineOverridesPreferences } from '@vben/preferences';
  * !!! 更改配置后请清空缓存，否则可能不生效
  */
 export const overridesPreferences = defineOverridesPreferences({
-  "app": {
-    "defaultHomePath": "/home",
-    "enableCheckUpdates": false
+  app: {
+    defaultHomePath: '/home',
+    enableCheckUpdates: false,
   },
-  "breadcrumb": {
-    "showHome": true
+  breadcrumb: {
+    showHome: false,
   },
-  "shortcutKeys": {
-    "enable": false
+  shortcutKeys: {
+    enable: false,
   },
-  "tabbar": {
-    "showMaximize": false,
-    "showMore": false
+  tabbar: {
+    showMaximize: false,
+    showMore: false,
   },
-  "theme": {
-    "builtinType": "deep-blue",
-    "colorPrimary": "hsl(211 91% 39%)",
-    "mode": "light",
-    "radius": "0.75"
+  theme: {
+    builtinType: 'deep-blue',
+    colorPrimary: 'hsl(211 91% 39%)',
+    mode: 'light',
+    radius: '0.75',
   },
-  "widget": {
-    "globalSearch": false,
-    "languageToggle": false,
-    "lockScreen": false,
-    "notification": false,
-    "themeToggle": false,
-    "timezone": false
-  }
+  widget: {
+    globalSearch: false,
+    languageToggle: false,
+    lockScreen: false,
+    notification: false,
+    themeToggle: false,
+    timezone: false,
+  },
 });

@@ -1,6 +1,7 @@
 import type { RouteRecordRaw } from 'vue-router';
 
 import { LOGIN_PATH } from '@vben/constants';
+import { preferences } from '@vben/preferences';
 
 import { $t } from '#/locales';
 
@@ -19,10 +20,10 @@ const fallbackNotFoundRoute: RouteRecordRaw = {
   path: '/:path(.*)*',
 };
 
-/** 基本路由，这些路由是必须存在�?*/
+/** 基本路由，这些路由是必须存在�?*/
 const coreRoutes: RouteRecordRaw[] = [
   /**
-   * 根路�?   * 使用基础布局，作为所有页面的父级容器，子级就不必配置BasicLayout�?   * 此路由必须存在，且不应修�?   */
+   * 根路�?   * 使用基础布局，作为所有页面的父级容器，子级就不必配置BasicLayout�?   * 此路由必须存在，且不应修�?   */
   {
     component: BasicLayout,
     meta: {
@@ -31,17 +32,8 @@ const coreRoutes: RouteRecordRaw[] = [
     },
     name: 'Root',
     path: '/',
-    children: [
-      {
-        name: 'Home',
-        path: '',
-        component: () => import('#/views/dashboard/analytics/index.vue'),
-        meta: {
-          title: '首页',
-          icon: 'mdi:home-outline',
-        },
-      },
-    ]
+    redirect: preferences.app.defaultHomePath,
+    children: [],
   },
   {
     component: AuthPageLayout,
