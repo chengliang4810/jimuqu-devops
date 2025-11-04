@@ -1,0 +1,37 @@
+import { defineOverridesPreferences } from '@vben/preferences';
+
+/**
+ * @description 项目配置文件
+ * 只需要覆盖项目中的一部分配置，不需要的配置不用覆盖，会自动使用默认配置
+ * !!! 更改配置后请清空缓存，否则可能不生效
+ */
+export const overridesPreferences = defineOverridesPreferences({
+  "app": {
+    "defaultHomePath": "/home",
+    "enableCheckUpdates": false
+  },
+  "breadcrumb": {
+    "showHome": true
+  },
+  "shortcutKeys": {
+    "enable": false
+  },
+  "tabbar": {
+    "showMaximize": false,
+    "showMore": false
+  },
+  "theme": {
+    "builtinType": "deep-blue",
+    "colorPrimary": "hsl(211 91% 39%)",
+    "mode": "light",
+    "radius": "0.75"
+  },
+  "widget": {
+    "globalSearch": false,
+    "languageToggle": false,
+    "lockScreen": false,
+    "notification": false,
+    "themeToggle": false,
+    "timezone": false
+  }
+});

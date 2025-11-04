@@ -1,0 +1,1618 @@
+basePath: /
+definitions:
+  models.CustomTime:
+    properties:
+      time.Time:
+        type: string
+    type: object
+  models.DeployConfigCreateRequest:
+    type: object
+  models.DeployConfigItem:
+    type: object
+  models.DeployConfigUpdateRequest:
+    type: object
+  models.DeployRecordCreateRequest:
+    properties:
+      branch:
+        description: 分支
+        example: main
+        type: string
+      duration:
+        description: 耗时（秒）
+        example: 300
+        type: integer
+      log_path:
+        description: 日志文件路径
+        example: /var/log/deploy/20240101_120000.log
+        type: string
+      project_id:
+        description: 项目ID
+        example: 1
+        type: integer
+      project_name:
+        description: 项目名称
+        example: 我的项目
+        type: string
+      start_time:
+        description: 开始执行时间
+        example: "2024-01-01 12:00:00"
+        type: string
+      status:
+        description: 部署状态：running, success, failed
+        example: running
+        type: string
+    required:
+    - branch
+    - project_id
+    - project_name
+    - start_time
+    type: object
+  models.DeployRecordUpdateRequest:
+    properties:
+      branch:
+        description: 分支
+        example: main
+        type: string
+      duration:
+        description: 耗时（秒）
+        example: 300
+        type: integer
+      log_path:
+        description: 日志文件路径
+        example: /var/log/deploy/20240101_120000.log
+        type: string
+      project_id:
+        description: 项目ID
+        example: 1
+        type: integer
+      project_name:
+        description: 项目名称
+        example: 我的项目
+        type: string
+      start_time:
+        description: 开始执行时间
+        example: "2024-01-01 12:00:00"
+        type: string
+      status:
+        description: 部署状态：running, success, failed
+        example: success
+        type: string
+    type: object
+  models.DirectoryFileItem:
+    properties:
+      content:
+        description: 文件内容
+        example: Hello World
+        type: string
+      is_dir:
+        description: 是否为目录
+        example: false
+        type: boolean
+      path:
+        description: 相对路径
+        example: subdir/file.txt
+        type: string
+      permissions:
+        description: 文件权限（可选）
+        example: "0644"
+        type: string
+    required:
+    - content
+    - path
+    type: object
+  models.DirectoryUploadRequest:
+    properties:
+      files:
+        description: 文件列表
+        items:
+          $ref: '#/definitions/models.DirectoryFileItem'
+        type: array
+      host_id:
+        description: 主机ID
+        example: 1
+        type: integer
+      overwrite:
+        description: 是否覆盖已存在的文件
+        example: true
+        type: boolean
+      remote_path:
+        description: 远程目录路径
+        example: /root/test_dir
+        type: string
+    required:
+    - files
+    - host_id
+    - remote_path
+    type: object
+  models.DockerBuildRequest:
+    properties:
+      build_args:
+        additionalProperties:
+          type: string
+        description: 构建参数
+        type: object
+      context_path:
+        description: 构建上下文路径
+        example: .
+        type: string
+      dockerfile:
+        description: Dockerfile路径
+        example: Dockerfile
+        type: string
+      host_id:
+        description: 主机ID
+        example: 1
+        type: integer
+      image_name:
+        description: 镜像名称
+        example: devops-app
+        type: string
+      image_tag:
+        description: 镜像标签
+        example: latest
+        type: string
+      timeout:
+        description: 超时时间（秒）
+        example: 300
+        type: integer
+    required:
+    - host_id
+    - image_name
+    type: object
+  models.DockerInfoRequest:
+    properties:
+      host_id:
+        description: 主机ID
+        example: 1
+        type: integer
+    required:
+    - host_id
+    type: object
+  models.DockerRunRequest:
+    properties:
+      command:
+        description: 运行命令
+        example: ./app
+        type: string
+      container_name:
+        description: 容器名称
+        example: test-container
+        type: string
+      detach:
+        description: 是否后台运行
+        example: true
+        type: boolean
+      env_vars:
+        additionalProperties:
+          type: string
+        description: 环境变量
+        type: object
+      host_id:
+        description: 主机ID
+        example: 1
+        type: integer
+      image_name:
+        description: 镜像名称
+        example: devops-app
+        type: string
+      image_tag:
+        description: 镜像标签
+        example: latest
+        type: string
+      port_bindings:
+        additionalProperties:
+          type: string
+        description: 端口绑定
+        type: object
+      timeout:
+        description: 超时时间（秒）
+        example: 60
+        type: integer
+      volumes:
+        description: 卷映射
+        items:
+          $ref: '#/definitions/models.DockerVolumeMapping'
+        type: array
+    required:
+    - host_id
+    - image_name
+    type: object
+  models.DockerVolumeMapping:
+    properties:
+      container_path:
+        description: 容器路径
+        example: /container/path
+        type: string
+      host_path:
+        description: 主机路径
+        example: /host/path
+        type: string
+      mode:
+        description: 读写模式：rw/ro
+        example: rw
+        type: string
+    type: object
+  models.FileUploadRequest:
+    properties:
+      content:
+        description: 文件内容
+        example: Hello World
+        type: string
+      host_id:
+        description: 主机ID
+        example: 1
+        type: integer
+      overwrite:
+        description: 是否覆盖已存在的文件
+        example: true
+        type: boolean
+      permissions:
+        description: 文件权限（可选）
+        example: "0644"
+        type: string
+      remote_path:
+        description: 远程路径
+        example: /root/test.txt
+        type: string
+    required:
+    - content
+    - host_id
+    - remote_path
+    type: object
+  models.Host:
+    properties:
+      auth_type:
+        description: password, key
+        type: string
+      created_at:
+        $ref: '#/definitions/models.CustomTime'
+      host:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      password:
+        type: string
+      port:
+        type: integer
+      remark:
+        description: 备注信息
+        type: string
+      status:
+        description: online, offline
+        type: string
+      updated_at:
+        $ref: '#/definitions/models.CustomTime'
+      username:
+        type: string
+    type: object
+  models.ProjectCreateRequest:
+    properties:
+      code:
+        description: 项目编码
+        example: PROJECT001
+        type: string
+      git_password:
+        description: Git密码
+        example: gitpassword
+        type: string
+      git_repo:
+        description: Git仓库地址
+        example: https://github.com/user/repo.git
+        type: string
+      git_username:
+        description: Git用户名
+        example: gituser
+        type: string
+      name:
+        description: 项目名称
+        example: 我的项目
+        type: string
+      remark:
+        description: 备注
+        example: 项目备注信息
+        type: string
+    required:
+    - code
+    - name
+    type: object
+  models.ProjectUpdateRequest:
+    properties:
+      code:
+        description: 项目编码
+        example: PROJECT001
+        type: string
+      git_password:
+        description: Git密码
+        example: gitpassword
+        type: string
+      git_repo:
+        description: Git仓库地址
+        example: https://github.com/user/repo.git
+        type: string
+      git_username:
+        description: Git用户名
+        example: gituser
+        type: string
+      name:
+        description: 项目名称
+        example: 我的项目
+        type: string
+      remark:
+        description: 备注
+        example: 项目备注信息
+        type: string
+    type: object
+  models.Response:
+    properties:
+      code:
+        description: 状态码：200成功，其他失败
+        example: 200
+        type: integer
+      data:
+        description: 数据：具体返回数据
+      message:
+        description: 消息：成功或失败原因
+        example: 操作成功
+        type: string
+    type: object
+  models.SSHCommandRequest:
+    properties:
+      command:
+        description: 要执行的命令
+        example: echo 'hello word'
+        type: string
+      host_id:
+        description: 主机ID
+        example: 1
+        type: integer
+      timeout:
+        description: 超时时间（秒），默认30秒
+        example: 30
+        type: integer
+    required:
+    - command
+    - host_id
+    type: object
+host: localhost:8083
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: DevOps自动化部署平台 - 主机管理API文档
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: DevOps主机管理API
+  version: "1.0"
+paths:
+  /api/deploy-config:
+    get:
+      consumes:
+      - application/json
+      description: 分页获取部署配置列表，支持按项目ID和分支名称过滤
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: pageNum
+        type: integer
+      - default: 10
+        description: 每页数量
+        in: query
+        name: pageSize
+        type: integer
+      - description: 项目ID精确查询
+        in: query
+        name: project_id
+        type: integer
+      - description: 分支名称模糊查询
+        in: query
+        name: branch
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 获取失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 获取部署配置列表
+      tags:
+      - 部署配置管理
+    post:
+      consumes:
+      - application/json
+      description: 为指定项目创建新的部署配置，每个项目的每个分支只能有一个配置
+      parameters:
+      - description: 部署配置信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.DeployConfigCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 创建成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 创建失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 创建部署配置
+      tags:
+      - 部署配置管理
+  /api/deploy-config/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 根据ID删除指定部署配置（软删除）
+      parameters:
+      - description: 部署配置ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: ID格式错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "404":
+          description: 部署配置不存在
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 删除失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 删除部署配置
+      tags:
+      - 部署配置管理
+    get:
+      consumes:
+      - application/json
+      description: 根据ID获取指定部署配置的详细信息
+      parameters:
+      - description: 部署配置ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: ID格式错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "404":
+          description: 部署配置不存在
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 获取失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 获取部署配置详情
+      tags:
+      - 部署配置管理
+    put:
+      consumes:
+      - application/json
+      description: 根据ID更新指定部署配置的信息
+      parameters:
+      - description: 部署配置ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 更新信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.DeployConfigUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: ID格式错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "404":
+          description: 部署配置不存在
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 更新失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 更新部署配置
+      tags:
+      - 部署配置管理
+  /api/deploy-config/project/{project_id}:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定项目的所有部署配置
+      parameters:
+      - description: 项目ID
+        in: path
+        name: project_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: ID格式错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 获取失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 根据项目ID获取部署配置列表
+      tags:
+      - 部署配置管理
+  /api/deploy-config/project/{project_id}/branch/{branch}:
+    get:
+      consumes:
+      - application/json
+      description: 根据项目ID和分支名称获取特定的部署配置
+      parameters:
+      - description: 项目ID
+        in: path
+        name: project_id
+        required: true
+        type: integer
+      - description: 分支名称
+        in: path
+        name: branch
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: 参数格式错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "404":
+          description: 部署配置不存在
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 获取失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 根据项目和分支获取部署配置
+      tags:
+      - 部署配置管理
+  /api/deploy-record:
+    get:
+      consumes:
+      - application/json
+      description: 分页获取部署记录列表，支持按项目ID、项目名称、分支、状态、时间范围过滤
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: pageNum
+        type: integer
+      - default: 10
+        description: 每页数量
+        in: query
+        name: pageSize
+        type: integer
+      - description: 项目ID精确查询
+        in: query
+        name: project_id
+        type: integer
+      - description: 项目名称模糊查询
+        in: query
+        name: project_name
+        type: string
+      - description: 分支模糊查询
+        in: query
+        name: branch
+        type: string
+      - description: 状态精确查询
+        in: query
+        name: status
+        type: string
+      - description: 开始时间范围查询-开始
+        in: query
+        name: start_time_start
+        type: string
+      - description: 开始时间范围查询-结束
+        in: query
+        name: start_time_end
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 获取失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 获取部署记录列表
+      tags:
+      - 部署记录管理
+    post:
+      consumes:
+      - application/json
+      description: 创建新的部署记录
+      parameters:
+      - description: 部署记录信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.DeployRecordCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 创建成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 创建失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 创建部署记录
+      tags:
+      - 部署记录管理
+  /api/deploy-record/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 根据ID删除指定部署记录（软删除）
+      parameters:
+      - description: 部署记录ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: ID格式错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "404":
+          description: 部署记录不存在
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 删除失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 删除部署记录
+      tags:
+      - 部署记录管理
+    get:
+      consumes:
+      - application/json
+      description: 根据ID获取指定部署记录的详细信息
+      parameters:
+      - description: 部署记录ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: ID格式错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "404":
+          description: 部署记录不存在
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 获取失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 获取部署记录详情
+      tags:
+      - 部署记录管理
+    put:
+      consumes:
+      - application/json
+      description: 根据ID更新指定部署记录的信息
+      parameters:
+      - description: 部署记录ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 更新信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.DeployRecordUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: ID格式错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "404":
+          description: 部署记录不存在
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 更新失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 更新部署记录
+      tags:
+      - 部署记录管理
+  /api/deploy-record/branch/{branch}:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定分支的所有部署记录
+      parameters:
+      - description: 分支名称
+        in: path
+        name: branch
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 获取失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 根据分支获取部署记录列表
+      tags:
+      - 部署记录管理
+  /api/deploy-record/project/{project_id}:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定项目的所有部署记录
+      parameters:
+      - description: 项目ID
+        in: path
+        name: project_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: ID格式错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 获取失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 根据项目ID获取部署记录列表
+      tags:
+      - 部署记录管理
+  /api/deploy-record/project/{project_id}/branch/{branch}/latest:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定项目和分支的最新部署记录
+      parameters:
+      - description: 项目ID
+        in: path
+        name: project_id
+        required: true
+        type: integer
+      - description: 分支名称
+        in: path
+        name: branch
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: 参数格式错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "404":
+          description: 部署记录不存在
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 获取失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 获取项目和分支的最新部署记录
+      tags:
+      - 部署记录管理
+  /api/deploy-record/stats:
+    get:
+      consumes:
+      - application/json
+      description: 获取部署记录的统计信息，包括总次数、成功次数、失败次数、运行中次数
+      parameters:
+      - description: 项目ID（可选，不传则统计所有项目）
+        in: query
+        name: project_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 获取失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 获取部署记录统计信息
+      tags:
+      - 部署记录管理
+  /api/deploy-record/status/{status}:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定状态的所有部署记录
+      parameters:
+      - description: 状态
+        in: path
+        name: status
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 获取失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 根据状态获取部署记录列表
+      tags:
+      - 部署记录管理
+  /api/host:
+    get:
+      consumes:
+      - application/json
+      description: 分页获取主机配置列表，支持pageNum和pageSize参数，支持主机名模糊查询、IP精确查询、状态精确查询
+      parameters:
+      - description: 页码
+        in: query
+        name: pageNum
+        type: integer
+      - description: 每页条数
+        in: query
+        name: pageSize
+        type: integer
+      - description: 主机名模糊查询
+        in: query
+        name: name
+        type: string
+      - description: IP地址精确查询
+        in: query
+        name: host
+        type: string
+      - description: 主机状态精确查询
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 分页获取主机列表
+      tags:
+      - hosts
+    post:
+      consumes:
+      - application/json
+      description: 创建新的SSH主机配置
+      parameters:
+      - description: 主机信息
+        in: body
+        name: host
+        required: true
+        schema:
+          $ref: '#/definitions/models.Host'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 创建成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 创建主机
+      tags:
+      - hosts
+  /api/host/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 根据ID删除指定主机（软删除）
+      parameters:
+      - description: 主机ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: ID格式错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "404":
+          description: 主机不存在
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 删除主机
+      tags:
+      - hosts
+    get:
+      consumes:
+      - application/json
+      description: 根据ID获取指定主机的详细信息
+      parameters:
+      - description: 主机ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: ID格式错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "404":
+          description: 主机不存在
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 获取主机详情
+      tags:
+      - hosts
+    put:
+      consumes:
+      - application/json
+      description: 更新指定主机的配置信息
+      parameters:
+      - description: 主机ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 更新的主机信息
+        in: body
+        name: host
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: ID格式错误或请求参数错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "404":
+          description: 主机不存在
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 更新主机信息
+      tags:
+      - hosts
+  /api/host/{id}/test:
+    post:
+      consumes:
+      - application/json
+      description: 测试指定主机的SSH连接是否正常
+      parameters:
+      - description: 主机ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 连接成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: ID格式错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 连接失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 测试SSH连接
+      tags:
+      - SSH操作
+  /api/host/batch-check:
+    post:
+      consumes:
+      - application/json
+      description: 批量检查所有主机的SSH连接状态并更新
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 检查完成
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 检查失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 批量检查主机状态
+      tags:
+      - SSH操作
+  /api/host/docker/build:
+    post:
+      consumes:
+      - application/json
+      description: 在指定主机上构建Docker镜像
+      parameters:
+      - description: Docker构建请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.DockerBuildRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 构建成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 构建失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 构建Docker镜像
+      tags:
+      - Docker管理
+  /api/host/docker/execute:
+    post:
+      consumes:
+      - application/json
+      description: 通过SSH连接在指定主机上执行Docker命令
+      parameters:
+      - description: Docker命令执行请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.SSHCommandRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 执行成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 执行失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 通过SSH执行Docker命令
+      tags:
+      - Docker管理
+  /api/host/docker/info:
+    post:
+      consumes:
+      - application/json
+      description: 获取指定主机的Docker信息和状态
+      parameters:
+      - description: Docker信息请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.DockerInfoRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 获取失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 获取Docker信息
+      tags:
+      - Docker管理
+  /api/host/docker/run:
+    post:
+      consumes:
+      - application/json
+      description: 在指定主机上运行Docker容器
+      parameters:
+      - description: Docker运行请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.DockerRunRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 运行成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 运行失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 运行Docker容器
+      tags:
+      - Docker管理
+  /api/host/execute:
+    post:
+      consumes:
+      - application/json
+      description: 在指定主机上执行SSH命令
+      parameters:
+      - description: 命令执行请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.SSHCommandRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 执行成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 执行失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 执行SSH命令
+      tags:
+      - SSH操作
+  /api/host/upload/directory:
+    post:
+      consumes:
+      - application/json
+      description: 通过SSH上传整个目录到指定主机
+      parameters:
+      - description: 目录上传请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.DirectoryUploadRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 上传成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 上传失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 上传目录
+      tags:
+      - 文件管理
+  /api/host/upload/file:
+    post:
+      consumes:
+      - application/json
+      description: 通过SSH上传单个文件到指定主机
+      parameters:
+      - description: 文件上传请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.FileUploadRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 上传成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 上传失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 上传单个文件
+      tags:
+      - 文件管理
+  /api/project:
+    get:
+      consumes:
+      - application/json
+      description: 获取所有项目列表，支持分页和条件查询
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: pageNum
+        type: integer
+      - default: 10
+        description: 每页数量
+        in: query
+        name: pageSize
+        type: integer
+      - description: 项目名称模糊查询
+        in: query
+        name: name
+        type: string
+      - description: 项目编码模糊查询
+        in: query
+        name: code
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 获取失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 获取项目列表
+      tags:
+      - 项目管理
+    post:
+      consumes:
+      - application/json
+      description: 创建新的项目
+      parameters:
+      - description: 项目信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.ProjectCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 创建成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 创建失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 创建项目
+      tags:
+      - 项目管理
+  /api/project/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 根据ID删除指定项目（软删除）
+      parameters:
+      - description: 项目ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: ID格式错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "404":
+          description: 项目不存在
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 删除失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 删除项目
+      tags:
+      - 项目管理
+    get:
+      consumes:
+      - application/json
+      description: 根据ID获取指定项目的详细信息
+      parameters:
+      - description: 项目ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: ID格式错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "404":
+          description: 项目不存在
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 获取项目详情
+      tags:
+      - 项目管理
+    put:
+      consumes:
+      - application/json
+      description: 根据ID更新指定项目的信息
+      parameters:
+      - description: 项目ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 更新信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.ProjectUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: ID格式错误
+          schema:
+            $ref: '#/definitions/models.Response'
+        "404":
+          description: 项目不存在
+          schema:
+            $ref: '#/definitions/models.Response'
+        "500":
+          description: 更新失败
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 更新项目
+      tags:
+      - 项目管理
+  /api/project/check-code:
+    get:
+      consumes:
+      - application/json
+      description: 检查项目编码是否已存在，用于新增和更新时的唯一性验证
+      parameters:
+      - description: 项目编码
+        in: query
+        name: code
+        required: true
+        type: string
+      - description: 排除的项目ID（用于更新时检查）
+        in: query
+        name: excludeId
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 检查完成
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 检查项目编码是否存在
+      tags:
+      - 项目管理
+  /api/project/code/{code}:
+    get:
+      consumes:
+      - application/json
+      description: 根据项目编码获取项目信息
+      parameters:
+      - description: 项目编码
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取成功
+          schema:
+            $ref: '#/definitions/models.Response'
+        "404":
+          description: 项目不存在
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 根据项目编码获取项目
+      tags:
+      - 项目管理
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: 检查服务运行状态
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 服务正常
+          schema:
+            $ref: '#/definitions/models.Response'
+      summary: 健康检查
+      tags:
+      - 心跳接口
+swagger: "2.0"
