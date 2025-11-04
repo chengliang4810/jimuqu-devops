@@ -50,3 +50,98 @@ vite.config.ts.*
 *.sw?
 .history
 .cursor
+
+# Go Backend - 编译文件和可执行文件
+**/backend/*.exe
+**/backend/*.dll
+**/backend/*.so
+**/backend/*.dylib
+**/backend/cmd
+**/backend/main
+**/backend/devops-platform
+**/backend/DevOpsProject
+
+# Go - 依赖和缓存
+**/backend/vendor/
+**/backend/go.work.sum
+
+# Go - 测试和覆盖率
+**/backend/*.test
+**/backend/coverage.txt
+**/backend/coverage.out
+**/backend/coverage.html
+
+# Go - IDE和编辑器
+**/backend/.vscode/settings.json
+**/backend/.idea/
+**/backend/*.swp
+**/backend/*.swo
+**/backend/*~
+
+# Go - 数据库文件
+**/backend/*.db
+**/backend/*.sqlite
+**/backend/*.sqlite3
+
+# Go - 配置文件
+**/backend/config.yaml
+**/backend/config.yml
+**/backend/config.json
+**/backend/.env
+
+# Go - 日志文件
+**/backend/logs/
+**/backend/*.log
+
+# Go - 临时文件
+**/backend/tmp/
+**/backend/temp/
+**/backend/*.tmp
+
+# Go - 部署文件
+**/backend/deploy/
+**/backend/docker-compose.override.yml
+
+# 操作系统 - Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# 操作系统 - macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# 操作系统 - Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# 开发工具
+.vscode/settings.json
+.vscode/launch.json
+.vscode/extensions.json
+*.code-workspace

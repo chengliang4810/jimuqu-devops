@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	_ "modernc.org/sqlite"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 var DB *gorm.DB
@@ -35,18 +36,38 @@ func InitDatabase(config Config) error {
 
 	switch config.Type {
 	case "sqlite":
-		// SQLite连接 - 使用纯Go的SQLite驱动
+		// SQLite连接 - 使用modernc.org/sqlite纯Go驱动
 		dsn := config.Database
 		if dsn == "" {
 			dsn = "./devops.db"
 		}
 
-		// 直接使用modernc.org/sqlite驱动创建GORM实例
+		// 创建自定义Dialector，明确使用modernc驱动
 		DB, err = gorm.Open(&sqlite.Dialector{
 			DSN: dsn,
 		}, gormConfig)
 	case "mysql":
-		// MySQL连接
+		// MySQL连接 - 先连接到MySQL服务器，创建数据库，然后连接到数据库
+		// 首先连接到MySQL服务器（不指定数据库）
+		serverDSN := fmt.Sprintf("%s:%s@tcp(%s:%s)/?charset=utf8mb4&parseTime=True&loc=Local",
+			config.Username, config.Password, config.Host, config.Port)
+
+		serverDB, err := gorm.Open(mysql.Open(serverDSN), gormConfig)
+		if err != nil {
+			return fmt.Errorf("连接MySQL服务器失败: %v", err)
+		}
+
+		// 创建数据库（如果不存在）
+		createDBSQL := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci", config.Database)
+		if err := serverDB.Exec(createDBSQL).Error; err != nil {
+			return fmt.Errorf("创建数据库失败: %v", err)
+		}
+
+		// 关闭服务器连接
+		sqlServerDB, _ := serverDB.DB()
+		sqlServerDB.Close()
+
+		// 连接到指定的数据库
 		dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
 			config.Username, config.Password, config.Host, config.Port, config.Database)
 		DB, err = gorm.Open(mysql.Open(dsn), gormConfig)
