@@ -98,6 +98,7 @@ DevOpsProject/
 ## 核心功能模块
 
 ### 1. 主机管理模块
+
 - **SSH连接管理**: 支持密码和密钥认证方式
 - **主机状态监控**: 实时检测主机连通性
 - **批量操作**: 支持批量主机状态检查
@@ -105,24 +106,28 @@ DevOpsProject/
 - **文件传输**: 支持单文件和目录批量上传
 
 ### 2. 项目管理模块
+
 - **项目信息管理**: 支持Git仓库集成
 - **代码管理**: Git仓库地址和认证信息管理
 - **项目编码**: 唯一性校验和自动补全
 - **项目分类**: 支持多项目分类管理
 
 ### 3. 部署配置模块
+
 - **环境配置**: 开发、测试、生产环境配置
 - **分支管理**: 支持多分支部署策略
 - **配置模板**: 可复用的部署配置模板
 - **配置验证**: 配置参数有效性检查
 
 ### 4. 部署记录模块
+
 - **部署历史**: 完整的部署记录追踪
 - **状态管理**: running/success/failed状态
 - **日志记录**: 详细的部署日志保存
 - **统计分析**: 部署成功率统计
 
 ### 5. Docker集成模块
+
 - **镜像构建**: 远程Docker镜像构建
 - **容器管理**: 容器生命周期管理
 - **环境信息**: Docker环境信息查询
@@ -131,6 +136,7 @@ DevOpsProject/
 ## 技术栈详解
 
 ### 后端技术栈
+
 - **Go 1.24**: 高性能后端开发语言
 - **Gin v1.11**: 轻量级Web框架，高性能HTTP服务
 - **GORM v1.25**: 强大的Go ORM库，支持多数据库
@@ -140,6 +146,7 @@ DevOpsProject/
 - **Docker**: 容器化部署
 
 ### 前端技术栈
+
 - **Vue 3**: 渐进式JavaScript框架
 - **TypeScript**: 类型安全的JavaScript超集
 - **Naive UI**: 现代化Vue 3组件库
@@ -149,6 +156,7 @@ DevOpsProject/
 - **Vben Admin**: 企业级管理后台框架
 
 ### 开发工具
+
 - **PNPM**: 高效的包管理器，支持Monorepo
 - **Turbo**: Monorepo构建工具
 - **ESLint**: 代码质量检查工具
@@ -160,6 +168,7 @@ DevOpsProject/
 ### 核心数据表
 
 #### hosts（主机表）
+
 ```sql
 CREATE TABLE hosts (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -178,6 +187,7 @@ CREATE TABLE hosts (
 ```
 
 #### projects（项目表）
+
 ```sql
 CREATE TABLE projects (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -194,6 +204,7 @@ CREATE TABLE projects (
 ```
 
 #### deploy_configs（部署配置表）
+
 ```sql
 CREATE TABLE deploy_configs (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -207,6 +218,7 @@ CREATE TABLE deploy_configs (
 ```
 
 #### deploy_records（部署记录表）
+
 ```sql
 CREATE TABLE deploy_records (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -228,6 +240,7 @@ CREATE TABLE deploy_records (
 ### RESTful API规范
 
 #### 主机管理API
+
 ```http
 GET    /api/host                    # 获取主机列表（支持分页和查询）
 POST   /api/host                    # 创建主机配置
@@ -250,6 +263,7 @@ POST   /api/host/docker/execute     # 执行Docker命令
 ```
 
 #### 项目管理API
+
 ```http
 GET    /api/project                 # 获取项目列表（支持分页和查询）
 POST   /api/project                 # 创建项目
@@ -263,11 +277,13 @@ GET    /api/project/check-code      # 检查项目编码唯一性
 ### API响应格式
 
 所有API采用统一的响应格式：
+
 ```json
 {
-  "code": 200,                        // 状态码：200成功，其他失败
-  "message": "操作成功",               // 响应消息
-  "data": {                           // 响应数据
+  "code": 200, // 状态码：200成功，其他失败
+  "message": "操作成功", // 响应消息
+  "data": {
+    // 响应数据
     // 具体数据内容
   }
 }
@@ -276,6 +292,7 @@ GET    /api/project/check-code      # 检查项目编码唯一性
 ## 常用开发命令
 
 ### 后端开发命令
+
 ```bash
 # 进入后端目录
 cd backend
@@ -306,6 +323,7 @@ docker build -t devops-platform .
 ```
 
 ### 前端开发命令
+
 ```bash
 # 进入前端目录
 cd frontend
@@ -336,10 +354,13 @@ pnpm update              # 更新依赖
 ## 数据库配置
 
 ### 开发环境 (SQLite)
+
 项目默认使用SQLite作为开发环境数据库，数据库文件为 `./devops.db`
 
 ### 生产环境 (MySQL)
+
 生产环境使用MySQL，配置信息在 `backend/cmd/main.go`:
+
 ```go
 config := database.Config{
     Type:     "mysql",
@@ -365,6 +386,7 @@ config := database.Config{
 ## 容器化部署
 
 ### Docker构建
+
 ```bash
 # 进入后端目录
 cd backend
@@ -374,19 +396,21 @@ docker build -t devops-platform .
 ```
 
 ### Docker运行
+
 ```bash
 # 运行容器（端口8080）
 docker run -p 8080:8080 devops-platform
 ```
 
 ### Docker Compose部署
+
 ```yaml
 version: '3.8'
 services:
   devops-platform:
     build: ./backend
     ports:
-      - "8080:8080"
+      - '8080:8080'
     environment:
       - DB_TYPE=mysql
       - DB_HOST=mysql
@@ -404,7 +428,7 @@ services:
       - MYSQL_ROOT_PASSWORD=password
       - MYSQL_DATABASE=devops_platform
     ports:
-      - "3306:3306"
+      - '3306:3306'
     volumes:
       - mysql_data:/var/lib/mysql
     restart: unless-stopped
@@ -434,28 +458,148 @@ volumes:
 ## 前端开发特定
 
 ### 应用访问
+
 - **主应用**: frontend/apps/web-naive (用户指定的开发目录)
 - **组件库**: frontend/packages/ 中的共享组件
 
 ### 路由配置
+
 - DevOps模块路由: `frontend/apps/web-naive/src/router/routes/modules/devops.ts`
-- 主机管理页面: `/devops/host`
-- 项目管理页面: `/devops/project`
+- **更新后的路由结构**:
+  - 主机管理页面: `/host`
+  - 项目管理页面: `/project`
+  - 部署配置页面: `/deploy-config`
+  - 部署记录页面: `/deploy-record`
 
 ### API服务集成
+
 - 主机API: `frontend/apps/web-naive/src/api/host.ts`
 - 项目API: `frontend/apps/web-naive/src/api/project.ts`
 - 请求配置: `frontend/apps/web-naive/src/api/request.ts`
 
+### Vxe Table架构学习成果
+
+基于playground示例，已成功集成Vxe Table组件架构：
+
+#### 标准CRUD页面结构
+
+```
+src/views/devops/[module]/
+├── index.vue           # 主页面，使用VxeGrid
+├── data.ts            # 表格列配置和表单字段定义
+└── modules/
+    └── form.vue       # 表单弹窗组件
+```
+
+#### 核心组件模式
+
+1. **VxeGrid集成**: 使用`useVbenVxeGrid`钩子
+   - 集成搜索表单配置 (`formOptions`)
+   - 表格配置 (`gridOptions`)
+   - 自动分页、排序、筛选功能
+
+2. **表单配置**: 使用`useVbenForm`钩子
+   - 字段验证规则 (基于zod)
+   - 条件显示字段 (`dependencies`)
+   - 统一的表单样式
+
+3. **弹窗管理**: 使用`useVbenModal`钩子
+   - 统一的弹窗逻辑
+   - 数据传递和回调处理
+   - 自动加载状态管理
+
+#### 操作列标准定义
+
+**推荐使用模板插槽方式**（更直观，易于维护）：
+
+1. **表格列配置** (`data.ts`)：
+
+```typescript
+{
+  align: 'center',
+  field: 'action',
+  fixed: 'right',
+  headerAlign: 'center',
+  showOverflow: false,
+  title: '操作',
+  width: 300,  // 固定宽度，确保按钮显示完整
+  slots: { default: 'action' },
+}
+```
+
+2. **模板插槽定义** (`index.vue`)：
+
+```vue
+<template #action="{ row }">
+  <NFlex>
+    <NButton type="info" size="small" @click="onTest(row)"> 测试连接 </NButton>
+    <NButton type="warning" size="small" @click="onEdit(row)"> 编辑 </NButton>
+    <NButton type="error" size="small" @click="onDelete(row)"> 删除 </NButton>
+  </NFlex>
+</template>
+```
+
+3. **事件处理函数** (`index.vue`)：
+
+```typescript
+function onTest(row: Host) {
+  testConnection(row.id)
+    .then(() => {
+      console.log(`主机 "${row.name}" 连接成功`);
+    })
+    .catch(() => {
+      console.error(`主机 "${row.name}" 连接失败`);
+    });
+}
+
+function onEdit(row: Host) {
+  formModalApi.setData(row).open();
+}
+
+function onDelete(row: Host) {
+  deleteHost(row.id)
+    .then(() => {
+      refreshGrid();
+    })
+    .catch(() => {
+      console.error(`主机 "${row.name}" 删除失败`);
+    });
+}
+```
+
+**配置式方式**（复杂场景备选）：
+
+- 使用 `CellOperation` 渲染器
+- 适用于需要动态生成按钮的复杂场景
+- 配置较为复杂，维护成本高
+
+#### 已重构模块
+
+- **主机管理**: 完全重构为Vxe Table架构
+  - 表格展示、搜索、分页
+  - 主机创建/编辑表单
+  - 操作按钮（测试连接、执行命令、上传文件、Docker管理、编辑、删除）
+
+#### 开发规范
+
+- 所有新功能模块必须遵循Vxe Table架构
+- 统一使用`Page`组件包装
+- 表单字段使用zod进行类型验证
+- API调用遵循现有的接口规范
+- 操作列优先使用模板插槽方式
+- 操作列宽度建议设置为300px以确保按钮完整显示
+
 ## 测试和验证
 
 ### API测试
+
 - Swagger UI: `http://localhost:8080/swagger/index.html`
 - 健康检查: `http://localhost:8080/health`
 - 主机管理API测试: 创建、查询、更新、删除主机
 - 项目管理API测试: 创建、查询、更新、删除项目
 
 ### 功能验证
+
 - SSH连接测试: 创建主机后测试SSH连通性
 - 命令执行测试: 在主机上执行系统命令
 - Docker功能测试: 获取Docker信息、执行Docker命令
@@ -463,12 +607,14 @@ volumes:
 ## 部署验证
 
 ### 本地部署
+
 - 后端服务启动成功 (端口8080)
 - 数据库连接正常
 - API接口响应正常
 - Swagger文档可访问
 
 ### Docker部署
+
 - 镜像构建成功
 - 容器启动正常
 - 服务可正常访问

@@ -25,9 +25,9 @@ setupVbenVxeTable({
         proxyConfig: {
           autoLoad: true,
           response: {
-            result: 'items',
+            result: 'list',
             total: 'total',
-            list: 'items',
+            list: 'list',
           },
           showActiveMsg: true,
           showResponseMsg: false,
@@ -54,6 +54,80 @@ setupVbenVxeTable({
           NButton,
           { size: 'small', type: 'primary', quaternary: true },
           { default: () => props?.text },
+        );
+      },
+    });
+
+    // 表格配置项可以用 cellRender: { name: 'CellOperation' },
+    vxeUI.renderer.add('CellOperation', {
+      renderTableDefault(renderOpts) {
+        const { props } = renderOpts;
+        return h(
+          'div',
+          { style: { display: 'flex', gap: '4px' } },
+          props?.options?.map((option: any) => {
+            if (typeof option === 'string') {
+              // 处理内置按钮类型
+              if (option === 'edit') {
+                return h(
+                  NButton,
+                  {
+                    size: 'small',
+                    type: 'primary',
+                    onClick: () =>
+                      props.onClick?.({ code: 'edit', row: props.row }),
+                  },
+                  { default: () => '编辑' },
+                );
+              }
+              if (option === 'delete') {
+                return h(
+                  NButton,
+                  {
+                    size: 'small',
+                    type: 'error',
+                    onClick: () =>
+                      props.onClick?.({ code: 'delete', row: props.row }),
+                  },
+                  { default: () => '删除' },
+                );
+              }
+            }
+            // 处理自定义按钮
+            if (option.code && option.text) {
+              return h(
+                NButton,
+                {
+                  size: 'small',
+                  onClick: () =>
+                    props.onClick?.({ code: option.code, row: props.row }),
+                },
+                { default: () => option.text },
+              );
+            }
+            return null;
+          }),
+        );
+      },
+    });
+
+    // 表格配置项可以用 cellRender: { name: 'CellTag' },
+    vxeUI.renderer.add('CellTag', {
+      renderTableDefault(renderOpts) {
+        const { props } = renderOpts;
+        return h(
+          'span',
+          {
+            style: {
+              ...props?.attrs,
+              display: 'inline-block',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              fontSize: '12px',
+              color: '#fff',
+            },
+          },
+          props?.attrs?.text || '',
         );
       },
     });

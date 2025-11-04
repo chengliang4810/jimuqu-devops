@@ -109,10 +109,12 @@ export type ComponentType =
   | 'IconPicker'
   | 'Input'
   | 'InputNumber'
+  | 'InputPassword'
   | 'RadioGroup'
   | 'Select'
   | 'Space'
   | 'Switch'
+  | 'Textarea'
   | 'TimePicker'
   | 'TreeSelect'
   | 'Upload'
@@ -183,6 +185,10 @@ async function initComponentAdapter() {
       inputComponent: NInput,
     }),
     Input: withDefaultPlaceholder(NInput, 'input'),
+    InputPassword: withDefaultPlaceholder(NInput, 'input', {
+      type: 'password',
+      showPasswordOn: 'click',
+    }),
     InputNumber: withDefaultPlaceholder(NInputNumber, 'input'),
     RadioGroup: (props, { attrs, slots }) => {
       let defaultSlot;
@@ -209,6 +215,10 @@ async function initComponentAdapter() {
     Select: withDefaultPlaceholder(NSelect, 'select'),
     Space: NSpace,
     Switch: NSwitch,
+    Textarea: withDefaultPlaceholder(NInput, 'input', {
+      type: 'textarea',
+      rows: 3,
+    }),
     TimePicker: NTimePicker,
     TreeSelect: withDefaultPlaceholder(NTreeSelect, 'select'),
     Upload: NUpload,

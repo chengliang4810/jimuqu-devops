@@ -9,6 +9,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: '首页',
       icon: 'mdi:home-outline',
+      order: 1,
     },
   },
 ];
