@@ -67,26 +67,24 @@ DevOpsProject/
 │   ├── Dockerfile                    # Docker构建文件
 │   ├── go.mod                        # Go模块定义
 │   └── go.sum                        # 依赖版本锁定
-├── frontend/                          # 前端应用
-│   ├── apps/
-│   │   └── web-naive/                 # 主前端应用
-│   │       ├── src/
-│   │       │   ├── views/            # 页面组件
-│   │       │   │   └── devops/       # DevOps功能模块
-│   │       │   │       ├── host/     # 主机管理
-│   │       │   │       └── project/ # 项目管理
-│   │       │   ├── api/              # API调用封装
-│   │       │   ├── router/           # 路由配置
-│   │       │   └── store/            # 状态管理
-│   │       ├── package.json
-│   │       └── vite.config.mts
-│   ├── packages/                     # 共享包
-│   │   ├── @vben/*                   # Vben框架包
-│   │   ├── utils/                    # 工具包
-│   │   ├── types/                    # 类型定义
-│   │   └── styles/                   # 样式包
-│   ├── internal/                     # 内部工具
-│   └── pnpm-workspace.yaml           # PNPM工作空间配置
+├── apps/                             # 前端应用
+│   └── web-naive/                    # 主前端应用
+│       ├── src/
+│       │   ├── views/                # 页面组件
+│       │   │   └── devops/           # DevOps功能模块
+│       │   │       ├── host/         # 主机管理
+│       │   │       └── project/      # 项目管理
+│       │   ├── api/                  # API调用封装
+│       │   ├── router/               # 路由配置
+│       │   └── store/                # 状态管理
+│       ├── package.json
+│       └── vite.config.mts
+├── packages/                         # 共享包
+│   ├── @vben/*                       # Vben框架包
+│   ├── utils/                        # 工具包
+│   ├── types/                        # 类型定义
+│   └── styles/                       # 样式包
+├── internal/                         # 内部工具
 ├── CLAUDE.md                          # 项目文档
 └── README.md                          # 项目说明
 ```
@@ -325,8 +323,7 @@ docker build -t devops-platform .
 ### 前端开发命令
 
 ```bash
-# 进入前端目录
-cd frontend
+# 前端项目在根目录，无需切换目录
 
 # 安装依赖
 pnpm install
@@ -447,7 +444,7 @@ volumes:
 
 3. **CORS配置**: 开发环境已配置允许跨域访问，生产环境需要调整安全策略
 
-4. **Monorepo管理**: 前端使用pnpm workspace，确保在frontend目录下执行命令
+4. **Monorepo管理**: 前端使用pnpm workspace，在根目录执行命令
 
 5. **API文档更新**: 修改handlers.go中的Swagger注释后，需要重新运行 `swag init -g cmd/main.go` 生成文档
 
@@ -459,12 +456,12 @@ volumes:
 
 ### 应用访问
 
-- **主应用**: frontend/apps/web-naive (用户指定的开发目录)
-- **组件库**: frontend/packages/ 中的共享组件
+- **主应用**: apps/web-naive (用户指定的开发目录)
+- **组件库**: packages/ 中的共享组件
 
 ### 路由配置
 
-- DevOps模块路由: `frontend/apps/web-naive/src/router/routes/modules/devops.ts`
+- DevOps模块路由: `apps/web-naive/src/router/routes/modules/devops.ts`
 - **更新后的路由结构**:
   - 主机管理页面: `/host`
   - 项目管理页面: `/project`
@@ -473,9 +470,9 @@ volumes:
 
 ### API服务集成
 
-- 主机API: `frontend/apps/web-naive/src/api/host.ts`
-- 项目API: `frontend/apps/web-naive/src/api/project.ts`
-- 请求配置: `frontend/apps/web-naive/src/api/request.ts`
+- 主机API: `apps/web-naive/src/api/host.ts`
+- 项目API: `apps/web-naive/src/api/project.ts`
+- 请求配置: `apps/web-naive/src/api/request.ts`
 
 ### Vxe Table架构学习成果
 

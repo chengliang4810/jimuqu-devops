@@ -4,7 +4,7 @@ import { h } from 'vue';
 
 import { setupVbenVxeTable, useVbenVxeGrid } from '@vben/plugins/vxe-table';
 
-import { NButton, NImage } from 'naive-ui';
+import { NButton, NImage, NTag } from 'naive-ui';
 
 import { useVbenForm } from './form';
 
@@ -128,6 +128,50 @@ setupVbenVxeTable({
             },
           },
           props?.attrs?.text || '',
+        );
+      },
+    });
+
+    // 表格配置项可以用 cellRender: { name: 'CellNTag' },
+    vxeUI.renderer.add('CellNTag', {
+      renderTableDefault(renderOpts, params) {
+        const { props } = renderOpts;
+        const { column, row } = params;
+        const { attrs } = props || {};
+
+        // 如果 attrs 是函数，调用它获取属性
+        const attrsData = typeof attrs === 'function' ? attrs(row) : attrs || {};
+
+        // 从 attrs 中提取 NTag 的属性
+        const {
+          text,
+          type = 'default',
+          size = 'medium',
+          closable = false,
+          disabled = false,
+          round = false,
+          color,
+          textColor,
+          borderColor,
+          ...restProps
+        } = attrsData;
+
+        // 处理函数类型的属性
+        const finalText = typeof text === 'function' ? text(row) : text || '';
+        const finalType = typeof type === 'function' ? type(row) : type;
+
+        return h(
+          NTag,
+          {
+            type: finalType,
+            size: size,
+            closable: closable,
+            disabled: disabled,
+            round: round,
+            color: color ? { color, textColor, borderColor } : undefined,
+            ...restProps,
+          },
+          { default: () => finalText }
         );
       },
     });

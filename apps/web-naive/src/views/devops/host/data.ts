@@ -103,7 +103,6 @@ export function useColumns(): VxeTableGridOptions<Host>['columns'] {
       field: 'name',
       title: '主机名称',
       minWidth: 120,
-      fixed: 'left',
     },
     {
       field: 'host',
@@ -121,42 +120,36 @@ export function useColumns(): VxeTableGridOptions<Host>['columns'] {
       width: 100,
     },
     {
-      cellRender: {
-        name: 'CellTag',
-        attrs: (params) => {
-          const authTypeMap = {
-            password: { type: 'info', text: '密码认证' },
-            key: { type: 'warning', text: '密钥认证' },
-          };
-          return (
-            authTypeMap[params.row.auth_type] || {
-              type: 'default',
-              text: '未知',
-            }
-          );
-        },
-      },
       field: 'auth_type',
       title: '认证方式',
-      width: 100,
-    },
-    {
+      width: 120,
       cellRender: {
-        name: 'CellTag',
-        attrs: (params) => {
-          const statusMap = {
-            online: { type: 'success', text: '在线' },
-            offline: { type: 'error', text: '离线' },
-            inactive: { type: 'default', text: '未激活' },
-          };
-          return (
-            statusMap[params.row.status] || { type: 'default', text: '未知' }
-          );
+        name: 'CellNTag',
+        props: {
+          attrs: (row: Host) => ({
+            type: row.auth_type === 'password' ? 'info' : 'success',
+            size: 'small',
+            round: true,
+            text: row.auth_type === 'password' ? '密码认证' : '密钥认证',
+          }),
         },
       },
+    },
+    {
       field: 'status',
       title: '状态',
-      width: 80,
+      width: 100,
+      cellRender: {
+        name: 'CellNTag',
+        props: {
+          attrs: (row: Host) => ({
+            type: row.status === 'online' ? 'success' : 'error',
+            size: 'small',
+            round: true,
+            text: row.status === 'online' ? '在线' : '离线',
+          }),
+        },
+      },
     },
     {
       field: 'remark',
