@@ -4,7 +4,7 @@ import type { Host } from '#/api/host';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 
-import { NButton, NSpace, useDialog, useMessage } from 'naive-ui';
+import { NButton, NSpace, useDialog, useMessage, NPopconfirm } from 'naive-ui';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { deleteHost, getHostList } from '#/api/host';
@@ -17,8 +17,7 @@ const [FormModal, formModalApi] = useVbenModal({
   destroyOnClose: true,
 });
 
-// 初始化对话框和消息提示
-const dialog = useDialog();
+// 初始化消息提示
 const message = useMessage();
 
 // 搜索表单配置
@@ -76,24 +75,15 @@ function onCreate() {
 /**
  * 删除主机
  */
-function onDelete(row: Host) {
-  dialog.warning({
-    title: '删除确认',
-    content: `确定要删除主机 "${row.name}" 吗？此操作不可撤销。`,
-    positiveText: '确定删除',
-    negativeText: '取消',
-    onPositiveClick: () => {
-      deleteHost(row.id)
-        .then(() => {
-          message.success(`主机 "${row.name}" 删除成功`);
-          refreshGrid();
-        })
-        .catch((error) => {
-          console.error(`主机 "${row.name}" 删除失败:`, error);
-          message.error(`主机 "${row.name}" 删除失败`);
-        });
-    },
-  });
+async function onDelete(row: Host) {
+  try {
+    await deleteHost(row.id);
+    message.success(`主机 "${row.name}" 删除成功`);
+    refreshGrid();
+  } catch (error) {
+    console.error(`主机 "${row.name}" 删除失败:`, error);
+    message.error(`主机 "${row.name}" 删除失败`);
+  }
 }
 
 const [Grid, gridApi] = useVbenVxeGrid({
@@ -144,9 +134,22 @@ function refreshGrid() {
           <NButton type="warning" size="small" @click="onEdit(row)">
             编辑
           </NButton>
-          <NButton type="error" size="small" @click="onDelete(row)">
-            删除
-          </NButton>
+          <NPopconfirm
+            :negative-text="null"
+            :positive-text="'确定删除'"
+            :show-arrow="true"
+            :show-icon="true"
+            @positive-click="() => onDelete(row)"
+          >
+            <template #trigger>
+              <NButton type="error" size="small">
+                删除
+              </NButton>
+            </template>
+            <template #default>
+              确定要删除主机 "{{ row.name }}" 吗？此操作不可撤销。
+            </template>
+          </NPopconfirm>
         </NSpace>
       </template>
     </Grid>
