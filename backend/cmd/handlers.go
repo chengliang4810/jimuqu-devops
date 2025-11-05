@@ -116,12 +116,13 @@ func createProjectHandler(service *database.ProjectService) gin.HandlerFunc {
 
 		// 转换为项目模型
 		project := &models.Project{
-			Name:        req.Name,
-			Code:        req.Code,
-			Remark:      req.Remark,
-			GitRepo:     req.GitRepo,
-			GitUsername: req.GitUsername,
-			GitPassword: req.GitPassword,
+			Name:            req.Name,
+			Code:            req.Code,
+			Remark:          req.Remark,
+			GitRepo:         req.GitRepo,
+			GitUsername:     req.GitUsername,
+			GitPassword:     req.GitPassword,
+			WebhookPassword: req.WebhookPassword,
 		}
 
 		if err := service.CreateProject(project); err != nil {
@@ -244,9 +245,9 @@ func updateProjectHandler(service *database.ProjectService) gin.HandlerFunc {
 		if req.GitUsername != "" {
 			updates["git_username"] = req.GitUsername
 		}
-		if req.GitPassword != "" {
-			updates["git_password"] = req.GitPassword
-		}
+		// 密码字段直接更新，支持空字符串
+		updates["git_password"] = req.GitPassword
+		updates["webhook_password"] = req.WebhookPassword
 
 		if err := service.UpdateProject(uint(id), updates); err != nil {
 			ErrorResponse(c, 500, "更新项目失败: "+err.Error())
@@ -400,7 +401,7 @@ func getAllHostsHandler(service *database.HostService) gin.HandlerFunc {
 
 		// 如果有分页参数或查询条件，使用分页查询
 		if c.Query("pageNum") != "" || c.Query("pageSize") != "" ||
-		   c.Query("name") != "" || c.Query("host") != "" || c.Query("status") != "" {
+			c.Query("name") != "" || c.Query("host") != "" || c.Query("status") != "" {
 			result, err := service.GetHostsWithPagination(query)
 			if err != nil {
 				ErrorResponse(c, 500, "获取主机列表失败: "+err.Error())
@@ -1601,11 +1602,11 @@ func getAccessCodesHandler(c *gin.Context) {
 
 // UserInfo 用户信息结构
 type UserInfo struct {
-	ID       uint   `json:"id"`
-	Username string `json:"username"`
-	Nickname string `json:"nickname"`
-	Avatar   string `json:"avatar"`
-	Email    string `json:"email"`
+	ID       uint     `json:"id"`
+	Username string   `json:"username"`
+	Nickname string   `json:"nickname"`
+	Avatar   string   `json:"avatar"`
+	Email    string   `json:"email"`
 	Roles    []string `json:"roles"`
 }
 
