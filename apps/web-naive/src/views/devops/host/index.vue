@@ -135,8 +135,6 @@ function refreshGrid() {
             编辑
           </NButton>
           <NPopconfirm
-            :negative-text="null"
-            :positive-text="'确定删除'"
             :show-arrow="true"
             :show-icon="true"
             @positive-click="() => onDelete(row)"
