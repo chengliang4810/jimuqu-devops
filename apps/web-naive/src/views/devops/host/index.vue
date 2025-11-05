@@ -42,7 +42,6 @@ const formOptions: VbenFormProps = {
         options: [
           { label: '在线', value: 'online' },
           { label: '离线', value: 'offline' },
-          { label: '未激活', value: 'inactive' },
         ],
         placeholder: '请选择状态',
       },
@@ -52,10 +51,8 @@ const formOptions: VbenFormProps = {
   ],
   // 控制表单是否显示折叠按钮
   showCollapseButton: true,
-  // 是否在字段值改变时提交表单
-  submitOnChange: true,
   // 按下回车时是否提交表单
-  submitOnEnter: false,
+  submitOnEnter: true,
 };
 
 /**

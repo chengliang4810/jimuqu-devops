@@ -96,10 +96,6 @@ export function useSchema(): VbenFormSchema[] {
 export function useColumns(): VxeTableGridOptions<Host>['columns'] {
   return [
     {
-      type: 'checkbox',
-      width: 50,
-    },
-    {
       field: 'name',
       title: '主机名称',
       minWidth: 120,
