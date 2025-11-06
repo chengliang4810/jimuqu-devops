@@ -3,6 +3,7 @@ import type { VbenFormProps, VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { Project } from '#/api/project';
 
 import { Page, useVbenModal } from '@vben/common-ui';
+import { useRouter } from 'vue-router';
 
 import { NButton, NSpace, useDialog, useMessage, NPopconfirm, NTooltip } from 'naive-ui';
 
@@ -16,6 +17,9 @@ const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
   destroyOnClose: true,
 });
+
+// 初始化路由
+const router = useRouter();
 
 // 初始化消息提示
 const message = useMessage();
@@ -115,6 +119,21 @@ async function onCopyWebhookUrl(row: Project) {
 }
 
 /**
+ * 部署配置
+ */
+function onDeployConfig(row: Project) {
+  // 跳转到部署配置页面，传递项目信息
+  router.push({
+    path: '/deploy-config',
+    query: {
+      projectId: row.id.toString(),
+      projectName: row.name,
+      projectCode: row.code,
+    },
+  });
+}
+
+/**
  * 刷新表格
  */
 function refreshGrid() {
@@ -131,6 +150,14 @@ function refreshGrid() {
       </template>
       <template #action="{ row }">
         <NSpace :wrap="false">
+          <NTooltip trigger="hover">
+            <template #trigger>
+              <NButton type="success" size="small" @click="onDeployConfig(row)">
+                部署配置
+              </NButton>
+            </template>
+            配置项目部署参数
+          </NTooltip>
           <NTooltip trigger="hover">
             <template #trigger>
               <NButton type="info" size="small" @click="onCopyWebhookUrl(row)">

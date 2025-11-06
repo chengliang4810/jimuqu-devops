@@ -28,6 +28,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: '部署配置',
       icon: 'mdi:cog-outline',
+      hideInMenu: true,
       order: 4,
     },
   },

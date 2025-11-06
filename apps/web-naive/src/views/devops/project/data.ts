@@ -172,7 +172,7 @@ export function useColumns(): VxeTableGridOptions<Project>['columns'] {
       slots: { default: 'action' },
       title: '操作',
       resizable: false,
-      width: 350,
+      width: 450,
     },
   ];
 }
