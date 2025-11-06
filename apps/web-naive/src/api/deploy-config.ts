@@ -22,6 +22,32 @@ export interface DeployConfigItem {
 }
 
 /**
+ * 编译配置
+ */
+export interface CompileConfig {
+  docker_image: string;           // Docker镜像名称
+  build_commands: string[];       // 构建命令列表
+}
+
+/**
+ * 部署配置
+ */
+export interface DeploymentConfig {
+  target_hosts: number[];         // 目标主机ID列表
+  deploy_directory: string;       // 部署目录
+  pre_deploy_commands: string[];  // 部署前执行的命令
+  post_deploy_commands: string[]; // 部署后执行的命令
+}
+
+/**
+ * 完整的部署配置内容
+ */
+export interface DeployConfigContent {
+  compile: CompileConfig;         // 编译配置
+  deploy: DeploymentConfig;       // 部署配置
+}
+
+/**
  * 创建部署配置请求参数
  */
 export interface CreateDeployConfigParams {
