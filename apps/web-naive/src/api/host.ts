@@ -54,7 +54,7 @@ export interface HostListParams {
  * 主机列表响应
  */
 export interface HostListResponse {
-  items: Host[];
+  list: Host[];
   total: number;
   page: number;
   pageSize: number;

@@ -19,7 +19,7 @@ import {
   NSelect,
   NModal,
 } from 'naive-ui';
-import { Plus, Copy } from '@vben/icons';
+import { Copy } from '@vben/icons';
 import type { DeployConfigContent } from '#/api/deploy-config';
 import type { Host } from '#/api/host';
 import {
@@ -42,7 +42,7 @@ const projectInfo = ref({
 
 // 分支相关
 const branches = ref<Array<{ name: string; config?: DeployConfigContent; id?: number }>>([]);
-const activeTab = ref('main');
+const activeTab = ref('');
 const showCopyBranchModal = ref(false);
 const copySourceBranch = ref('');
 const copyTargetBranch = ref('');
@@ -100,8 +100,8 @@ async function loadHostList() {
   loadingHosts.value = true;
   try {
     const response = await getHostList({ pageSize: 1000 });
-    if (response && response.items) {
-      hostList.value = response.items.filter(host => host.status === 'online' && !host.deleted_at);
+    if (response && response.list) {
+      hostList.value = response.list.filter(host => host.status === 'online' && !host.deleted_at);
     }
   } catch (error) {
     console.error('加载主机列表失败:', error);
@@ -174,30 +174,21 @@ async function loadDeployConfigs() {
 
       // 设置默认选中的分支
       if (branches.value.length > 0) {
-        activeTab.value = branches.value[0]?.name || 'main';
+        activeTab.value = branches.value[0]?.name || '';
         // 自动初始化第一个分支的表单数据
         initializeFormForBranch(activeTab.value);
       }
     } else {
-      // 如果没有配置，初始化默认分支
-      branches.value = [
-        { name: 'main', config: undefined },
-        { name: 'develop', config: undefined }
-      ];
-      activeTab.value = 'main';
-      // 初始化默认表单数据
-      initializeFormForBranch(activeTab.value);
+      // 如果没有配置，不创建默认分支，保持为空
+      branches.value = [];
+      activeTab.value = '';
     }
   } catch (error) {
     console.error('加载部署配置失败:', error);
     message.error('加载部署配置失败');
-    // 初始化默认分支
-    branches.value = [
-      { name: 'main', config: undefined },
-      { name: 'develop', config: undefined }
-    ];
-    activeTab.value = 'main';
-    initializeFormForBranch(activeTab.value);
+    // 出错时也不创建默认分支，保持为空
+    branches.value = [];
+    activeTab.value = '';
   } finally {
     loading.value = false;
   }
@@ -418,44 +409,6 @@ async function handleDeleteBranch(branchName: string) {
   });
 }
 
-// 开始编辑配置
-function startEditing(branchName: string) {
-  const branch = branches.value.find(b => b.name === branchName);
-  if (branch?.config) {
-    configForm.value = JSON.parse(JSON.stringify(branch.config));
-    // 将命令数组转换为纯文本格式（每行一个命令）
-    richConfigForm.value = {
-      docker_image: branch.config.compile.docker_image,
-      build_commands: branch.config.compile.build_commands.join('\n'),
-      target_hosts: branch.config.deploy.target_hosts,
-      deploy_directory: branch.config.deploy.deploy_directory,
-      pre_deploy_commands: branch.config.deploy.pre_deploy_commands.join('\n'),
-      post_deploy_commands: branch.config.deploy.post_deploy_commands.join('\n')
-    };
-  } else {
-    configForm.value = {
-      compile: {
-        docker_image: '',
-        build_commands: []
-      },
-      deploy: {
-        target_hosts: [],
-        deploy_directory: '',
-        pre_deploy_commands: [],
-        post_deploy_commands: []
-      }
-    };
-    richConfigForm.value = {
-      docker_image: '',
-      build_commands: '',
-      target_hosts: [],
-      deploy_directory: '',
-      pre_deploy_commands: '',
-      post_deploy_commands: ''
-    };
-  }
-}
-
 // 保存当前分支的配置
 async function saveCurrentConfig() {
   const branchName = activeTab.value;
@@ -516,7 +469,7 @@ async function saveCurrentConfig() {
         <div v-else-if="branches.length === 0" class="py-32">
           <NEmpty description="暂无部署配置">
             <template #extra>
-              <NButton type="primary" @click="showAddBranchModal = true">
+              <NButton type="primary" @click="handleAddBranchTab">
                 创建第一个配置
               </NButton>
             </template>
