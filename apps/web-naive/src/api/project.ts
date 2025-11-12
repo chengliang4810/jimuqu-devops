@@ -51,7 +51,7 @@ export interface ProjectListParams {
  * 项目列表响应
  */
 export interface ProjectListResponse {
-  items: Project[];
+  list: Project[];
   total: number;
   page: number;
   pageSize: number;

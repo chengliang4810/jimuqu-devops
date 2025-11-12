@@ -11,6 +11,7 @@ import { useDialog, useMessage, NButton, NEmpty, NFlex } from 'naive-ui'
 import { $t } from '@vben/locales'
 import { gridColumns, renderStatus, renderAction, formatDuration } from './data'
 import DeployRecordDetail from './modules/detail.vue'
+import DeployRecordCreate from './modules/create.vue'
 
 // 定义查询参数类型
 interface QueryForm extends DeployRecordQuery {
@@ -19,6 +20,7 @@ interface QueryForm extends DeployRecordQuery {
 
 const showDetailModal = ref(false)
 const currentRecord = ref<DeployRecord | null>(null)
+const showCreateModal = ref(false)
 
 // 初始化 Naive UI hooks
 const message = useMessage()
@@ -207,6 +209,16 @@ function handleExport() {
   message.info('导出功能开发中...')
 }
 
+// 新建部署
+function handleCreate() {
+  showCreateModal.value = true
+}
+
+// 部署创建成功回调
+function handleCreateSuccess() {
+  refreshGrid()
+}
+
 // 页面初始化
 onMounted(() => {
   refreshGrid()
@@ -217,7 +229,14 @@ onMounted(() => {
   <Page auto-content-height>
     <Grid>
       <!-- 工具栏左侧操作按钮 -->
-      <template #toolbar-left>
+      <template #toolbar-tools>
+        <NButton
+          type="primary"
+          size="small"
+          @click="handleCreate"
+        >
+          新建部署
+        </NButton>
         <NButton
           type="error"
           size="small"
@@ -255,6 +274,12 @@ onMounted(() => {
       v-model:show="showDetailModal"
       :record="currentRecord"
       @success="refreshGrid"
+    />
+
+    <!-- 新建部署弹窗 -->
+    <DeployRecordCreate
+      v-model:show="showCreateModal"
+      @success="handleCreateSuccess"
     />
   </Page>
 </template>

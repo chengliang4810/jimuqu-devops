@@ -1,0 +1,4 @@
+uid=81_0 RootWebArea url="http://localhost:8089/api/project?page=1&pageSize=10"
+  uid=81_1 StaticText "{"code":200,"message":"操作成功","data":{"list":[{"id":2,"name":"aaaa","code":"aaaa","remark":"","git_repo":"","git_username":"","git_password":"","webhook_password":"","created_at":"2025-11-12 11:07:08","updated_at":"2025-11-12 11:07:08"},{"id":1,"name":"烦烦烦","code":"TEST001","remark":"啊啊啊啊","git_repo":"https://github.com/test/repo.git","git_username":"testuser","git_password":"testpass","webhook_password":"","created_at":"2025-11-03 14:54:27","updated_at":"2025-11-05 17:06:49"}],"total":2}}"
+  uid=81_2 StaticText "美观输出"
+  uid=81_3 checkbox "美观输出"

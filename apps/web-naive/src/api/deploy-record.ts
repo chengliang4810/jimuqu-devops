@@ -26,6 +26,17 @@ export interface DeployRecordQuery {
   startTimeEnd?: string
 }
 
+// 创建部署记录请求参数
+export interface CreateDeployRecordParams {
+  projectId: number
+  projectName: string
+  branch: string
+  startTime?: string
+  duration?: number
+  logPath?: string
+  status?: 'running' | 'success' | 'failed'
+}
+
 // 分页响应数据
 export interface PageData<T> {
   rows: T[]
@@ -53,7 +64,7 @@ export function getDeployRecord(id: number) {
 }
 
 // 创建部署记录
-export function createDeployRecord(data: Partial<DeployRecord>) {
+export function createDeployRecord(data: CreateDeployRecordParams) {
   return requestClient.post<DeployRecord>('/api/deploy-record', data)
 }
 
