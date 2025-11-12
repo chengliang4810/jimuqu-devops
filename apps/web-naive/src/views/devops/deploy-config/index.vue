@@ -297,7 +297,7 @@ async function handleAddBranchTab() {
     counter++;
   }
 
-  // 重置输入框的值
+  // 重置输入框的值为默认值
   newBranchInputRef.value = branchName;
 
   // 显示输入对话框
@@ -307,7 +307,7 @@ async function handleAddBranchTab() {
       return h('div', { style: 'padding: 16px 0;' }, [
         h('div', { style: 'margin-bottom: 12px;' }, '请输入新分支的名称：'),
         h(NInput, {
-          value: newBranchInputRef.value,
+          defaultValue: branchName,
           placeholder: branchName,
           onUpdateValue: (value: string) => {
             newBranchInputRef.value = value;
