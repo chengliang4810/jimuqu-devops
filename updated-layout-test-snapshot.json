@@ -1,0 +1,58 @@
+uid=59_0 RootWebArea "部署配置 - Vben Admin" url="http://localhost:5890/#/deploy-config?projectId=1&projectName=%E7%83%A6%E7%83%A6%E7%83%A6&projectCode=TEST001"
+  uid=59_1 StaticText "Jimuqu Devops"
+  uid=59_2 complementary
+    uid=59_3 link "Vben Admin Vben Admin" url="javascript:void 0"
+      uid=59_4 image "Vben Admin" url="https://unpkg.com/@vbenjs/static-source@0.1.7/source/logo-v1.webp"
+      uid=59_5 StaticText "Vben Admin"
+    uid=59_6 generic
+      uid=59_7 menu orientation="vertical"
+        uid=59_8 menuitem "首页"
+        uid=59_9 menuitem "主机管理"
+        uid=59_10 menuitem "项目管理"
+        uid=59_11 menuitem "部署记录"
+  uid=59_12 banner
+    uid=59_13 button
+    uid=59_14 button
+    uid=59_15 navigation "breadcrumb"
+      uid=59_16 StaticText "部署配置"
+    uid=59_17 button
+    uid=59_18 button
+    uid=59_19 button haspopup="menu"
+  uid=59_20 generic
+    uid=59_21 StaticText "部署配置"
+    uid=59_22 StaticText "首页"
+    uid=59_23 StaticText "项目管理"
+    uid=59_24 StaticText "部署配置"
+  uid=59_25 main
+    uid=59_26 heading "部署配置 - 烦烦烦 (TEST001)" level="2"
+    uid=59_27 button "loading 保存配置"
+    uid=59_28 button "添加分支"
+    uid=59_29 StaticText "main"
+    uid=59_30 button
+    uid=59_31 button "删除"
+    uid=59_32 StaticText "test"
+    uid=59_33 button
+    uid=59_34 button "删除"
+    uid=59_35 heading "编译配置" level="2"
+    uid=59_36 StaticText "Docker镜像名称"
+    uid=59_37 StaticText " *"
+    uid=59_38 textbox "例如: node:18-alpine, golang:1.21-alpine" value="node:18-alpine"
+    uid=59_39 StaticText "构建命令"
+    uid=59_40 textbox "请输入构建命令，每行一个命令，例如：npm installnpm run buildnpm run test" multiline value="npm install
+npm run build
+npm run test"
+    uid=59_41 heading "部署配置" level="2"
+    uid=59_42 StaticText "目标主机"
+    uid=59_43 StaticText " *"
+    uid=59_44 generic
+      uid=59_45 image "loading"
+    uid=59_46 StaticText "选择要部署到的主机"
+    uid=59_47 StaticText "部署目录"
+    uid=59_48 StaticText " *"
+    uid=59_49 textbox "例如: /var/www/app, /opt/myapp" value="/var/www/app"
+    uid=59_50 StaticText "部署前执行的命令"
+    uid=59_51 textbox "请输入部署前执行的命令，每行一个命令，例如：systemctl stop nginxbackup current app" multiline value="systemctl stop nginx
+cp -r /var/www/app /backup/"
+    uid=59_52 StaticText "部署后执行的命令"
+    uid=59_53 textbox "请输入部署后执行的命令，每行一个命令，例如：systemctl start nginxcleanup old files" multiline value="systemctl start nginx
+rm -rf /tmp/deploy-files"

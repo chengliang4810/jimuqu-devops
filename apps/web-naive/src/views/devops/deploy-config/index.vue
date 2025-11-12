@@ -452,11 +452,8 @@ async function saveCurrentConfig() {
       >
         <template #header-extra>
           <NSpace>
-            <NButton type="primary" size="small" @click="showAddBranchModal = true" :disabled="loading">
-              <template #icon>
-                <NIcon :component="Plus" />
-              </template>
-              添加分支
+            <NButton type="primary" size="small" @click="saveCurrentConfig" :loading="loading">
+              保存配置
             </NButton>
           </NSpace>
         </template>
@@ -478,13 +475,23 @@ async function saveCurrentConfig() {
         </div>
 
         <!-- 分支配置Tab -->
-        <NTabs
-          v-else
-          v-model:value="activeTab"
-          type="card"
-          placement="left"
-          tab-style="min-width: 140px; max-width: 160px;"
-        >
+        <div v-else class="branch-tabs-container">
+          <!-- Tab栏上方的操作按钮 -->
+          <div class="branch-header-actions mb-4">
+            <NButton type="primary" size="small" @click="showAddBranchModal = true" :disabled="loading">
+              <template #icon>
+                <NIcon :component="Plus" />
+              </template>
+              添加分支
+            </NButton>
+          </div>
+
+          <NTabs
+            v-model:value="activeTab"
+            type="card"
+            placement="left"
+            tab-style="min-width: 140px; max-width: 160px;"
+          >
           <NTabPane
             v-for="branch in branches"
             :key="branch.name"
@@ -539,7 +546,6 @@ async function saveCurrentConfig() {
                       placeholder="请输入构建命令，每行一个命令，例如：&#10;npm install&#10;npm run build&#10;npm run test"
                       :rows="6"
                       :autosize="{ minRows: 4, maxRows: 8 }"
-                      show-count
                       clearable
                     />
                   </NFormItem>
@@ -576,7 +582,6 @@ async function saveCurrentConfig() {
                       placeholder="请输入部署前执行的命令，每行一个命令，例如：&#10;systemctl stop nginx&#10;backup current app"
                       :rows="6"
                       :autosize="{ minRows: 4, maxRows: 8 }"
-                      show-count
                       clearable
                     />
                   </NFormItem>
@@ -588,22 +593,15 @@ async function saveCurrentConfig() {
                       placeholder="请输入部署后执行的命令，每行一个命令，例如：&#10;systemctl start nginx&#10;cleanup old files"
                       :rows="6"
                       :autosize="{ minRows: 4, maxRows: 8 }"
-                      show-count
                       clearable
                     />
                   </NFormItem>
-
-                  <!-- 操作按钮 -->
-                  <div class="form-actions">
-                    <NSpace justify="end">
-                      <NButton type="primary" @click="saveCurrentConfig" :loading="loading">保存配置</NButton>
-                    </NSpace>
-                  </div>
                 </NForm>
               </NCard>
             </div>
           </NTabPane>
         </NTabs>
+        </div>
       </NCard>
     </div>
 
@@ -762,6 +760,20 @@ async function saveCurrentConfig() {
 /* 配置表单样式 */
 .config-form {
   width: 100%;
+}
+
+/* 分支标签页容器样式 */
+.branch-tabs-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* 分支标题操作按钮区域 */
+.branch-header-actions {
+  display: flex;
+  justify-content: flex-start;
+  padding: 0 4px;
 }
 
 .form-actions {
