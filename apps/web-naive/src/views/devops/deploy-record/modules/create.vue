@@ -84,11 +84,6 @@ const formRules = {
     message: '请选择项目',
     trigger: ['change', 'blur']
   },
-  projectName: {
-    required: true,
-    message: '项目名称不能为空',
-    trigger: ['input', 'blur']
-  },
   branch: {
     required: true,
     message: '请选择分支',
@@ -127,7 +122,7 @@ async function handleProjectChange(projectId: number) {
   }
 
   try {
-    // 查找项目名称
+    // 查找项目名称（用于提交时使用）
     const project = projectList.value.find(item => item.id === projectId)
     if (project) {
       formData.value.projectName = project.name
@@ -243,14 +238,6 @@ function handleCancel() {
               filterable
               clearable
               @update:value="handleProjectChange"
-            />
-          </NFormItem>
-
-          <NFormItem label="项目名称" path="projectName">
-            <NInput
-              v-model:value="formData.projectName"
-              placeholder="项目名称"
-              disabled
             />
           </NFormItem>
 

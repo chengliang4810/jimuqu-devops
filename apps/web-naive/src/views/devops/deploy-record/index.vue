@@ -204,11 +204,6 @@ function handleBatchDelete() {
   })
 }
 
-// 导出数据（预留功能）
-function handleExport() {
-  message.info('导出功能开发中...')
-}
-
 // 新建部署
 function handleCreate() {
   showCreateModal.value = true
@@ -241,15 +236,9 @@ onMounted(() => {
           type="error"
           size="small"
           @click="handleBatchDelete"
+          style="margin-left: 8px;"
         >
           批量删除
-        </NButton>
-        <NButton
-          type="default"
-          size="small"
-          @click="handleExport"
-        >
-          导出数据
         </NButton>
       </template>
 
