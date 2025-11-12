@@ -501,7 +501,7 @@ async function saveCurrentConfig() {
       >
         <template #header-extra>
           <NSpace>
-            <NButton type="primary" size="small" @click="saveCurrentConfig" :loading="loading">
+            <NButton type="primary" @click="saveCurrentConfig" :loading="loading">
               保存配置
             </NButton>
           </NSpace>
