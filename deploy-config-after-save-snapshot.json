@@ -1,0 +1,58 @@
+uid=36_0 RootWebArea "部署配置 - Vben Admin" url="http://localhost:5890/#/deploy-config?projectId=1&projectName=%E6%B5%8B%E8%AF%95%E9%A1%B9%E7%9B%AE&projectCode=TEST001"
+  uid=36_1 complementary
+    uid=36_2 link "Vben Admin Vben Admin" url="javascript:void 0"
+      uid=36_3 image "Vben Admin" url="https://unpkg.com/@vbenjs/static-source@0.1.7/source/logo-v1.webp"
+      uid=36_4 StaticText "Vben Admin"
+    uid=36_5 generic
+      uid=36_6 menu orientation="vertical"
+        uid=36_7 menuitem "首页"
+        uid=36_8 menuitem "主机管理"
+        uid=36_9 menuitem "项目管理"
+        uid=36_10 menuitem "部署记录"
+  uid=36_11 banner
+    uid=36_12 button
+    uid=36_13 button
+    uid=36_14 navigation "breadcrumb"
+      uid=36_15 StaticText "部署配置"
+    uid=36_16 button
+    uid=36_17 button
+    uid=36_18 button haspopup="menu"
+  uid=36_19 generic
+    uid=36_20 StaticText "部署配置"
+  uid=36_21 main
+    uid=36_22 heading "部署配置 - 测试项目 (TEST001)" level="2"
+    uid=36_23 button "添加分支"
+    uid=36_24 StaticText "main"
+    uid=36_25 button
+    uid=36_26 button "删除"
+    uid=36_27 StaticText "test"
+    uid=36_28 button
+    uid=36_29 button "删除"
+    uid=36_30 StaticText "aaa"
+    uid=36_31 button
+    uid=36_32 button "删除"
+    uid=36_33 heading "当前配置" level="2"
+    uid=36_34 heading "编译配置" level="4"
+    uid=36_35 StaticText "Docker镜像:"
+    uid=36_36 StaticText " node:18-alpine"
+    uid=36_37 StaticText "构建命令:"
+    uid=36_38 StaticText " 3 条"
+    uid=36_39 heading "部署配置" level="4"
+    uid=36_40 StaticText "目标主机:"
+    uid=36_41 StaticText " 0 台"
+    uid=36_42 StaticText "部署目录:"
+    uid=36_43 StaticText " /var/www/app"
+    uid=36_44 StaticText "部署前命令:"
+    uid=36_45 StaticText " 2 条"
+    uid=36_46 StaticText "部署后命令:"
+    uid=36_47 StaticText " 2 条"
+    uid=36_48 button "编辑配置"
+    uid=36_49 StaticText "分支名称"
+    uid=36_50 textbox "请输入分支名称"
+    uid=36_51 StaticText "请输入分支名称"
+    uid=36_52 StaticText "源分支"
+    uid=36_53 textbox "请输入" readonly
+    uid=36_54 StaticText "请输入"
+    uid=36_55 StaticText "目标分支名称"
+    uid=36_56 textbox "请输入目标分支名称"
+    uid=36_57 StaticText "请输入目标分支名称"

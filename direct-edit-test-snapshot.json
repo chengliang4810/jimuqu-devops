@@ -1,0 +1,60 @@
+uid=28_0 RootWebArea "Vben Admin" url="http://localhost:5890/#/deploy-config?projectId=1&projectName=%E6%B5%8B%E8%AF%95%E9%A1%B9%E7%9B%AE&projectCode=TEST001"
+  uid=28_1 StaticText "[plugin:vite:vue] "
+  uid=28_2 StaticText "[vue/compiler-sfc] Identifier 'saveConfig' has already been declared. (366:15)
+
+D:/GolandProjects/DevOpsProject/apps/web-naive/src/views/devops/deploy-config/index.vue
+364|  
+365|  // 保存配置
+366|  async function saveConfig() {
+367|    const branchName = editingBranch.value;
+368|"
+  uid=28_3 StaticText "D:"
+  uid=28_4 StaticText "/GolandProjects/DevOpsProject/apps/web-naive/src/views/devops/deploy-config/index.vue:366:15"
+  uid=28_5 StaticText "362 |    editingBranch.value = '';
+363 |  }
+364 |  
+    |  ^
+365 |  // 保存配置
+366 |  async function saveConfig() {"
+  uid=28_6 StaticText "    at constructor ("
+  uid=28_7 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@babel+parser@7.27.7\node_modules\@babel\parser\lib\index.js:363:19"
+  uid=28_8 StaticText ")
+    at TypeScriptParserMixin.raise ("
+  uid=28_9 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@babel+parser@7.27.7\node_modules\@babel\parser\lib\index.js:6612:19"
+  uid=28_10 StaticText ")
+    at TypeScriptScopeHandler.checkRedeclarationInScope ("
+  uid=28_11 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@babel+parser@7.27.7\node_modules\@babel\parser\lib\index.js:1629:19"
+  uid=28_12 StaticText ")
+    at TypeScriptScopeHandler.declareName ("
+  uid=28_13 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@babel+parser@7.27.7\node_modules\@babel\parser\lib\index.js:1595:12"
+  uid=28_14 StaticText ")
+    at TypeScriptScopeHandler.declareName ("
+  uid=28_15 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@babel+parser@7.27.7\node_modules\@babel\parser\lib\index.js:4895:11"
+  uid=28_16 StaticText ")
+    at TypeScriptParserMixin.registerFunctionStatementId ("
+  uid=28_17 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@babel+parser@7.27.7\node_modules\@babel\parser\lib\index.js:13395:16"
+  uid=28_18 StaticText ")
+    at TypeScriptParserMixin.registerFunctionStatementId ("
+  uid=28_19 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@babel+parser@7.27.7\node_modules\@babel\parser\lib\index.js:9210:13"
+  uid=28_20 StaticText ")
+    at TypeScriptParserMixin.parseFunction ("
+  uid=28_21 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@babel+parser@7.27.7\node_modules\@babel\parser\lib\index.js:13379:12"
+  uid=28_22 StaticText ")
+    at TypeScriptParserMixin.parseFunctionStatement ("
+  uid=28_23 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@babel+parser@7.27.7\node_modules\@babel\parser\lib\index.js:13058:17"
+  uid=28_24 StaticText ")
+    at TypeScriptParserMixin.parseStatementContent ("
+  uid=28_25 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@babel+parser@7.27.7\node_modules\@babel\parser\lib\index.js:12823:25"
+  uid=28_26 StaticText ")"
+  uid=28_27 StaticText "Click outside, press "
+  uid=28_28 StaticText "Esc"
+  uid=28_29 StaticText " key, or fix the code to dismiss."
+  uid=28_30 LineBreak "
+"
+  uid=28_31 StaticText "You can also disable this overlay by setting "
+  uid=28_32 StaticText "server.hmr.overlay"
+  uid=28_33 StaticText " to "
+  uid=28_34 StaticText "false"
+  uid=28_35 StaticText " in "
+  uid=28_36 StaticText "vite.config.mts"
+  uid=28_37 StaticText "."

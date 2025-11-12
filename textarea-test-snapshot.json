@@ -1,0 +1,50 @@
+uid=20_0 RootWebArea "部署配置 - Vben Admin" url="http://localhost:5890/#/deploy-config?projectId=1&projectName=%E6%B5%8B%E8%AF%95%E9%A1%B9%E7%9B%AE&projectCode=TEST001"
+  uid=20_1 complementary
+    uid=20_2 link "Vben Admin Vben Admin" url="javascript:void 0"
+      uid=20_3 image "Vben Admin" url="https://unpkg.com/@vbenjs/static-source@0.1.7/source/logo-v1.webp"
+      uid=20_4 StaticText "Vben Admin"
+    uid=20_5 generic
+      uid=20_6 menu orientation="vertical"
+        uid=20_7 menuitem "首页"
+        uid=20_8 menuitem "主机管理"
+        uid=20_9 menuitem "项目管理"
+        uid=20_10 menuitem "部署记录"
+  uid=20_11 banner
+    uid=20_12 button
+    uid=20_13 button
+    uid=20_14 navigation "breadcrumb"
+      uid=20_15 StaticText "部署配置"
+    uid=20_16 button
+    uid=20_17 button
+    uid=20_18 button haspopup="menu"
+  uid=20_19 generic
+    uid=20_20 StaticText "首页"
+    uid=20_21 StaticText "部署配置"
+  uid=20_22 main
+    uid=20_23 heading "部署配置 - 测试项目 (TEST001)" level="2"
+    uid=20_24 button "添加分支"
+    uid=20_25 StaticText "main"
+    uid=20_26 button
+    uid=20_27 button "删除"
+    uid=20_28 StaticText "test"
+    uid=20_29 button
+    uid=20_30 button "删除"
+    uid=20_31 StaticText "aaa"
+    uid=20_32 button
+    uid=20_33 button "删除"
+    uid=20_34 heading "当前配置" level="2"
+    uid=20_35 heading "编译配置" level="4"
+    uid=20_36 StaticText "Docker镜像:"
+    uid=20_37 StaticText " node:18-alpine"
+    uid=20_38 StaticText "构建命令:"
+    uid=20_39 StaticText " 0 条"
+    uid=20_40 heading "部署配置" level="4"
+    uid=20_41 StaticText "目标主机:"
+    uid=20_42 StaticText " 0 台"
+    uid=20_43 StaticText "部署目录:"
+    uid=20_44 StaticText " /var/www/app"
+    uid=20_45 StaticText "部署前命令:"
+    uid=20_46 StaticText " 0 条"
+    uid=20_47 StaticText "部署后命令:"
+    uid=20_48 StaticText " 0 条"
+    uid=20_49 button "编辑配置"

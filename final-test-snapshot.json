@@ -1,0 +1,70 @@
+uid=49_0 RootWebArea "部署配置 - Vben Admin" url="http://localhost:5890/#/deploy-config?projectId=1&projectName=%E6%B5%8B%E8%AF%95%E9%A1%B9%E7%9B%AE&projectCode=TEST001"
+  uid=49_1 complementary
+    uid=49_2 link "Vben Admin Vben Admin" url="javascript:void 0"
+      uid=49_3 image "Vben Admin" url="https://unpkg.com/@vbenjs/static-source@0.1.7/source/logo-v1.webp"
+      uid=49_4 StaticText "Vben Admin"
+    uid=49_5 generic
+      uid=49_6 menu orientation="vertical"
+        uid=49_7 menuitem "首页"
+        uid=49_8 menuitem "主机管理"
+        uid=49_9 menuitem "项目管理"
+        uid=49_10 menuitem "部署记录"
+  uid=49_11 banner
+    uid=49_12 button
+    uid=49_13 button
+    uid=49_14 navigation "breadcrumb"
+      uid=49_15 StaticText "部署配置"
+    uid=49_16 button
+    uid=49_17 button
+    uid=49_18 button haspopup="menu"
+  uid=49_19 generic
+    uid=49_20 StaticText "部署配置"
+  uid=49_21 main
+    uid=49_22 heading "部署配置 - 测试项目 (TEST001)" level="2"
+    uid=49_23 button "添加分支"
+    uid=49_24 StaticText "main"
+    uid=49_25 button
+    uid=49_26 button "删除"
+    uid=49_27 StaticText "test"
+    uid=49_28 button
+    uid=49_29 button "删除"
+    uid=49_30 StaticText "aaa"
+    uid=49_31 button
+    uid=49_32 button "删除"
+    uid=49_33 heading "配置部署参数" level="2"
+    uid=49_34 heading "编译配置" level="3"
+    uid=49_35 StaticText "Docker镜像名称"
+    uid=49_36 StaticText " *"
+    uid=49_37 textbox "例如: node:18-alpine, golang:1.21-alpine" value="node:18-alpine"
+    uid=49_38 StaticText "构建命令"
+    uid=49_39 textbox "请输入构建命令，每行一个命令，例如：npm installnpm run buildnpm run test" multiline value="npm install
+npm run build
+npm run test"
+    uid=49_40 StaticText "38"
+    uid=49_41 heading "部署配置" level="3"
+    uid=49_42 StaticText "目标主机"
+    uid=49_43 StaticText " *"
+    uid=49_44 generic
+      uid=49_45 image "loading"
+    uid=49_46 StaticText "选择要部署到的主机"
+    uid=49_47 StaticText "部署目录"
+    uid=49_48 StaticText " *"
+    uid=49_49 textbox "例如: /var/www/app, /opt/myapp" value="/var/www/app"
+    uid=49_50 StaticText "部署前执行的命令"
+    uid=49_51 textbox "请输入部署前执行的命令，每行一个命令，例如：systemctl stop nginxbackup current app" multiline value="systemctl stop nginx
+cp -r /var/www/app /backup/"
+    uid=49_52 StaticText "48"
+    uid=49_53 StaticText "部署后执行的命令"
+    uid=49_54 textbox "请输入部署后执行的命令，每行一个命令，例如：systemctl start nginxcleanup old files" multiline value="systemctl start nginx
+rm -rf /tmp/deploy-files"
+    uid=49_55 StaticText "46"
+    uid=49_56 button "保存配置"
+    uid=49_57 StaticText "分支名称"
+    uid=49_58 textbox "请输入分支名称"
+    uid=49_59 StaticText "请输入分支名称"
+    uid=49_60 StaticText "源分支"
+    uid=49_61 textbox "请输入" readonly
+    uid=49_62 StaticText "请输入"
+    uid=49_63 StaticText "目标分支名称"
+    uid=49_64 textbox "请输入目标分支名称"
+    uid=49_65 StaticText "请输入目标分支名称"

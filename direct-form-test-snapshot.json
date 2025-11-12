@@ -1,0 +1,53 @@
+uid=40_0 RootWebArea "Vben Admin" url="http://localhost:5890/#/deploy-config?projectId=1&projectName=%E6%B5%8B%E8%AF%95%E9%A1%B9%E7%9B%AE&projectCode=TEST001"
+  uid=40_1 StaticText "[plugin:vite:vue] "
+  uid=40_2 StaticText "Element is missing end tag."
+  uid=40_3 StaticText "D:"
+  uid=40_4 StaticText "/GolandProjects/DevOpsProject/apps/web-naive/src/views/devops/deploy-config/index.vue:487:11"
+  uid=40_5 StaticText "485 |            tab-style="min-width: 140px; max-width: 160px;"
+486 |          >
+487 |            <NTabPane
+    |             ^
+488 |              v-for="branch in branches"
+489 |              :key="branch.name""
+  uid=40_6 StaticText "    at createCompilerError ("
+  uid=40_7 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@vue+compiler-core@3.5.17\node_modules\@vue\compiler-core\dist\compiler-core.cjs.js:1364:17"
+  uid=40_8 StaticText ")
+    at emitError ("
+  uid=40_9 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@vue+compiler-core@3.5.17\node_modules\@vue\compiler-core\dist\compiler-core.cjs.js:2949:5"
+  uid=40_10 StaticText ")
+    at Object.onclosetag ("
+  uid=40_11 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@vue+compiler-core@3.5.17\node_modules\@vue\compiler-core\dist\compiler-core.cjs.js:2308:13"
+  uid=40_12 StaticText ")
+    at Tokenizer.stateInClosingTagName ("
+  uid=40_13 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@vue+compiler-core@3.5.17\node_modules\@vue\compiler-core\dist\compiler-core.cjs.js:785:16"
+  uid=40_14 StaticText ")
+    at Tokenizer.parse ("
+  uid=40_15 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@vue+compiler-core@3.5.17\node_modules\@vue\compiler-core\dist\compiler-core.cjs.js:1143:16"
+  uid=40_16 StaticText ")
+    at Object.baseParse ("
+  uid=40_17 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@vue+compiler-core@3.5.17\node_modules\@vue\compiler-core\dist\compiler-core.cjs.js:2988:13"
+  uid=40_18 StaticText ")
+    at Object.parse ("
+  uid=40_19 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@vue+compiler-dom@3.5.17\node_modules\@vue\compiler-dom\dist\compiler-dom.cjs.js:907:23"
+  uid=40_20 StaticText ")
+    at Object.parse$1 [as parse] ("
+  uid=40_21 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@vue+compiler-sfc@3.5.17\node_modules\@vue\compiler-sfc\dist\compiler-sfc.cjs.js:1794:24"
+  uid=40_22 StaticText ")
+    at createDescriptor ("
+  uid=40_23 StaticText "file:///D:/GolandProjects/DevOpsProject/node_modules/.pnpm/@vitejs+plugin-vue@6.0.1_vi_70699736ceff1a7a1a2151fc1a9abc37/node_modules/@vitejs/plugin-vue/dist/index.js:79:42"
+  uid=40_24 StaticText ")
+    at handleHotUpdate ("
+  uid=40_25 StaticText "file:///D:/GolandProjects/DevOpsProject/node_modules/.pnpm/@vitejs+plugin-vue@6.0.1_vi_70699736ceff1a7a1a2151fc1a9abc37/node_modules/@vitejs/plugin-vue/dist/index.js:1475:25"
+  uid=40_26 StaticText ")"
+  uid=40_27 StaticText "Click outside, press "
+  uid=40_28 StaticText "Esc"
+  uid=40_29 StaticText " key, or fix the code to dismiss."
+  uid=40_30 LineBreak "
+"
+  uid=40_31 StaticText "You can also disable this overlay by setting "
+  uid=40_32 StaticText "server.hmr.overlay"
+  uid=40_33 StaticText " to "
+  uid=40_34 StaticText "false"
+  uid=40_35 StaticText " in "
+  uid=40_36 StaticText "vite.config.mts"
+  uid=40_37 StaticText "."

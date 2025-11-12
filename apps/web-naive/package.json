@@ -40,9 +40,11 @@
     "@vben/styles": "workspace:*",
     "@vben/types": "workspace:*",
     "@vben/utils": "workspace:*",
+    "@vueup/vue-quill": "^1.2.0",
     "@vueuse/core": "catalog:",
     "naive-ui": "catalog:",
     "pinia": "catalog:",
+    "quill": "^2.0.3",
     "vue": "catalog:",
     "vue-router": "catalog:"
   }

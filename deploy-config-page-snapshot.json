@@ -1,0 +1,98 @@
+uid=8_0 RootWebArea "首页 - Vben Admin" url="http://localhost:5890/#/deploy-config?projectId=1&projectName=%E6%B5%8B%E8%AF%95%E9%A1%B9%E7%9B%AE&projectCode=TEST001"
+  uid=8_1 complementary
+    uid=8_2 link "Vben Admin Vben Admin" url="javascript:void 0"
+      uid=8_3 image "Vben Admin" url="https://unpkg.com/@vbenjs/static-source@0.1.7/source/logo-v1.webp"
+      uid=8_4 StaticText "Vben Admin"
+    uid=8_5 generic
+      uid=8_6 menu orientation="vertical"
+        uid=8_7 menuitem "首页"
+        uid=8_8 menuitem "主机管理"
+        uid=8_9 menuitem "项目管理"
+        uid=8_10 menuitem "部署记录"
+  uid=8_11 banner
+    uid=8_12 button
+    uid=8_13 button
+    uid=8_14 navigation "breadcrumb"
+      uid=8_15 StaticText "首页"
+    uid=8_16 button
+    uid=8_17 button
+    uid=8_18 button haspopup="menu"
+  uid=8_19 generic
+    uid=8_20 StaticText "首页"
+  uid=8_21 main
+    uid=8_22 heading "用户量" level="3"
+    uid=8_23 StaticText "2,000"
+    uid=8_24 StaticText "总用户量"
+    uid=8_25 StaticText "120,000"
+    uid=8_26 heading "访问量" level="3"
+    uid=8_27 StaticText "20,000"
+    uid=8_28 StaticText "总访问量"
+    uid=8_29 StaticText "500,000"
+    uid=8_30 heading "下载量" level="3"
+    uid=8_31 StaticText "8,000"
+    uid=8_32 StaticText "总下载量"
+    uid=8_33 StaticText "120,000"
+    uid=8_34 heading "使用量" level="3"
+    uid=8_35 StaticText "5,000"
+    uid=8_36 StaticText "总使用量"
+    uid=8_37 StaticText "50,000"
+    uid=8_38 tablist orientation="horizontal"
+      uid=8_39 tab "流量趋势" selectable selected
+      uid=8_40 tab "月访问量"
+    uid=8_41 tabpanel "流量趋势"
+    uid=8_42 heading "访问数量" level="3"
+    uid=8_43 heading "访问来源" level="3"
+    uid=8_44 heading "访问来源" level="3"
+  uid=8_45 StaticText "[plugin:vite:vue] "
+  uid=8_46 StaticText "v-model cannot be used on a prop, because local prop bindings are not writable.
+Use a v-bind binding combined with a v-on listener that emits update:x event instead."
+  uid=8_47 StaticText "D:"
+  uid=8_48 StaticText "/GolandProjects/DevOpsProject/apps/web-naive/src/components/RichTextEditor.vue:4:24"
+  uid=8_49 StaticText "2  |    <div class="rich-text-editor">
+3  |      <QuillEditor
+4  |        v-model:content="modelValue"
+   |                          ^
+5  |        :options="editorOptions"
+6  |        :placeholder="placeholder""
+  uid=8_50 StaticText "    at createCompilerError ("
+  uid=8_51 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@vue+compiler-core@3.5.17\node_modules\@vue\compiler-core\dist\compiler-core.cjs.js:1364:17"
+  uid=8_52 StaticText ")
+    at Object.transformModel ("
+  uid=8_53 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@vue+compiler-core@3.5.17\node_modules\@vue\compiler-core\dist\compiler-core.cjs.js:6363:21"
+  uid=8_54 StaticText ")
+    at transformModel ("
+  uid=8_55 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@vue+compiler-dom@3.5.17\node_modules\@vue\compiler-dom\dist\compiler-dom.cjs.js:219:35"
+  uid=8_56 StaticText ")
+    at buildProps ("
+  uid=8_57 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@vue+compiler-core@3.5.17\node_modules\@vue\compiler-core\dist\compiler-core.cjs.js:5854:48"
+  uid=8_58 StaticText ")
+    at Array.postTransformElement ("
+  uid=8_59 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@vue+compiler-core@3.5.17\node_modules\@vue\compiler-core\dist\compiler-core.cjs.js:5476:32"
+  uid=8_60 StaticText ")
+    at traverseNode ("
+  uid=8_61 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@vue+compiler-core@3.5.17\node_modules\@vue\compiler-core\dist\compiler-core.cjs.js:3591:15"
+  uid=8_62 StaticText ")
+    at traverseChildren ("
+  uid=8_63 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@vue+compiler-core@3.5.17\node_modules\@vue\compiler-core\dist\compiler-core.cjs.js:3542:5"
+  uid=8_64 StaticText ")
+    at traverseNode ("
+  uid=8_65 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@vue+compiler-core@3.5.17\node_modules\@vue\compiler-core\dist\compiler-core.cjs.js:3585:7"
+  uid=8_66 StaticText ")
+    at traverseChildren ("
+  uid=8_67 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@vue+compiler-core@3.5.17\node_modules\@vue\compiler-core\dist\compiler-core.cjs.js:3542:5"
+  uid=8_68 StaticText ")
+    at traverseNode ("
+  uid=8_69 StaticText "D:\GolandProjects\DevOpsProject\node_modules\.pnpm\@vue+compiler-core@3.5.17\node_modules\@vue\compiler-core\dist\compiler-core.cjs.js:3585:7"
+  uid=8_70 StaticText ")"
+  uid=8_71 StaticText "Click outside, press "
+  uid=8_72 StaticText "Esc"
+  uid=8_73 StaticText " key, or fix the code to dismiss."
+  uid=8_74 LineBreak "
+"
+  uid=8_75 StaticText "You can also disable this overlay by setting "
+  uid=8_76 StaticText "server.hmr.overlay"
+  uid=8_77 StaticText " to "
+  uid=8_78 StaticText "false"
+  uid=8_79 StaticText " in "
+  uid=8_80 StaticText "vite.config.mts"
+  uid=8_81 StaticText "."

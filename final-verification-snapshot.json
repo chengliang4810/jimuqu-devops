@@ -1,0 +1,62 @@
+uid=55_0 RootWebArea "部署配置 - Vben Admin" url="http://localhost:5890/#/deploy-config?projectId=1&projectName=%E7%83%A6%E7%83%A6%E7%83%A6&projectCode=TEST001"
+  uid=55_1 complementary
+    uid=55_2 link "Vben Admin Vben Admin" url="javascript:void 0"
+      uid=55_3 image "Vben Admin" url="https://unpkg.com/@vbenjs/static-source@0.1.7/source/logo-v1.webp"
+      uid=55_4 StaticText "Vben Admin"
+    uid=55_5 generic
+      uid=55_6 menu orientation="vertical"
+        uid=55_7 menuitem "首页"
+        uid=55_8 menuitem "主机管理"
+        uid=55_9 menuitem "项目管理"
+        uid=55_10 menuitem "部署记录"
+  uid=55_11 banner
+    uid=55_12 button
+    uid=55_13 button
+    uid=55_14 navigation "breadcrumb"
+      uid=55_15 StaticText "部署配置"
+    uid=55_16 button
+    uid=55_17 button
+    uid=55_18 button haspopup="menu"
+  uid=55_19 generic
+    uid=55_20 StaticText "部署配置"
+    uid=55_21 StaticText "首页"
+    uid=55_22 StaticText "项目管理"
+    uid=55_23 StaticText "部署配置"
+  uid=55_24 main
+    uid=55_25 heading "部署配置 - 烦烦烦 (TEST001)" level="2"
+    uid=55_26 button "添加分支"
+    uid=55_27 StaticText "main"
+    uid=55_28 button
+    uid=55_29 button "删除"
+    uid=55_30 StaticText "test"
+    uid=55_31 button
+    uid=55_32 button "删除"
+    uid=55_33 heading "编译配置" level="2"
+    uid=55_34 StaticText "Docker镜像名称"
+    uid=55_35 StaticText " *"
+    uid=55_36 textbox "例如: node:18-alpine, golang:1.21-alpine" value="node:18-alpine"
+    uid=55_37 StaticText "构建命令"
+    uid=55_38 textbox "请输入构建命令，每行一个命令，例如：npm installnpm run buildnpm run test" multiline value="npm install
+npm run build
+npm run test"
+    uid=55_39 StaticText "38"
+    uid=55_40 heading "部署配置" level="2"
+    uid=55_41 StaticText "目标主机"
+    uid=55_42 StaticText " *"
+    uid=55_43 generic
+      uid=55_44 image "loading"
+    uid=55_45 StaticText "选择要部署到的主机"
+    uid=55_46 StaticText "部署目录"
+    uid=55_47 StaticText " *"
+    uid=55_48 textbox "例如: /var/www/app, /opt/myapp" value="/var/www/app"
+    uid=55_49 StaticText "部署前执行的命令"
+    uid=55_50 textbox "请输入部署前执行的命令，每行一个命令，例如：systemctl stop nginxbackup current app" multiline value="systemctl stop nginx
+cp -r /var/www/app /backup/"
+    uid=55_51 StaticText "48"
+    uid=55_52 StaticText "部署后执行的命令"
+    uid=55_53 textbox "请输入部署后执行的命令，每行一个命令，例如：systemctl start nginxcleanup old files" multiline value="systemctl start nginx
+rm -rf /tmp/deploy-files"
+    uid=55_54 StaticText "46"
+    uid=55_55 button "保存配置" focusable focused
+  uid=55_56 StaticText "配置保存成功"
+  uid=55_57 StaticText "配置保存成功"

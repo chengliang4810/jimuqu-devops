@@ -1,0 +1,23 @@
+uid=5_0 RootWebArea "登录 - Vben Admin" url="http://localhost:5890/#/auth/login"
+  uid=5_1 button
+  uid=5_2 button
+  uid=5_3 button
+  uid=5_4 button
+  uid=5_5 button
+  uid=5_6 button
+  uid=5_7 button
+  uid=5_8 button
+  uid=5_9 button haspopup="menu"
+  uid=5_10 image "Vben Admin" url="https://unpkg.com/@vbenjs/static-source@0.1.7/source/logo-v1.webp"
+  uid=5_11 StaticText "Vben Admin"
+  uid=5_12 image "87667-SVG8"
+  uid=5_13 StaticText "开箱即用的大型中后台管理系统"
+  uid=5_14 StaticText "工程化、高性能、跨组件库的前端模版"
+  uid=5_15 heading "欢迎回来 👋🏻" level="2"
+  uid=5_16 StaticText "请输入您的帐户信息以开始管理您的项目"
+  uid=5_17 textbox "请输入用户名" value="admin"
+  uid=5_18 textbox "密码" value="•••••"
+  uid=5_19 button "login"
+  uid=5_20 StaticText "Copyright © 2024"
+  uid=5_21 link "Vben" url="https://www.vben.pro/"
+    uid=5_22 StaticText "Vben"

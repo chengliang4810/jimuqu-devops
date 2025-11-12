@@ -23,7 +23,7 @@ import (
 // @license.name Apache 2.0
 // @license.url http://www.apache.org/licenses/LICENSE-2.0.html
 
-// @host localhost:8080
+// @host localhost:8089
 // @BasePath /
 
 func main() {
@@ -162,7 +162,7 @@ func main() {
 	// Swagger文档
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	fmt.Println("DevOps主机管理平台启动在端口 :8080")
-	fmt.Println("Swagger文档地址: http://localhost:8080/swagger/index.html")
-	log.Fatal(r.Run(":8080"))
+	fmt.Println("DevOps主机管理平台启动在端口 :8089")
+	fmt.Println("Swagger文档地址: http://localhost:8089/swagger/index.html")
+	log.Fatal(r.Run(":8089"))
 }

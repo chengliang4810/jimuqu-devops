@@ -522,78 +522,76 @@ async function saveCurrentConfig() {
 
             <!-- 配置表单 - 直接显示 -->
             <div class="config-form">
-              <NCard title="配置部署参数" class="mb-4">
+              <!-- 编译配置卡片 -->
+              <NCard title="编译配置" class="mb-4">
                 <NForm>
-                  <!-- 编译配置 -->
-                  <div class="config-section mb-6">
-                    <h3 class="section-title mb-4">编译配置</h3>
-                    <NFormItem label="Docker镜像名称" required>
-                      <NInput
-                        v-model:value="richConfigForm.docker_image"
-                        placeholder="例如: node:18-alpine, golang:1.21-alpine"
-                      />
-                    </NFormItem>
+                  <NFormItem label="Docker镜像名称" required>
+                    <NInput
+                      v-model:value="richConfigForm.docker_image"
+                      placeholder="例如: node:18-alpine, golang:1.21-alpine"
+                    />
+                  </NFormItem>
 
-                    <NFormItem label="构建命令">
-                      <NInput
-                        v-model:value="richConfigForm.build_commands"
-                        type="textarea"
-                        placeholder="请输入构建命令，每行一个命令，例如：&#10;npm install&#10;npm run build&#10;npm run test"
-                        :rows="6"
-                        :autosize="{ minRows: 4, maxRows: 8 }"
-                        show-count
-                        clearable
-                      />
-                    </NFormItem>
-                  </div>
+                  <NFormItem label="构建命令">
+                    <NInput
+                      v-model:value="richConfigForm.build_commands"
+                      type="textarea"
+                      placeholder="请输入构建命令，每行一个命令，例如：&#10;npm install&#10;npm run build&#10;npm run test"
+                      :rows="6"
+                      :autosize="{ minRows: 4, maxRows: 8 }"
+                      show-count
+                      clearable
+                    />
+                  </NFormItem>
+                </NForm>
+              </NCard>
 
-                  <!-- 部署配置 -->
-                  <div class="config-section">
-                    <h3 class="section-title mb-4">部署配置</h3>
-                    <NFormItem label="目标主机" required>
-                      <NSelect
-                        v-model:value="configForm.deploy.target_hosts"
-                        :options="hostList.map(host => ({
-                          label: `${host.name} (${host.host})`,
-                          value: host.id
-                        }))"
-                        multiple
-                        placeholder="选择要部署到的主机"
-                        :loading="loadingHosts"
-                      />
-                    </NFormItem>
+              <!-- 部署配置卡片 -->
+              <NCard title="部署配置" class="mb-4">
+                <NForm>
+                  <NFormItem label="目标主机" required>
+                    <NSelect
+                      v-model:value="configForm.deploy.target_hosts"
+                      :options="hostList.map(host => ({
+                        label: `${host.name} (${host.host})`,
+                        value: host.id
+                      }))"
+                      multiple
+                      placeholder="选择要部署到的主机"
+                      :loading="loadingHosts"
+                    />
+                  </NFormItem>
 
-                    <NFormItem label="部署目录" required>
-                      <NInput
-                        v-model:value="richConfigForm.deploy_directory"
-                        placeholder="例如: /var/www/app, /opt/myapp"
-                      />
-                    </NFormItem>
+                  <NFormItem label="部署目录" required>
+                    <NInput
+                      v-model:value="richConfigForm.deploy_directory"
+                      placeholder="例如: /var/www/app, /opt/myapp"
+                    />
+                  </NFormItem>
 
-                    <NFormItem label="部署前执行的命令">
-                      <NInput
-                        v-model:value="richConfigForm.pre_deploy_commands"
-                        type="textarea"
-                        placeholder="请输入部署前执行的命令，每行一个命令，例如：&#10;systemctl stop nginx&#10;backup current app"
-                        :rows="6"
-                        :autosize="{ minRows: 4, maxRows: 8 }"
-                        show-count
-                        clearable
-                      />
-                    </NFormItem>
+                  <NFormItem label="部署前执行的命令">
+                    <NInput
+                      v-model:value="richConfigForm.pre_deploy_commands"
+                      type="textarea"
+                      placeholder="请输入部署前执行的命令，每行一个命令，例如：&#10;systemctl stop nginx&#10;backup current app"
+                      :rows="6"
+                      :autosize="{ minRows: 4, maxRows: 8 }"
+                      show-count
+                      clearable
+                    />
+                  </NFormItem>
 
-                    <NFormItem label="部署后执行的命令">
-                      <NInput
-                        v-model:value="richConfigForm.post_deploy_commands"
-                        type="textarea"
-                        placeholder="请输入部署后执行的命令，每行一个命令，例如：&#10;systemctl start nginx&#10;cleanup old files"
-                        :rows="6"
-                        :autosize="{ minRows: 4, maxRows: 8 }"
-                        show-count
-                        clearable
-                      />
-                    </NFormItem>
-                  </div>
+                  <NFormItem label="部署后执行的命令">
+                    <NInput
+                      v-model:value="richConfigForm.post_deploy_commands"
+                      type="textarea"
+                      placeholder="请输入部署后执行的命令，每行一个命令，例如：&#10;systemctl start nginx&#10;cleanup old files"
+                      :rows="6"
+                      :autosize="{ minRows: 4, maxRows: 8 }"
+                      show-count
+                      clearable
+                    />
+                  </NFormItem>
 
                   <!-- 操作按钮 -->
                   <div class="form-actions">
@@ -761,18 +759,9 @@ async function saveCurrentConfig() {
   font-weight: 600;
 }
 
-/* 编辑表单样式 */
-.config-edit-form {
+/* 配置表单样式 */
+.config-form {
   width: 100%;
-}
-
-.section-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #333;
-  border-bottom: 2px solid #18a058;
-  padding-bottom: 8px;
-  margin-bottom: 16px;
 }
 
 .form-actions {
