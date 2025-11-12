@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Page } from '@vben/common-ui';
 import { useRoute } from 'vue-router';
-import { onMounted, ref, watch } from 'vue';
+import { onMounted, ref, watch, h } from 'vue';
 import {
   NCard,
   NTabs,
@@ -43,8 +43,6 @@ const projectInfo = ref({
 // 分支相关
 const branches = ref<Array<{ name: string; config?: DeployConfigContent; id?: number }>>([]);
 const activeTab = ref('main');
-const showAddBranchModal = ref(false);
-const newBranchName = ref('');
 const showCopyBranchModal = ref(false);
 const copySourceBranch = ref('');
 const copyTargetBranch = ref('');
@@ -286,24 +284,56 @@ async function saveConfig(branchName: string, config: DeployConfigContent) {
   }
 }
 
-// 添加分支
-async function handleAddBranch() {
-  if (!newBranchName.value.trim()) {
-    message.warning('请输入分支名称');
-    return;
+// NTabs 新增分支处理
+async function handleAddBranchTab() {
+  const defaultBranchName = `branch-${branches.value.length + 1}`;
+
+  // 检查是否已存在默认分支名
+  let branchName = defaultBranchName;
+  let counter = 1;
+  while (branches.value.some(b => b.name === branchName)) {
+    branchName = `${defaultBranchName}-${counter}`;
+    counter++;
   }
 
-  if (branches.value.some(b => b.name === newBranchName.value)) {
-    message.warning('分支已存在');
-    return;
-  }
+  // 显示输入对话框
+  dialog.create({
+    title: '添加新分支',
+    content: () => {
+      const inputRef = ref('');
+      return h('div', { style: 'padding: 16px 0;' }, [
+        h('div', { style: 'margin-bottom: 12px;' }, '请输入新分支的名称：'),
+        h(NInput, {
+          value: inputRef.value,
+          placeholder: branchName,
+          onUpdateValue: (value: string) => {
+            inputRef.value = value;
+          }
+        })
+      ]);
+    },
+    positiveText: '确定',
+    negativeText: '取消',
+    onPositiveClick: () => {
+      const inputElement = document.querySelector('.n-dialog .n-input__input-el') as HTMLInputElement;
+      const branchNameInput = inputElement?.value.trim() || branchName;
 
-  // 添加到本地列表
-  branches.value.push({ name: newBranchName.value, config: undefined });
+      if (!branchNameInput) {
+        message.warning('请输入分支名称');
+        return false;
+      }
 
-  showAddBranchModal.value = false;
-  newBranchName.value = '';
-  activeTab.value = newBranchName.value;
+      if (branches.value.some(b => b.name === branchNameInput)) {
+        message.warning('分支已存在');
+        return false;
+      }
+
+      // 添加到本地列表
+      branches.value.push({ name: branchNameInput, config: undefined });
+      activeTab.value = branchNameInput;
+      return true;
+    }
+  });
 }
 
 // 复制分支
@@ -476,21 +506,13 @@ async function saveCurrentConfig() {
 
         <!-- 分支配置Tab -->
         <div v-else class="branch-tabs-container">
-          <!-- Tab栏上方的操作按钮 -->
-          <div class="branch-header-actions mb-4">
-            <NButton type="primary" size="small" @click="showAddBranchModal = true" :disabled="loading">
-              <template #icon>
-                <NIcon :component="Plus" />
-              </template>
-              添加分支
-            </NButton>
-          </div>
-
           <NTabs
             v-model:value="activeTab"
             type="card"
             placement="left"
             tab-style="min-width: 140px; max-width: 160px;"
+            addable
+            @add="handleAddBranchTab"
           >
           <NTabPane
             v-for="branch in branches"
@@ -604,29 +626,6 @@ async function saveCurrentConfig() {
         </div>
       </NCard>
     </div>
-
-    <!-- 添加分支弹窗 -->
-    <NModal
-      v-model:show="showAddBranchModal"
-      preset="card"
-      title="添加分支"
-      style="width: 400px"
-    >
-      <NForm>
-        <NFormItem label="分支名称">
-          <NInput
-            v-model:value="newBranchName"
-            placeholder="请输入分支名称"
-          />
-        </NFormItem>
-      </NForm>
-      <template #footer>
-        <NSpace justify="end">
-          <NButton @click="showAddBranchModal = false">取消</NButton>
-          <NButton type="primary" @click="handleAddBranch">确定</NButton>
-        </NSpace>
-      </template>
-    </NModal>
 
     <!-- 复制分支弹窗 -->
     <NModal
@@ -767,13 +766,6 @@ async function saveCurrentConfig() {
   display: flex;
   flex-direction: column;
   height: 100%;
-}
-
-/* 分支标题操作按钮区域 */
-.branch-header-actions {
-  display: flex;
-  justify-content: flex-start;
-  padding: 0 4px;
 }
 
 .form-actions {
