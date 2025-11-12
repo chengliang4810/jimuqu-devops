@@ -1,0 +1,23 @@
+uid=71_0 RootWebArea "部署记录 - Vben Admin" url="http://localhost:5888/home#/deploy-record"
+  uid=71_1 ignored
+    uid=71_2 ignored
+      uid=71_3 generic
+        uid=71_4 ignored
+      uid=71_5 ignored
+        uid=71_6 ignored
+      uid=71_7 ignored
+        uid=71_8 ignored
+      uid=71_9 ignored
+        uid=71_10 ignored
+      uid=71_11 ignored
+        uid=71_12 ignored
+      uid=71_13 ignored
+        uid=71_14 ignored
+      uid=71_15 ignored
+        uid=71_16 ignored
+      uid=71_17 ignored
+        uid=71_18 ignored
+      uid=71_19 ignored
+        uid=71_20 ignored
+      uid=71_21 ignored
+        uid=71_22 ignored
