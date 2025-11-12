@@ -10,16 +10,14 @@ import {
   NIcon,
   NSpace,
   NInput,
-  NModal,
   NForm,
   NFormItem,
-  NSteps,
-  NStep,
   useMessage,
   useDialog,
   NSpin,
   NEmpty,
-  NSelect
+  NSelect,
+  NModal,
 } from 'naive-ui';
 import { Plus, Copy } from '@vben/icons';
 import type { DeployConfigContent } from '#/api/deploy-config';
@@ -51,9 +49,16 @@ const showCopyBranchModal = ref(false);
 const copySourceBranch = ref('');
 const copyTargetBranch = ref('');
 
-// 配置表单相关
-const currentStep = ref(1);
-const showConfigForm = ref(false);
+// 用于存储富文本编辑器的配置
+const richConfigForm = ref({
+  docker_image: '',
+  build_commands: '',      // 富文本内容
+  target_hosts: [] as number[],
+  deploy_directory: '',
+  pre_deploy_commands: '',  // 富文本内容
+  post_deploy_commands: ''  // 富文本内容
+});
+
 const configForm = ref<DeployConfigContent>({
   compile: {
     docker_image: '',
@@ -114,6 +119,13 @@ watch(() => projectInfo.value.id, (newId) => {
   }
 });
 
+// 监听分支切换，自动加载对应分支的配置
+watch(() => activeTab.value, (newTab) => {
+  if (newTab) {
+    initializeFormForBranch(newTab);
+  }
+});
+
 // 加载部署配置
 async function loadDeployConfigs() {
   if (!projectInfo.value.id) return;
@@ -164,6 +176,8 @@ async function loadDeployConfigs() {
       // 设置默认选中的分支
       if (branches.value.length > 0) {
         activeTab.value = branches.value[0]?.name || 'main';
+        // 自动初始化第一个分支的表单数据
+        initializeFormForBranch(activeTab.value);
       }
     } else {
       // 如果没有配置，初始化默认分支
@@ -172,6 +186,8 @@ async function loadDeployConfigs() {
         { name: 'develop', config: undefined }
       ];
       activeTab.value = 'main';
+      // 初始化默认表单数据
+      initializeFormForBranch(activeTab.value);
     }
   } catch (error) {
     console.error('加载部署配置失败:', error);
@@ -182,8 +198,48 @@ async function loadDeployConfigs() {
       { name: 'develop', config: undefined }
     ];
     activeTab.value = 'main';
+    initializeFormForBranch(activeTab.value);
   } finally {
     loading.value = false;
+  }
+}
+
+// 为指定分支初始化表单数据
+function initializeFormForBranch(branchName: string) {
+  const branch = branches.value.find(b => b.name === branchName);
+  if (branch?.config) {
+    // 如果分支有配置，使用配置数据初始化表单
+    configForm.value = JSON.parse(JSON.stringify(branch.config));
+    richConfigForm.value = {
+      docker_image: branch.config.compile.docker_image,
+      build_commands: branch.config.compile.build_commands.join('\n'),
+      target_hosts: branch.config.deploy.target_hosts,
+      deploy_directory: branch.config.deploy.deploy_directory,
+      pre_deploy_commands: branch.config.deploy.pre_deploy_commands.join('\n'),
+      post_deploy_commands: branch.config.deploy.post_deploy_commands.join('\n')
+    };
+  } else {
+    // 如果分支没有配置，初始化为空表单
+    configForm.value = {
+      compile: {
+        docker_image: '',
+        build_commands: []
+      },
+      deploy: {
+        target_hosts: [],
+        deploy_directory: '',
+        pre_deploy_commands: [],
+        post_deploy_commands: []
+      }
+    };
+    richConfigForm.value = {
+      docker_image: '',
+      build_commands: '',
+      target_hosts: [],
+      deploy_directory: '',
+      pre_deploy_commands: '',
+      post_deploy_commands: ''
+    };
   }
 }
 
@@ -313,11 +369,20 @@ async function handleDeleteBranch(branchName: string) {
   });
 }
 
-// 配置表单相关函数
-function openConfigForm(branchName: string) {
+// 开始编辑配置
+function startEditing(branchName: string) {
   const branch = branches.value.find(b => b.name === branchName);
   if (branch?.config) {
     configForm.value = JSON.parse(JSON.stringify(branch.config));
+    // 将命令数组转换为纯文本格式（每行一个命令）
+    richConfigForm.value = {
+      docker_image: branch.config.compile.docker_image,
+      build_commands: branch.config.compile.build_commands.join('\n'),
+      target_hosts: branch.config.deploy.target_hosts,
+      deploy_directory: branch.config.deploy.deploy_directory,
+      pre_deploy_commands: branch.config.deploy.pre_deploy_commands.join('\n'),
+      post_deploy_commands: branch.config.deploy.post_deploy_commands.join('\n')
+    };
   } else {
     configForm.value = {
       compile: {
@@ -331,59 +396,49 @@ function openConfigForm(branchName: string) {
         post_deploy_commands: []
       }
     };
-  }
-  currentStep.value = 1;
-  showConfigForm.value = true;
-}
-
-function closeConfigForm() {
-  showConfigForm.value = false;
-  currentStep.value = 1;
-}
-
-function nextStep() {
-  if (currentStep.value < 2) {
-    currentStep.value++;
+    richConfigForm.value = {
+      docker_image: '',
+      build_commands: '',
+      target_hosts: [],
+      deploy_directory: '',
+      pre_deploy_commands: '',
+      post_deploy_commands: ''
+    };
   }
 }
 
-function prevStep() {
-  if (currentStep.value > 1) {
-    currentStep.value--;
-  }
-}
-
-async function saveConfigForm() {
+// 保存当前分支的配置
+async function saveCurrentConfig() {
   const branchName = activeTab.value;
+
+  // 将纯文本内容转换为命令数组（按行分割）
+  const buildCommands = richConfigForm.value.build_commands
+    ? richConfigForm.value.build_commands.split('\n').filter(cmd => cmd.trim())
+    : [];
+
+  const preDeployCommands = richConfigForm.value.pre_deploy_commands
+    ? richConfigForm.value.pre_deploy_commands.split('\n').filter(cmd => cmd.trim())
+    : [];
+
+  const postDeployCommands = richConfigForm.value.post_deploy_commands
+    ? richConfigForm.value.post_deploy_commands.split('\n').filter(cmd => cmd.trim())
+    : [];
+
+  // 更新configForm值
+  configForm.value = {
+    compile: {
+      docker_image: richConfigForm.value.docker_image,
+      build_commands: buildCommands
+    },
+    deploy: {
+      target_hosts: richConfigForm.value.target_hosts,
+      deploy_directory: richConfigForm.value.deploy_directory,
+      pre_deploy_commands: preDeployCommands,
+      post_deploy_commands: postDeployCommands
+    }
+  };
+
   await saveConfig(branchName, configForm.value);
-  closeConfigForm();
-}
-
-// 添加构建命令
-function addBuildCommand() {
-  configForm.value.compile.build_commands.push('');
-}
-
-function removeBuildCommand(index: number) {
-  configForm.value.compile.build_commands.splice(index, 1);
-}
-
-// 添加部署前命令
-function addPreDeployCommand() {
-  configForm.value.deploy.pre_deploy_commands.push('');
-}
-
-function removePreDeployCommand(index: number) {
-  configForm.value.deploy.pre_deploy_commands.splice(index, 1);
-}
-
-// 添加部署后命令
-function addPostDeployCommand() {
-  configForm.value.deploy.post_deploy_commands.push('');
-}
-
-function removePostDeployCommand(index: number) {
-  configForm.value.deploy.post_deploy_commands.splice(index, 1);
 }
 </script>
 
@@ -465,195 +520,94 @@ function removePostDeployCommand(index: number) {
               </div>
             </template>
 
-            <!-- 分支配置内容 -->
-            <div class="branch-config-content">
-              <!-- 配置表单 -->
-              <div v-if="branch.config" class="config-display">
-                <NCard title="当前配置" class="mb-4">
-                  <div class="config-summary">
-                    <div class="config-section">
-                      <h4>编译配置</h4>
-                      <p><strong>Docker镜像:</strong> {{ branch.config.compile.docker_image || '未设置' }}</p>
-                      <p><strong>构建命令:</strong> {{ branch.config.compile.build_commands.length }} 条</p>
-                    </div>
-                    <div class="config-section">
-                      <h4>部署配置</h4>
-                      <p><strong>目标主机:</strong> {{ branch.config.deploy.target_hosts.length }} 台</p>
-                      <p><strong>部署目录:</strong> {{ branch.config.deploy.deploy_directory || '未设置' }}</p>
-                      <p><strong>部署前命令:</strong> {{ branch.config.deploy.pre_deploy_commands.length }} 条</p>
-                      <p><strong>部署后命令:</strong> {{ branch.config.deploy.post_deploy_commands.length }} 条</p>
-                    </div>
-                  </div>
-                  <div class="mt-4">
-                    <NButton type="primary" @click="openConfigForm(branch.name)">编辑配置</NButton>
-                  </div>
-                </NCard>
-              </div>
+            <!-- 配置表单 - 直接显示 -->
+            <div class="config-form">
+              <NCard title="配置部署参数" class="mb-4">
+                <NForm>
+                  <!-- 编译配置 -->
+                  <div class="config-section mb-6">
+                    <h3 class="section-title mb-4">编译配置</h3>
+                    <NFormItem label="Docker镜像名称" required>
+                      <NInput
+                        v-model:value="richConfigForm.docker_image"
+                        placeholder="例如: node:18-alpine, golang:1.21-alpine"
+                      />
+                    </NFormItem>
 
-              <!-- 无配置状态 -->
-              <div v-else class="py-32 text-center text-gray-400">
-                <div class="text-6xl mb-4">⚙️</div>
-                <div class="text-xl">分支 "{{ branch.name }}" 尚未配置部署参数</div>
-                <div class="text-sm mt-2 text-gray-500">
-                  点击下方按钮开始配置部署流程
-                </div>
-                <div class="mt-6">
-                  <NButton type="primary" size="large" @click="openConfigForm(branch.name)">
-                    开始配置
-                  </NButton>
-                </div>
-              </div>
+                    <NFormItem label="构建命令">
+                      <NInput
+                        v-model:value="richConfigForm.build_commands"
+                        type="textarea"
+                        placeholder="请输入构建命令，每行一个命令，例如：&#10;npm install&#10;npm run build&#10;npm run test"
+                        :rows="6"
+                        :autosize="{ minRows: 4, maxRows: 8 }"
+                        show-count
+                        clearable
+                      />
+                    </NFormItem>
+                  </div>
+
+                  <!-- 部署配置 -->
+                  <div class="config-section">
+                    <h3 class="section-title mb-4">部署配置</h3>
+                    <NFormItem label="目标主机" required>
+                      <NSelect
+                        v-model:value="configForm.deploy.target_hosts"
+                        :options="hostList.map(host => ({
+                          label: `${host.name} (${host.host})`,
+                          value: host.id
+                        }))"
+                        multiple
+                        placeholder="选择要部署到的主机"
+                        :loading="loadingHosts"
+                      />
+                    </NFormItem>
+
+                    <NFormItem label="部署目录" required>
+                      <NInput
+                        v-model:value="richConfigForm.deploy_directory"
+                        placeholder="例如: /var/www/app, /opt/myapp"
+                      />
+                    </NFormItem>
+
+                    <NFormItem label="部署前执行的命令">
+                      <NInput
+                        v-model:value="richConfigForm.pre_deploy_commands"
+                        type="textarea"
+                        placeholder="请输入部署前执行的命令，每行一个命令，例如：&#10;systemctl stop nginx&#10;backup current app"
+                        :rows="6"
+                        :autosize="{ minRows: 4, maxRows: 8 }"
+                        show-count
+                        clearable
+                      />
+                    </NFormItem>
+
+                    <NFormItem label="部署后执行的命令">
+                      <NInput
+                        v-model:value="richConfigForm.post_deploy_commands"
+                        type="textarea"
+                        placeholder="请输入部署后执行的命令，每行一个命令，例如：&#10;systemctl start nginx&#10;cleanup old files"
+                        :rows="6"
+                        :autosize="{ minRows: 4, maxRows: 8 }"
+                        show-count
+                        clearable
+                      />
+                    </NFormItem>
+                  </div>
+
+                  <!-- 操作按钮 -->
+                  <div class="form-actions">
+                    <NSpace justify="end">
+                      <NButton type="primary" @click="saveCurrentConfig" :loading="loading">保存配置</NButton>
+                    </NSpace>
+                  </div>
+                </NForm>
+              </NCard>
             </div>
           </NTabPane>
         </NTabs>
       </NCard>
     </div>
-
-    <!-- 配置表单弹窗 -->
-    <NModal
-      v-model:show="showConfigForm"
-      preset="card"
-      title="配置部署流程"
-      style="width: 800px"
-      :closable="false"
-      :mask-closable="false"
-    >
-      <NSteps :current="currentStep" class="mb-6">
-        <NStep title="编译配置" description="设置Docker镜像和构建命令" />
-        <NStep title="部署配置" description="选择目标主机和部署参数" />
-      </NSteps>
-
-      <!-- 步骤1: 编译配置 -->
-      <div v-if="currentStep === 1">
-        <NForm>
-          <NFormItem label="Docker镜像名称" required>
-            <NInput
-              v-model:value="configForm.compile.docker_image"
-              placeholder="例如: node:18-alpine, golang:1.21-alpine"
-            />
-          </NFormItem>
-
-          <NFormItem label="构建命令">
-            <div class="w-full">
-              <div
-                v-for="(_, index) in configForm.compile.build_commands"
-                :key="index"
-                class="mb-2"
-              >
-                <div class="flex gap-2">
-                  <NInput
-                    v-model:value="configForm.compile.build_commands[index]"
-                    placeholder="输入构建命令，例如: npm run build"
-                    class="flex-1"
-                  />
-                  <NButton
-                    type="error"
-                    size="small"
-                    @click="removeBuildCommand(index)"
-                    :disabled="configForm.compile.build_commands.length <= 1"
-                  >
-                    删除
-                  </NButton>
-                </div>
-              </div>
-              <NButton dashed @click="addBuildCommand" class="w-full">
-                添加构建命令
-              </NButton>
-            </div>
-          </NFormItem>
-        </NForm>
-      </div>
-
-      <!-- 步骤2: 部署配置 -->
-      <div v-if="currentStep === 2">
-        <NForm>
-          <NFormItem label="目标主机" required>
-            <NSelect
-              v-model:value="configForm.deploy.target_hosts"
-              :options="hostList.map(host => ({
-                label: `${host.name} (${host.host})`,
-                value: host.id
-              }))"
-              multiple
-              placeholder="选择要部署到的主机"
-              :loading="loadingHosts"
-            />
-          </NFormItem>
-
-          <NFormItem label="部署目录" required>
-            <NInput
-              v-model:value="configForm.deploy.deploy_directory"
-              placeholder="例如: /var/www/app, /opt/myapp"
-            />
-          </NFormItem>
-
-          <NFormItem label="部署前执行的命令">
-            <div class="w-full">
-              <div
-                v-for="(_, index) in configForm.deploy.pre_deploy_commands"
-                :key="index"
-                class="mb-2"
-              >
-                <div class="flex gap-2">
-                  <NInput
-                    v-model:value="configForm.deploy.pre_deploy_commands[index]"
-                    placeholder="输入部署前执行的命令，例如: systemctl stop nginx"
-                    class="flex-1"
-                  />
-                  <NButton
-                    type="error"
-                    size="small"
-                    @click="removePreDeployCommand(index)"
-                  >
-                    删除
-                  </NButton>
-                </div>
-              </div>
-              <NButton dashed @click="addPreDeployCommand" class="w-full">
-                添加部署前命令
-              </NButton>
-            </div>
-          </NFormItem>
-
-          <NFormItem label="部署后执行的命令">
-            <div class="w-full">
-              <div
-                v-for="(_, index) in configForm.deploy.post_deploy_commands"
-                :key="index"
-                class="mb-2"
-              >
-                <div class="flex gap-2">
-                  <NInput
-                    v-model:value="configForm.deploy.post_deploy_commands[index]"
-                    placeholder="输入部署后执行的命令，例如: systemctl start nginx"
-                    class="flex-1"
-                  />
-                  <NButton
-                    type="error"
-                    size="small"
-                    @click="removePostDeployCommand(index)"
-                  >
-                    删除
-                  </NButton>
-                </div>
-              </div>
-              <NButton dashed @click="addPostDeployCommand" class="w-full">
-                添加部署后命令
-              </NButton>
-            </div>
-          </NFormItem>
-        </NForm>
-      </div>
-
-      <template #footer>
-        <NSpace justify="end">
-          <NButton @click="closeConfigForm">取消</NButton>
-          <NButton v-if="currentStep > 1" @click="prevStep">上一步</NButton>
-          <NButton v-if="currentStep < 2" type="primary" @click="nextStep">下一步</NButton>
-          <NButton v-if="currentStep === 2" type="primary" @click="saveConfigForm">保存配置</NButton>
-        </NSpace>
-      </template>
-    </NModal>
 
     <!-- 添加分支弹窗 -->
     <NModal
@@ -805,5 +759,25 @@ function removePostDeployCommand(index: number) {
 .config-section strong {
   color: #333;
   font-weight: 600;
+}
+
+/* 编辑表单样式 */
+.config-edit-form {
+  width: 100%;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 2px solid #18a058;
+  padding-bottom: 8px;
+  margin-bottom: 16px;
+}
+
+.form-actions {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #e0e0e0;
 }
 </style>
