@@ -1,0 +1,24 @@
+uid=67_0 RootWebArea "登录 - Vben Admin" url="http://localhost:5891/#/auth/login?redirect=%252Fdeploy-config%253FprojectId%253D1%2526projectName%253D%2525E7%252583%2525A6%2525E7%252583%2525A6%2525E7%252583%2525A6%2526projectCode%253DTEST001"
+  uid=67_1 StaticText "Jimuqu Devops"
+  uid=67_2 button
+  uid=67_3 button
+  uid=67_4 button
+  uid=67_5 button
+  uid=67_6 button
+  uid=67_7 button
+  uid=67_8 button
+  uid=67_9 button
+  uid=67_10 button haspopup="menu"
+  uid=67_11 image "Vben Admin" url="https://unpkg.com/@vbenjs/static-source@0.1.7/source/logo-v1.webp"
+  uid=67_12 StaticText "Vben Admin"
+  uid=67_13 image "87667-SVG8"
+  uid=67_14 StaticText "开箱即用的大型中后台管理系统"
+  uid=67_15 StaticText "工程化、高性能、跨组件库的前端模版"
+  uid=67_16 heading "欢迎回来 👋🏻" level="2"
+  uid=67_17 StaticText "请输入您的帐户信息以开始管理您的项目"
+  uid=67_18 textbox "请输入用户名" value="admin"
+  uid=67_19 textbox "密码" value="•••••"
+  uid=67_20 button "login"
+  uid=67_21 StaticText "Copyright © 2024"
+  uid=67_22 link "Vben" url="https://www.vben.pro/"
+    uid=67_23 StaticText "Vben"

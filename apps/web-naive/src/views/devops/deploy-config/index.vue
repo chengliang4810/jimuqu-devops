@@ -46,6 +46,7 @@ const activeTab = ref('main');
 const showCopyBranchModal = ref(false);
 const copySourceBranch = ref('');
 const copyTargetBranch = ref('');
+const newBranchInputRef = ref('');
 
 // 用于存储富文本编辑器的配置
 const richConfigForm = ref({
@@ -296,18 +297,29 @@ async function handleAddBranchTab() {
     counter++;
   }
 
+  // 重置输入框的值
+  newBranchInputRef.value = branchName;
+
   // 显示输入对话框
   dialog.create({
     title: '添加新分支',
     content: () => {
-      const inputRef = ref('');
       return h('div', { style: 'padding: 16px 0;' }, [
         h('div', { style: 'margin-bottom: 12px;' }, '请输入新分支的名称：'),
         h(NInput, {
-          value: inputRef.value,
+          value: newBranchInputRef.value,
           placeholder: branchName,
           onUpdateValue: (value: string) => {
-            inputRef.value = value;
+            newBranchInputRef.value = value;
+          },
+          ref: (el: any) => {
+            // 自动聚焦到输入框
+            if (el) {
+              setTimeout(() => {
+                el.focus();
+                el.select();
+              }, 100);
+            }
           }
         })
       ]);
@@ -315,8 +327,7 @@ async function handleAddBranchTab() {
     positiveText: '确定',
     negativeText: '取消',
     onPositiveClick: () => {
-      const inputElement = document.querySelector('.n-dialog .n-input__input-el') as HTMLInputElement;
-      const branchNameInput = inputElement?.value.trim() || branchName;
+      const branchNameInput = newBranchInputRef.value.trim() || branchName;
 
       if (!branchNameInput) {
         message.warning('请输入分支名称');
@@ -331,7 +342,15 @@ async function handleAddBranchTab() {
       // 添加到本地列表
       branches.value.push({ name: branchNameInput, config: undefined });
       activeTab.value = branchNameInput;
+
+      // 清空输入框
+      newBranchInputRef.value = '';
+
       return true;
+    },
+    onClose: () => {
+      // 关闭时清空输入框
+      newBranchInputRef.value = '';
     }
   });
 }
