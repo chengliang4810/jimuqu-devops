@@ -1,8 +1,9 @@
-package cryptoutil
+package crypto
 
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -75,4 +76,11 @@ func (c *Cipher) Decrypt(encoded string) (string, error) {
 	}
 
 	return string(plain), nil
+}
+
+// HMACSHA256 计算HMAC-SHA256签名
+func HMACSHA256(data, key []byte) []byte {
+	h := hmac.New(sha256.New, key)
+	h.Write(data)
+	return h.Sum(nil)
 }
