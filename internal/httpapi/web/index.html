@@ -4,9 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>积木区流水线</title>
-  <link rel="stylesheet" href="/assets/styles.css?v=20260310j">
+  <link rel="stylesheet" href="/assets/styles.css?v=20260311b">
 </head>
 <body>
+  <!-- 消息提示 -->
+  <div id="messageBar" class="message-bar hidden"></div>
+
   <!-- 登录界面 -->
   <div id="loginScreen" class="login-screen">
     <div class="login-container">
@@ -39,19 +42,17 @@
         <button class="nav-button active" data-view-target="home">首页</button>
         <button class="nav-button" data-view-target="hosts">主机</button>
         <button class="nav-button" data-view-target="projects">项目</button>
-        <button class="nav-button" data-view-target="notifications">通知渠道</button>
         <button class="nav-button" data-view-target="logs">部署记录</button>
+        <button class="nav-button" data-view-target="notifications">通知渠道</button>
       </nav>
       <div class="topbar-actions">
         <div class="signal-box">
           <span class="signal-dot"></span>
           <span id="serverOrigin"></span>
-          <button id="logoutBtn" class="button button-secondary">退出登录</button>
         </div>
+        <button id="logoutBtn" class="button button-secondary">退出登录</button>
       </div>
     </header>
-
-    <div id="messageBar" class="message-bar hidden"></div>
 
     <main class="views-shell">
       <section id="view-home" class="view-section active reveal">
@@ -183,13 +184,6 @@
           <div class="runs-layout">
             <div id="runList" class="run-list empty-state">正在加载部署记录...</div>
             <div class="run-detail panel-inset">
-              <div class="run-detail-head">
-                <div>
-                  <strong id="runDetailTitle">暂无运行详情</strong>
-                  <span id="runDetailMeta" class="hint-text">点击左侧记录查看日志</span>
-                </div>
-                <span id="runStreamState" class="status-chip status-queued">未连接</span>
-              </div>
               <pre id="runLogOutput" class="log-output">尚未加载日志。</pre>
             </div>
           </div>
@@ -272,15 +266,15 @@
               <span>部署超时(分钟)</span>
               <input id="timeoutMinutes" type="number" min="1" value="30" required>
             </label>
-            <label>
-              <span>Webhook Token</span>
-              <input id="webhookToken" type="text" placeholder="自动生成或手动输入">
-            </label>
             <label class="full-span">
               <span>描述</span>
               <textarea id="projectDescription" name="description" rows="3" placeholder="可填写环境、用途或备注"></textarea>
             </label>
           </form>
+          <div class="tab-footer">
+            <button type="button" class="button button-secondary" id="cancelProjectModalBtn">取消</button>
+            <button type="button" class="button" id="basicNextBtn">下一步</button>
+          </div>
         </div>
 
         <!-- 编译配置Tab -->
@@ -294,19 +288,29 @@
               <span>编译命令</span>
               <textarea id="buildCommands" rows="5" placeholder="每行一个命令，例如&#10;pnpm install&#10;pnpm run build" required></textarea>
             </label>
-            <label>
+            <label class="full-span">
               <span>制品过滤模式</span>
-              <select id="artifactFilterMode">
-                <option value="none">不筛选</option>
-                <option value="include">仅包含</option>
-                <option value="exclude">排除</option>
-              </select>
+              <div class="radio-group">
+                <label class="radio-label">
+                  <input type="radio" name="artifactFilterMode" value="exclude" checked>
+                  <span>排除</span>
+                </label>
+                <label class="radio-label">
+                  <input type="radio" name="artifactFilterMode" value="include">
+                  <span>包含</span>
+                </label>
+              </div>
             </label>
             <label class="full-span">
               <span>制品过滤规则</span>
-              <textarea id="artifactRules" rows="4" placeholder="每行一个目录或文件名；包含和排除二选一"></textarea>
+              <textarea id="artifactRules" rows="4" placeholder="每行一个目录或文件名，例如：node_modules&#10;.git&#10;*.log"></textarea>
             </label>
           </form>
+          <div class="tab-footer">
+            <button type="button" class="button button-secondary" id="cancelProjectModalBtn2">取消</button>
+            <button type="button" class="button button-secondary" id="buildPrevBtn">上一步</button>
+            <button type="button" class="button" id="buildNextBtn">下一步</button>
+          </div>
         </div>
 
         <!-- 部署配置Tab -->
@@ -319,16 +323,16 @@
               </select>
             </label>
             <label>
-              <span>保留版本数量</span>
-              <input id="versionCount" type="number" min="1" value="5" required>
+              <span>远程部署目录</span>
+              <input id="remoteDeployDir" type="text" placeholder="/data/apps/portal" required>
             </label>
             <label>
               <span>远程保存目录</span>
-              <input id="remoteSaveDir" type="text" placeholder="/data/releases" required>
+              <input id="remoteSaveDir" type="text" placeholder="/data/jimuqu/projects" value="/data/jimuqu/projects" required>
             </label>
             <label>
-              <span>远程部署目录</span>
-              <input id="remoteDeployDir" type="text" placeholder="/data/apps/portal" required>
+              <span>保留版本数量</span>
+              <input id="versionCount" type="number" min="1" value="5" required>
             </label>
             <label class="full-span">
               <span>部署前命令</span>
@@ -339,21 +343,19 @@
               <textarea id="postDeployCommands" rows="3" placeholder="例如&#10;docker restart app"></textarea>
             </label>
             <label class="full-span">
-              <span>通知 Webhook URL</span>
-              <input id="notifyWebhookURL" type="url" placeholder="https://example.com/hooks/deploy">
-            </label>
-            <label class="full-span">
-              <span>通知 Bearer Token</span>
-              <input id="notifyBearerToken" type="password" placeholder="编辑时留空表示不修改">
+              <span>通知渠道</span>
+              <select id="notificationChannelId">
+                <option value="">使用默认渠道</option>
+                <option value="-1">不通知</option>
+              </select>
             </label>
           </form>
+          <div class="tab-footer">
+            <button type="button" class="button button-secondary" id="cancelProjectModalBtn3">取消</button>
+            <button type="button" class="button button-secondary" id="deployPrevBtn">上一步</button>
+            <button type="submit" class="button" id="saveProjectBtn">保存</button>
+          </div>
         </div>
-      </div>
-
-      <!-- 统一的底部操作栏 -->
-      <div class="modal-footer">
-        <button type="button" class="button button-secondary" id="cancelProjectModalBtn">取消</button>
-        <button type="submit" class="button" id="saveProjectBtn">保存</button>
       </div>
     </div>
   </div>
@@ -375,14 +377,18 @@
           <span>渠道类型</span>
           <select id="notifyChannelType" name="type" required>
             <option value="webhook">Webhook</option>
-            <option value="wechat">企业微信</option>
             <option value="dingtalk">钉钉</option>
+            <option value="wechat">企业微信</option>
             <option value="feishu">飞书</option>
           </select>
         </label>
         <label class="full-span">
-          <span>配置</span>
-          <textarea id="notifyChannelConfig" rows="4" placeholder="JSON格式的配置信息，例如webhook地址"></textarea>
+          <span>Webhook URL</span>
+          <input id="notifyChannelWebhookURL" type="url" placeholder="https://oapi.dingtalk.com/robot/send?access_token=xxx" required>
+        </label>
+        <label class="full-span">
+          <span>签名密钥（可选）</span>
+          <input id="notifyChannelSecret" type="text" placeholder="钉钉群机器人加签密钥，其他类型留空">
         </label>
         <label class="full-span">
           <span>备注</span>
@@ -396,6 +402,6 @@
     </div>
   </div>
 
-  <script src="/assets/app.js?v=20260310fixed" defer></script>
+  <script src="/assets/app.js?v=20260311c" defer></script>
 </body>
 </html>

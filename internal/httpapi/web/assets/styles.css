@@ -133,8 +133,9 @@ h2 {
 }
 
 .topbar-actions {
-  display: grid;
-  justify-items: end;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   gap: 12px;
 }
 
@@ -207,6 +208,44 @@ h2 {
   border: 1px solid rgba(27, 105, 115, 0.12);
 }
 
+.radio-group {
+  display: flex;
+  gap: 20px;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(34, 53, 59, 0.14);
+  transition: all 0.2s ease;
+  flex-direction: row; /* 强制横向排列：选项在左，文字在右 */
+}
+
+.radio-label:hover {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(27, 105, 115, 0.3);
+}
+
+.radio-label input[type="radio"] {
+  cursor: pointer;
+  margin: 0; /* 移除默认边距 */
+  flex-shrink: 0; /* 防止选项被压缩 */
+}
+
+.radio-label span {
+  white-space: nowrap; /* 防止文字换行 */
+}
+
+.radio-label input[type="radio"]:checked + span {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .hero-note-label,
 .stat-label,
 .stat-sub,
@@ -273,24 +312,30 @@ label span {
 }
 
 .message-bar {
-  margin-top: 18px;
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  min-width: 300px;
+  max-width: 500px;
   padding: 14px 18px;
   border-radius: 16px;
   font-weight: 700;
   border: 1px solid transparent;
-  animation: riseIn 0.35s ease;
+  animation: slideInRight 0.35s ease;
+  z-index: 99999;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }
 
 .message-bar.success {
-  color: var(--success);
-  background: rgba(30, 123, 79, 0.1);
-  border-color: rgba(30, 123, 79, 0.18);
+  color: #ffffff;
+  background: rgba(30, 123, 79, 0.95);
+  border-color: rgba(30, 123, 79, 1);
 }
 
 .message-bar.error {
-  color: var(--danger);
-  background: rgba(173, 46, 46, 0.1);
-  border-color: rgba(173, 46, 46, 0.18);
+  color: #ffffff;
+  background: rgba(173, 46, 46, 0.95);
+  border-color: rgba(173, 46, 46, 1);
 }
 
 .hidden {
@@ -472,6 +517,11 @@ textarea {
   transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
 
+.run-card {
+  width: 280px;
+  min-height: 100px;
+}
+
 .list-card:hover {
   transform: translateY(-1px);
   border-color: rgba(27, 105, 115, 0.28);
@@ -511,6 +561,30 @@ textarea {
   margin-top: 14px;
 }
 
+.card-delete-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(173, 46, 46, 0.1);
+  color: var(--danger);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.card-delete-btn:hover {
+  background: rgba(173, 46, 46, 0.2);
+  transform: scale(1.1);
+}
+
 .micro-button {
   appearance: none;
   padding: 8px 12px;
@@ -523,6 +597,61 @@ textarea {
 
 .micro-button.danger {
   color: var(--danger);
+}
+
+/* 项目卡片操作按钮均分底部空间 */
+.item-actions-full {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+  width: 100%;
+}
+
+.action-button {
+  appearance: none;
+  padding: 10px 8px;
+  border-radius: 12px;
+  border: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.action-button-deploy {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.action-button-deploy:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.action-button-webhook {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+}
+
+.action-button-webhook:hover {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.action-button-config {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: white;
+}
+
+.action-button-config:hover {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
 }
 
 .command-center {
@@ -606,8 +735,11 @@ textarea {
 
 .runs-layout {
   display: grid;
-  grid-template-columns: minmax(280px, 0.72fr) minmax(0, 1.28fr);
+  grid-template-columns: 280px 1fr;
   gap: 16px;
+  height: 100%;
+  max-height: calc(100vh - 300px);
+  overflow: hidden;
 }
 
 .run-list {
@@ -626,6 +758,10 @@ textarea {
 
 .run-detail {
   min-height: 420px;
+  height: 100%;
+  max-height: calc(100vh - 300px);
+  display: flex;
+  flex-direction: column;
 }
 
 .log-toolbar {
@@ -637,11 +773,17 @@ textarea {
 }
 
 .log-output {
-  margin: 14px 0 0;
+  margin: 0;
   padding: 16px;
-  min-height: 340px;
-  max-height: 620px;
-  overflow: auto;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
   overflow-y: auto;
   border-radius: 16px;
   background: #152d33;
@@ -755,6 +897,15 @@ textarea {
   border-top: 1px solid var(--line);
 }
 
+.tab-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
 .modal-head {
   display: flex;
   justify-content: space-between;
@@ -815,6 +966,17 @@ textarea {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 

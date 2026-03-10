@@ -8,6 +8,7 @@ const state = {
   runDetail: null,
   token: localStorage.getItem("jwt_token") || null,
   isAuthenticated: !!localStorage.getItem("jwt_token"),
+  isAutoSelecting: false, // 防止循环选择
 };
 
 // 移除轮询计时器，改用手动刷新
@@ -64,16 +65,10 @@ function bindElements() {
     viewSections: Array.from(document.querySelectorAll(".view-section")),
     messageBar: document.getElementById("messageBar"),
     serverOrigin: document.getElementById("serverOrigin"),
-    homeProjectChip: document.getElementById("homeProjectChip"),
-    homeSelectedProjectMeta: document.getElementById("homeSelectedProjectMeta"),
-    homeGoProjectsBtn: document.getElementById("homeGoProjectsBtn"),
-    homeGoLogsBtn: document.getElementById("homeGoLogsBtn"),
     projectCount: document.getElementById("projectCount"),
     hostCount: document.getElementById("hostCount"),
     runCount: document.getElementById("runCount"),
     notifyCount: document.getElementById("notifyCount"),
-    selectedRunStatus: document.getElementById("selectedRunStatus"),
-    lastSyncText: document.getElementById("lastSyncText"),
     hostSummaryChip: document.getElementById("hostSummaryChip"),
     projectSummaryChip: document.getElementById("projectSummaryChip"),
     notifyChannelSummaryChip: document.getElementById("notifyChannelSummaryChip"),
@@ -103,18 +98,15 @@ function bindElements() {
     projectRepoURL: document.getElementById("projectRepoURL"),
     projectDescription: document.getElementById("projectDescription"),
     timeoutMinutes: document.getElementById("timeoutMinutes"),
-    webhookToken: document.getElementById("webhookToken"),
     buildImage: document.getElementById("buildImage"),
     buildCommands: document.getElementById("buildCommands"),
-    artifactFilterMode: document.getElementById("artifactFilterMode"),
     artifactRules: document.getElementById("artifactRules"),
     remoteSaveDir: document.getElementById("remoteSaveDir"),
     remoteDeployDir: document.getElementById("remoteDeployDir"),
     preDeployCommands: document.getElementById("preDeployCommands"),
     postDeployCommands: document.getElementById("postDeployCommands"),
     versionCount: document.getElementById("versionCount"),
-    notifyWebhookURL: document.getElementById("notifyWebhookURL"),
-    notifyBearerToken: document.getElementById("notifyBearerToken"),
+    notificationChannelId: document.getElementById("notificationChannelId"),
     hostModal: document.getElementById("hostModal"),
     hostModalTitle: document.getElementById("hostModalTitle"),
     closeHostModalBtn: document.getElementById("closeHostModalBtn"),
@@ -136,6 +128,13 @@ function bindElements() {
     notifyChannelModalTitle: document.getElementById("notifyChannelModalTitle"),
     closeNotifyChannelModalBtn: document.getElementById("closeNotifyChannelModalBtn"),
     cancelNotifyChannelModalBtn: document.getElementById("cancelNotifyChannelModalBtn"),
+    notifyChannelForm: document.getElementById("notifyChannelForm"),
+    notifyChannelName: document.getElementById("notifyChannelName"),
+    notifyChannelType: document.getElementById("notifyChannelType"),
+    notifyChannelWebhookURL: document.getElementById("notifyChannelWebhookURL"),
+    notifyChannelSecret: document.getElementById("notifyChannelSecret"),
+    notifyChannelRemark: document.getElementById("notifyChannelRemark"),
+    loadMoreLogsBtn: document.getElementById("loadMoreLogsBtn"),
   });
 }
 
@@ -167,7 +166,15 @@ function bindEvents() {
   els.addProjectBtn.addEventListener("click", openProjectModalForCreate);
   els.closeProjectModalBtn.addEventListener("click", closeProjectModal);
   els.cancelProjectModalBtn.addEventListener("click", closeProjectModal);
+  els.cancelProjectModalBtn2?.addEventListener("click", closeProjectModal);
+  els.cancelProjectModalBtn3?.addEventListener("click", closeProjectModal);
   els.saveProjectBtn.addEventListener("click", handleProjectSubmit);
+
+  // 项目表单导航按钮
+  document.getElementById("basicNextBtn")?.addEventListener("click", () => switchTab("build"));
+  document.getElementById("buildPrevBtn")?.addEventListener("click", () => switchTab("basic"));
+  document.getElementById("buildNextBtn")?.addEventListener("click", () => switchTab("deploy"));
+  document.getElementById("deployPrevBtn")?.addEventListener("click", () => switchTab("build"));
 
   // 通知渠道事件
   els.addNotifyChannelBtn.addEventListener("click", openNotifyChannelModal);
@@ -176,8 +183,12 @@ function bindEvents() {
   els.cancelNotifyChannelModalBtn.addEventListener("click", closeNotifyChannelModal);
 
   // 部署记录事件
-  els.refreshLogsBtn.addEventListener("click", refreshRuns);
-  els.loadMoreLogsBtn.addEventListener("click", loadMoreRuns);
+  if (els.refreshLogsBtn) {
+    els.refreshLogsBtn.addEventListener("click", refreshAll);
+  }
+  if (els.loadMoreLogsBtn) {
+    els.loadMoreLogsBtn.addEventListener("click", refreshAll);
+  }
 
   // Tab切换事件
   document.querySelectorAll('.tab-button').forEach(button => {
@@ -245,6 +256,7 @@ async function refreshAll() {
     renderProjects();
     renderNotifyChannels();
     renderHostOptionsForConfig();
+    renderNotificationChannelOptionsForConfig();
     renderOverview();
     renderRuns();
   } catch (error) {
@@ -303,7 +315,7 @@ function renderOverview() {
 // 移除首页相关函数结束
 
 function renderHosts() {
-  if (!state.hosts.length) {
+  if (!state.hosts || !state.hosts.length) {
     els.hostList.className = "list-grid empty-state";
     els.hostList.textContent = "暂无主机，先创建一个部署目标。";
     return;
@@ -362,9 +374,7 @@ function renderProjects() {
   state.projects.forEach((project) => {
     const card = document.createElement("article");
     card.className = "list-card";
-
-    const head = document.createElement("div");
-    head.className = "item-head";
+    card.style.position = "relative";
 
     const info = document.createElement("div");
     info.innerHTML = `
@@ -373,11 +383,34 @@ function renderProjects() {
       <p class="item-meta">${escapeHTML(project.repo_url)}</p>
     `;
 
-    const actions = document.createElement("div");
-    actions.className = "item-actions";
+    // 删除按钮放在右上角
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "card-delete-btn";
+    deleteBtn.innerHTML = "×";
+    deleteBtn.title = "删除项目";
+    deleteBtn.onclick = (event) => {
+      event.stopPropagation();
+      handleDeleteProject(project.id, project.name);
+    };
 
-    const buttons = [
-      createMicroButton("Webhook", (event) => {
+    const actions = document.createElement("div");
+    actions.className = "item-actions item-actions-full";
+
+    const buttons = [];
+
+    // 1. 部署按钮（如果有部署配置）
+    if (project.has_deploy_config) {
+      buttons.push(
+        createActionButton("部署", "deploy", (event) => {
+          event.stopPropagation();
+          handleDeployProject(project.id, project.name);
+        })
+      );
+    }
+
+    // 2. Webhook按钮
+    buttons.push(
+      createActionButton("Webhook", "webhook", (event) => {
         event.stopPropagation();
         const webhookUrl = `${window.location.origin}/api/v1/webhooks/${project.webhook_token}`;
         navigator.clipboard.writeText(webhookUrl).then(() => {
@@ -385,32 +418,23 @@ function renderProjects() {
         }).catch(() => {
           showMessage("复制失败，请手动复制", "error");
         });
-      }),
-      createMicroButton("配置", (event) => {
+      })
+    );
+
+    // 3. 配置按钮
+    buttons.push(
+      createActionButton("配置", "config", (event) => {
         event.stopPropagation();
         openProjectModalForEdit(project);
-      }),
-    ];
-
-    if (project.has_deploy_config) {
-      buttons.push(
-        createMicroButton("触发", (event) => {
-          event.stopPropagation();
-          handleTriggerProject(project.id, project.name);
-        })
-      );
-    }
-
-    buttons.push(
-      createMicroButton("删除", (event) => {
-        event.stopPropagation();
-        handleDeleteProject(project.id, project.name);
-      }, true)
+      })
     );
 
     actions.append(...buttons);
 
-    head.append(info);
+    const head = document.createElement("div");
+    head.className = "item-head";
+    head.append(info, deleteBtn);
+
     card.append(head, actions);
     els.projectList.append(card);
   });
@@ -446,6 +470,10 @@ function renderNotifyChannels() {
     actions.className = "item-actions";
 
     const buttons = [
+      createMicroButton("测试", (event) => {
+        event.stopPropagation();
+        handleTestNotifyChannel(channel.id, channel.name);
+      }),
       createMicroButton("编辑", (event) => {
         event.stopPropagation();
         openNotifyChannelModalForEdit(channel);
@@ -473,6 +501,13 @@ function renderRuns() {
     return;
   }
 
+  // 如果没有选中的记录，默认选中最后一条
+  let needLoadDetail = false;
+  if (!state.selectedRunId) {
+    state.selectedRunId = runs[0].id;
+    needLoadDetail = true;
+  }
+
   els.runSummaryChip.textContent = `${runs.length} 条记录`;
   els.runList.className = "run-list";
   els.runList.innerHTML = "";
@@ -488,9 +523,19 @@ function renderRuns() {
     head.className = "run-card-head";
 
     const info = document.createElement("div");
+    // 根据触发类型显示不同的信息
+    let triggerInfo = "";
+    if (run.trigger_type === "webhook") {
+      triggerInfo = `Webhook ${run.trigger_ref ? `/ ${escapeHTML(run.trigger_ref)}` : ""}`;
+    } else if (run.trigger_type === "manual") {
+      triggerInfo = "手动触发";
+    } else {
+      triggerInfo = run.trigger_type || "-";
+    }
+
     info.innerHTML = `
       <p class="item-title">#${run.id} ${escapeHTML(project.name)}</p>
-      <p class="item-subtitle">${escapeHTML(project.branch)} / ${escapeHTML(run.trigger_type)} / ${escapeHTML(run.trigger_ref || "-")}</p>
+      <p class="item-subtitle">${escapeHTML(project.branch)} / ${triggerInfo}</p>
       <p class="item-meta">${formatDateTime(run.created_at)}</p>
     `;
 
@@ -503,21 +548,33 @@ function renderRuns() {
     els.runList.append(card);
   });
 
+  // 渲染详细信息
   renderRunDetail();
+
+  // 如果需要加载详细信息且是自动选择的情况，则异步加载
+  if (needLoadDetail && state.selectedRunId && !state.runDetail) {
+    loadRunDetail(state.selectedRunId);
+  }
+}
+
+// 新增：加载运行详细信息（不触发renderRuns循环）
+async function loadRunDetail(runId) {
+  try {
+    state.runDetail = await api(`/api/v1/runs/${runId}`);
+    startRunStream(runId);
+    renderRunDetail(); // 只渲染详细信息，不重新渲染列表
+  } catch (error) {
+    console.error("加载运行详细信息失败:", error);
+  }
 }
 
 function renderRunDetail() {
   if (!state.runDetail) {
-    els.runDetailTitle.textContent = "暂无运行详情";
-    els.runDetailMeta.textContent = "点击左侧记录查看日志";
     els.runLogOutput.textContent = "尚未加载日志。";
-    setRunStreamState("未连接", "queued");
     return;
   }
 
   const run = state.runDetail;
-  els.runDetailTitle.textContent = `运行 #${run.id} / ${statusText(run.status)}`;
-  els.runDetailMeta.textContent = `${formatDateTime(run.created_at)} / ${run.trigger_type} / ${run.trigger_ref || "-"}`;
 
   const sections = [];
   if (run.error_message) {
@@ -528,12 +585,6 @@ function renderRunDetail() {
 
   // 自动滚动到底部显示最新日志
   els.runLogOutput.scrollTop = els.runLogOutput.scrollHeight;
-
-  if (isTerminalStatus(run.status)) {
-    setRunStreamState("已结束", run.status);
-  } else if (streamingRunId === run.id) {
-    setRunStreamState("实时刷新中", "running");
-  }
 }
 
 function startRunStream(runId) {
@@ -549,7 +600,7 @@ function startRunStream(runId) {
   streamingRunId = runId;
   setRunStreamState("连接中", "running");
 
-  runStream = new EventSource(`/api/v1/runs/${runId}/stream`);
+  runStream = new EventSource(`/api/v1/runs/${runId}/stream?token=${state.token}`);
   runStream.addEventListener("run", (event) => {
     const run = JSON.parse(event.data);
     state.runDetail = run;
@@ -598,8 +649,7 @@ function syncRunIntoList(run) {
 }
 
 function setRunStreamState(text, status) {
-  els.runStreamState.textContent = text;
-  els.runStreamState.className = `status-chip ${statusClass(status || "queued")}`;
+  // 状态显示元素已移除，此函数保留以保持兼容性
 }
 
 async function selectRun(runId) {
@@ -654,7 +704,6 @@ async function handleProjectSubmit(event) {
     repo_url: els.projectRepoURL.value.trim(),
     branch: els.projectBranch.value.trim(),
     description: els.projectDescription.value.trim(),
-    webhook_token: els.webhookToken.value.trim() || undefined,
   };
 
   try {
@@ -668,31 +717,50 @@ async function handleProjectSubmit(event) {
 
     // 然后保存部署配置（合并编译和部署Tab的数据）
     const configPayload = {
-      host_id: parseInt(els.deployHostId.value) || 0,
+      host_id: parseInt(els.deployHostId.value),
       build_image: els.buildImage.value.trim(),
       build_commands: textToLines(els.buildCommands.value),
-      artifact_filter_mode: els.artifactFilterMode.value,
+      artifact_filter_mode: document.querySelector('input[name="artifactFilterMode"]:checked')?.value || "include",
       artifact_rules: textToLines(els.artifactRules.value),
       remote_save_dir: els.remoteSaveDir.value.trim(),
       remote_deploy_dir: els.remoteDeployDir.value.trim(),
       pre_deploy_commands: textToLines(els.preDeployCommands.value),
       post_deploy_commands: textToLines(els.postDeployCommands.value),
       timeout_seconds: parseInt(els.timeoutMinutes.value) * 60, // 转换为秒
-      notify_webhook_url: els.notifyWebhookURL.value.trim(),
     };
 
-    // 只有在有BearerToken时才添加
-    if (els.notifyBearerToken.value.trim()) {
-      configPayload.notify_bearer_token = els.notifyBearerToken.value.trim();
+    // 处理通知渠道选择
+    const channelValue = els.notificationChannelId.value;
+    if (channelValue === "-1") {
+      configPayload.notification_channel_id = null; // 不通知
+    } else if (channelValue !== "") {
+      configPayload.notification_channel_id = parseInt(channelValue); // 指定渠道
     }
+    // channelValue === "" 时，不设置该字段，使用默认渠道
 
-    await api(`/api/v1/projects/${project.id}/config`, { method: "PUT", body: configPayload });
+    await api(`/api/v1/projects/${project.id}/deploy-config`, { method: "PUT", body: configPayload });
 
     showMessage(id ? "项目已更新" : "项目已创建", "success");
     closeProjectModal();
     await refreshAll();
   } catch (error) {
-    showMessage(error.message, "error");
+    // 处理各种错误情况
+    let errorMessage = error.message;
+
+    // UNIQUE约束错误
+    if (errorMessage.includes("UNIQUE constraint failed")) {
+      errorMessage = "该仓库地址和分支组合已存在，请勿重复创建项目";
+    }
+    // host_id为空或无效
+    else if (errorMessage.includes("host_id is required") || errorMessage.includes("host_id")) {
+      errorMessage = "请选择目标主机";
+    }
+    // 其他验证错误
+    else if (errorMessage.includes("is required") || errorMessage.includes("required")) {
+      errorMessage = `缺少必填字段: ${errorMessage}`;
+    }
+
+    showMessage(errorMessage, "error");
   }
 }
 
@@ -728,18 +796,56 @@ function openNotifyChannelModal() {
   document.getElementById("notifyChannelId").value = "";
   document.getElementById("notifyChannelName").value = "";
   document.getElementById("notifyChannelType").value = "webhook";
-  document.getElementById("notifyChannelConfig").value = "";
+  document.getElementById("notifyChannelWebhookURL").value = "";
+  document.getElementById("notifyChannelSecret").value = "";
   document.getElementById("notifyChannelRemark").value = "";
   els.notifyChannelModal.style.display = "flex";
 }
 
-function openNotifyChannelModalForEdit(channel) {
+async function openNotifyChannelModalForEdit(channel) {
   els.notifyChannelModalTitle.textContent = "编辑通知渠道";
   document.getElementById("notifyChannelId").value = channel.id;
   document.getElementById("notifyChannelName").value = channel.name;
   document.getElementById("notifyChannelType").value = channel.type;
-  document.getElementById("notifyChannelConfig").value = channel.config_json || "";
   document.getElementById("notifyChannelRemark").value = channel.remark || "";
+
+  // 获取完整配置信息
+  try {
+    const fullChannel = await api(`/api/v1/notification-channels/${channel.id}`);
+    if (fullChannel.config) {
+      const config = fullChannel.config;
+      // 根据类型填充URL和密钥字段
+      switch (channel.type) {
+        case "webhook":
+          document.getElementById("notifyChannelWebhookURL").value = config.url || "";
+          document.getElementById("notifyChannelSecret").value = config.secret || "";
+          break;
+        case "wechat":
+          document.getElementById("notifyChannelWebhookURL").value = config.webhook_url || "";
+          document.getElementById("notifyChannelSecret").value = config.key || "";
+          break;
+        case "dingtalk":
+          document.getElementById("notifyChannelWebhookURL").value = config.webhook_url || "";
+          document.getElementById("notifyChannelSecret").value = config.secret || "";
+          break;
+        case "feishu":
+          document.getElementById("notifyChannelWebhookURL").value = config.webhook_url || "";
+          document.getElementById("notifyChannelSecret").value = "";
+          break;
+        default:
+          document.getElementById("notifyChannelWebhookURL").value = "";
+          document.getElementById("notifyChannelSecret").value = "";
+      }
+    } else {
+      document.getElementById("notifyChannelWebhookURL").value = "";
+      document.getElementById("notifyChannelSecret").value = "";
+    }
+  } catch (error) {
+    showMessage(error.message, "error");
+    document.getElementById("notifyChannelWebhookURL").value = "";
+    document.getElementById("notifyChannelSecret").value = "";
+  }
+
   els.notifyChannelModal.style.display = "flex";
 }
 
@@ -752,10 +858,46 @@ function closeNotifyChannelModal() {
 async function handleNotifyChannelSubmit(event) {
   event.preventDefault();
   const id = document.getElementById("notifyChannelId").value;
+  const type = document.getElementById("notifyChannelType").value;
+  const webhookURL = document.getElementById("notifyChannelWebhookURL").value;
+  const secret = document.getElementById("notifyChannelSecret").value;
+
+  // 根据渠道类型构建配置对象
+  let config = {};
+  switch (type) {
+    case "webhook":
+      config = {
+        url: webhookURL,
+        token: "",
+        secret: secret
+      };
+      break;
+    case "wechat":
+      config = {
+        webhook_url: webhookURL,
+        key: secret
+      };
+      break;
+    case "dingtalk":
+      config = {
+        webhook_url: webhookURL,
+        secret: secret
+      };
+      break;
+    case "feishu":
+      config = {
+        webhook_url: webhookURL
+      };
+      break;
+    default:
+      showMessage("不支持的渠道类型", "error");
+      return;
+  }
+
   const channelPayload = {
     name: document.getElementById("notifyChannelName").value,
-    type: document.getElementById("notifyChannelType").value,
-    config_json: document.getElementById("notifyChannelConfig").value,
+    type: type,
+    config: config,
     remark: document.getElementById("notifyChannelRemark").value,
   };
 
@@ -769,6 +911,21 @@ async function handleNotifyChannelSubmit(event) {
     }
     closeNotifyChannelModal();
     await refreshAll();
+  } catch (error) {
+    showMessage(error.message, "error");
+  }
+}
+
+async function handleTestNotifyChannel(channelId, channelName) {
+  try {
+    await api(`/api/v1/notification-channels/${channelId}/test`, {
+      method: "POST",
+      body: {
+        title: "测试通知",
+        content: "这是一条来自积木区DevOps的测试通知"
+      }
+    });
+    showMessage(`已发送测试通知到 ${channelName}`, "success");
   } catch (error) {
     showMessage(error.message, "error");
   }
@@ -793,6 +950,35 @@ async function handleTriggerProject(projectId, projectName) {
     showMessage(`已触发部署，运行号 #${run.id}`, "success");
     state.selectedRunId = run.id;
     await refreshAll();
+  } catch (error) {
+    showMessage(error.message, "error");
+  }
+}
+
+async function handleDeployProject(projectId, projectName) {
+  // 先确认是否开始部署
+  if (!window.confirm(`确认开始手动部署项目 "${projectName}" 吗？`)) {
+    return;
+  }
+
+  try {
+    const run = await api(`/api/v1/projects/${projectId}/trigger`, { method: "POST" });
+    showMessage(`部署已触发，运行号 #${run.id}`, "success");
+
+    // 询问是否查看部署日志
+    if (window.confirm("部署已成功触发！是否立即查看部署日志？")) {
+      // 跳转到部署记录页面并选中该运行记录
+      await refreshAll();
+      window.location.hash = "logs";
+
+      // 等待页面加载后选中该运行记录
+      setTimeout(async () => {
+        await selectRun(run.id);
+      }, 100);
+    } else {
+      // 如果不查看日志，也刷新数据
+      await refreshAll();
+    }
   } catch (error) {
     showMessage(error.message, "error");
   }
@@ -843,6 +1029,15 @@ function createMicroButton(label, handler, danger = false) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = `micro-button${danger ? " danger" : ""}`;
+  button.textContent = label;
+  button.addEventListener("click", handler);
+  return button;
+}
+
+function createActionButton(label, type, handler) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `action-button action-button-${type}`;
   button.textContent = label;
   button.addEventListener("click", handler);
   return button;
@@ -945,15 +1140,15 @@ async function openProjectModalForCreate() {
 
   // 重置部署配置
   els.deployHostId.value = "";
-  els.remoteSaveDir.value = "";
+  els.remoteSaveDir.value = "/data/jimuqu/projects"; // 设置默认值
   els.remoteDeployDir.value = "";
   els.versionCount.value = "5";
   els.preDeployCommands.value = "";
   els.postDeployCommands.value = "";
-  els.notifyWebhookURL.value = "";
-  els.notifyBearerToken.value = "";
+  els.notificationChannelId.value = ""; // 使用默认渠道
 
   await renderHostOptionsForConfig();
+  await renderNotificationChannelOptionsForConfig();
   els.projectModalTitle.textContent = "新增项目";
   switchTab("basic");
   els.projectModal.style.display = "flex";
@@ -965,7 +1160,6 @@ async function openProjectModalForEdit(project) {
   els.projectBranch.value = project.branch || "";
   els.projectRepoURL.value = project.repo_url || "";
   els.projectDescription.value = project.description || "";
-  els.webhookToken.value = project.webhook_token || "";
 
   // 获取完整的项目详情
   try {
@@ -979,7 +1173,12 @@ async function openProjectModalForEdit(project) {
       // 编译配置
       els.buildImage.value = config.build_image || "";
       els.buildCommands.value = (config.build_commands || []).join("\n");
-      els.artifactFilterMode.value = config.artifact_filter_mode || "none";
+      // 设置制品过滤模式单选按钮
+      const artifactFilterMode = config.artifact_filter_mode || "include";
+      const radioButton = document.querySelector(`input[name="artifactFilterMode"][value="${artifactFilterMode}"]`);
+      if (radioButton) {
+        radioButton.checked = true;
+      }
       els.artifactRules.value = (config.artifact_rules || []).join("\n");
 
       // 部署配置
@@ -989,8 +1188,15 @@ async function openProjectModalForEdit(project) {
       els.versionCount.value = String(config.version_count || 5);
       els.preDeployCommands.value = (config.pre_deploy_commands || []).join("\n");
       els.postDeployCommands.value = (config.post_deploy_commands || []).join("\n");
-      els.notifyWebhookURL.value = config.notify_webhook_url || "";
-      els.notifyBearerToken.value = "";
+
+      // 通知渠道设置
+      if (config.notification_channel_id === null) {
+        els.notificationChannelId.value = "-1"; // 不通知
+      } else if (config.notification_channel_id) {
+        els.notificationChannelId.value = String(config.notification_channel_id); // 指定渠道
+      } else {
+        els.notificationChannelId.value = ""; // 使用默认渠道
+      }
     } else {
       // 重置配置表单为默认值
       els.timeoutMinutes.value = "30";
@@ -999,19 +1205,19 @@ async function openProjectModalForEdit(project) {
       els.artifactFilterMode.value = "none";
       els.artifactRules.value = "";
       els.deployHostId.value = "";
-      els.remoteSaveDir.value = "";
+      els.remoteSaveDir.value = "/data/jimuqu/projects"; // 设置默认值
       els.remoteDeployDir.value = "";
       els.versionCount.value = "5";
       els.preDeployCommands.value = "";
       els.postDeployCommands.value = "";
-      els.notifyWebhookURL.value = "";
-      els.notifyBearerToken.value = "";
+      els.notificationChannelId.value = ""; // 使用默认渠道
     }
   } catch (error) {
     console.error("Failed to load project details:", error);
   }
 
   await renderHostOptionsForConfig();
+  await renderNotificationChannelOptionsForConfig();
   els.projectModalTitle.textContent = "编辑项目";
   switchTab("basic");
   els.projectModal.style.display = "flex";
@@ -1034,8 +1240,27 @@ function renderHostOptionsForConfig() {
     option.textContent = `${host.name} / ${host.username}@${host.address}:${host.port}`;
     els.deployHostId.append(option);
   });
+
+  // 如果有当前值，使用当前值；否则默认选中第一个主机
   if (currentValue) {
     els.deployHostId.value = currentValue;
+  } else if (state.hosts && state.hosts.length > 0) {
+    els.deployHostId.value = String(state.hosts[0].id);
+  }
+}
+
+function renderNotificationChannelOptionsForConfig() {
+  const currentValue = els.notificationChannelId.value;
+  els.notificationChannelId.innerHTML = '<option value="">使用默认渠道</option><option value="-1">不通知</option>';
+  (state.notifyChannels || []).forEach((channel) => {
+    const option = document.createElement("option");
+    option.value = String(channel.id);
+    const defaultMark = channel.is_default ? " (默认)" : "";
+    option.textContent = `${channel.name} ${defaultMark}`;
+    els.notificationChannelId.append(option);
+  });
+  if (currentValue) {
+    els.notificationChannelId.value = currentValue;
   }
 }
 
