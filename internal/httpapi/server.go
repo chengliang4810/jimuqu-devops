@@ -1,19 +1,23 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
 	"devops-pipeline/internal/auth"
 	"devops-pipeline/internal/config"
+	"devops-pipeline/internal/crypto"
 	"devops-pipeline/internal/model"
 	"devops-pipeline/internal/pipeline"
 	"devops-pipeline/internal/store"
@@ -24,18 +28,21 @@ import (
 )
 
 type Server struct {
-	store    *store.Store
-	executor *pipeline.Executor
-	logger   *slog.Logger
-	config   config.Config
+	store     *store.Store
+	executor  *pipeline.Executor
+	logger    *slog.Logger
+	config    config.Config
+	jwtManager *auth.JWTManager
 }
 
 func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, cfg config.Config) http.Handler {
+	jwtManager := auth.NewJWTManager(cfg.JWTSecret)
 	server := &Server{
-		store:    store,
-		executor: executor,
-		logger:   logger,
-		config:   cfg,
+		store:     store,
+		executor:  executor,
+		logger:    logger,
+		config:    cfg,
+		jwtManager: jwtManager,
 	}
 
 	router := chi.NewRouter()
@@ -53,7 +60,7 @@ func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, c
 
 		// 需要认证的接口
 		r.Group(func(r chi.Router) {
-			r.Use(AuthMiddleware(auth.NewJWTManager(cfg.JWTSecret)))
+			r.Use(AuthMiddleware(server.jwtManager))
 
 			r.Route("/hosts", func(r chi.Router) {
 				r.Get("/", server.handleListHosts)
@@ -94,8 +101,10 @@ func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, c
 
 			r.Get("/runs", server.handleListAllRuns)
 			r.Get("/runs/{runID}", server.handleGetRun)
-			r.Get("/runs/{runID}/stream", server.handleStreamRun)
 		})
+
+		// 流式接口移到认证组外面，支持查询参数传递token
+		r.Get("/runs/{runID}/stream", server.handleStreamRun)
 	})
 
 	return router
@@ -570,8 +579,9 @@ func validateDeployConfigInput(input model.DeployConfigUpsert) error {
 	default:
 		return errors.New("artifact_filter_mode must be one of none/include/exclude")
 	}
-	if input.ArtifactFilterMode == model.ArtifactFilterInclude && len(input.ArtifactRules) == 0 {
-		return errors.New("artifact_rules cannot be empty when artifact_filter_mode is include")
+	// 当过滤规则为空时，自动将模式设为none
+	if len(input.ArtifactRules) == 0 {
+		input.ArtifactFilterMode = model.ArtifactFilterNone
 	}
 	if strings.TrimSpace(input.RemoteSaveDir) == "" {
 		return errors.New("remote_save_dir is required")
@@ -752,11 +762,16 @@ func (s *Server) handleTestNotificationChannel(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	_ = channel // 暂时避免未使用警告
+	// 发送测试通知
+	s.logger.Info("测试通知渠道", "channel_id", channelID, "channel_name", channel.Name, "type", channel.Type)
 
-	// TODO: 集成通知发送服务
-	// notificationSender.TestChannel(channel, input)
+	if err = s.sendTestNotification(&channel, input); err != nil {
+		s.logger.Error("发送测试通知失败", "error", err, "channel_id", channelID)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
 
+	s.logger.Info("测试通知发送成功", "channel_id", channelID)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -851,4 +866,135 @@ func (s *Server) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) sendTestNotification(channel *model.NotificationChannel, input model.TestNotificationInput) error {
+	var config map[string]any
+	if err := json.Unmarshal([]byte(channel.Config), &config); err != nil {
+		return fmt.Errorf("解析配置失败: %w", err)
+	}
+
+	switch channel.Type {
+	case model.ChannelTypeDingTalk:
+		return s.sendDingTalkNotification(config, input.Title, input.Content)
+	case model.ChannelTypeWeChat:
+		return s.sendWeChatNotification(config, input.Title, input.Content)
+	case model.ChannelTypeFeishu:
+		return s.sendFeishuNotification(config, input.Title, input.Content)
+	case model.ChannelTypeWebhook:
+		return s.sendWebhookNotification(config, input.Title, input.Content)
+	default:
+		return fmt.Errorf("不支持的通知类型: %s", channel.Type)
+	}
+}
+
+func (s *Server) sendDingTalkNotification(config map[string]any, title, content string) error {
+	webhookURL, ok := config["webhook_url"].(string)
+	if !ok || webhookURL == "" {
+		return errors.New("钉钉 Webhook URL 为空")
+	}
+
+	// 如果有签名，计算签名并添加到URL
+	if secret, ok := config["secret"].(string); ok && secret != "" {
+		timestamp := time.Now().UnixMilli()
+		signStr := fmt.Sprintf("%d\n%s", timestamp, secret)
+		hmac := crypto.HMACSHA256([]byte(signStr), []byte(secret))
+		sign := base64.StdEncoding.EncodeToString(hmac)
+		webhookURL = fmt.Sprintf("%s&timestamp=%d&sign=%s", webhookURL, timestamp, url.QueryEscape(sign))
+		s.logger.Info("钉钉通知使用签名", "timestamp", timestamp)
+	}
+
+	// 钉钉机器人要求消息中必须包含关键词，添加常见关键词
+	messageContent := fmt.Sprintf("%s\n%s\n\n【通知】【部署】", title, content)
+
+	message := map[string]any{
+		"msgtype": "text",
+		"text": map[string]string{
+			"content": messageContent,
+		},
+	}
+
+	return s.sendHTTPRequest(webhookURL, message)
+}
+
+func (s *Server) sendWeChatNotification(config map[string]any, title, content string) error {
+	webhookURL, ok := config["webhook_url"].(string)
+	if !ok || webhookURL == "" {
+		return errors.New("企业微信 Webhook URL 为空")
+	}
+
+	message := map[string]any{
+		"msgtype": "text",
+		"text": map[string]string{
+			"content": fmt.Sprintf("%s\n%s", title, content),
+		},
+	}
+
+	return s.sendHTTPRequest(webhookURL, message)
+}
+
+func (s *Server) sendFeishuNotification(config map[string]any, title, content string) error {
+	webhookURL, ok := config["webhook_url"].(string)
+	if !ok || webhookURL == "" {
+		return errors.New("飞书 Webhook URL 为空")
+	}
+
+	message := map[string]any{
+		"msg_type": "text",
+		"content": map[string]string{
+			"text": fmt.Sprintf("%s\n%s", title, content),
+		},
+	}
+
+	return s.sendHTTPRequest(webhookURL, message)
+}
+
+func (s *Server) sendWebhookNotification(config map[string]any, title, content string) error {
+	webhookURL, ok := config["url"].(string)
+	if !ok || webhookURL == "" {
+		return errors.New("Webhook URL 为空")
+	}
+
+	message := map[string]any{
+		"title":   title,
+		"content": content,
+	}
+
+	return s.sendHTTPRequest(webhookURL, message)
+}
+
+func (s *Server) sendHTTPRequest(url string, payload any) error {
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("序列化请求失败: %w", err)
+	}
+
+	s.logger.Info("发送HTTP请求", "url", url, "payload", string(jsonData))
+
+	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonData))
+	if err != nil {
+		return fmt.Errorf("创建请求失败: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("发送请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("读取响应失败: %w", err)
+	}
+
+	s.logger.Info("收到响应", "status", resp.StatusCode, "body", string(respBody))
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("请求失败，状态码: %d, 响应: %s", resp.StatusCode, string(respBody))
+	}
+
+	return nil
 }
