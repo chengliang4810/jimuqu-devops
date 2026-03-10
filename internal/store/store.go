@@ -373,11 +373,13 @@ func (s *Store) DeleteProject(ctx context.Context, id int64) error {
 func (s *Store) GetProject(ctx context.Context, id int64) (model.Project, error) {
 	row := s.db.QueryRowContext(
 		ctx,
-		`SELECT id, name, repo_url, branch, description, webhook_token,
-		        git_auth_type, git_username_cipher, git_password_cipher, git_ssh_key_cipher,
-		        created_at, updated_at
+		`SELECT projects.id, projects.name, projects.repo_url, projects.branch, projects.description, projects.webhook_token,
+		        (CASE WHEN deploy_configs.id IS NOT NULL THEN 1 ELSE 0 END) as has_deploy_config,
+		        projects.git_auth_type, projects.git_username_cipher, projects.git_password_cipher, projects.git_ssh_key_cipher,
+		        projects.created_at, projects.updated_at
 		 FROM projects
-		 WHERE id = ?`,
+		 LEFT JOIN deploy_configs ON deploy_configs.project_id = projects.id
+		 WHERE projects.id = ?`,
 		id,
 	)
 	return s.scanProjectWithGitAuth(row)
@@ -386,11 +388,13 @@ func (s *Store) GetProject(ctx context.Context, id int64) (model.Project, error)
 func (s *Store) GetProjectByWebhookToken(ctx context.Context, token string) (model.Project, error) {
 	row := s.db.QueryRowContext(
 		ctx,
-		`SELECT id, name, repo_url, branch, description, webhook_token,
-		        git_auth_type, git_username_cipher, git_password_cipher, git_ssh_key_cipher,
-		        created_at, updated_at
+		`SELECT projects.id, projects.name, projects.repo_url, projects.branch, projects.description, projects.webhook_token,
+		        (CASE WHEN deploy_configs.id IS NOT NULL THEN 1 ELSE 0 END) as has_deploy_config,
+		        projects.git_auth_type, projects.git_username_cipher, projects.git_password_cipher, projects.git_ssh_key_cipher,
+		        projects.created_at, projects.updated_at
 		 FROM projects
-		 WHERE webhook_token = ?`,
+		 LEFT JOIN deploy_configs ON deploy_configs.project_id = projects.id
+		 WHERE projects.webhook_token = ?`,
 		token,
 	)
 	return s.scanProjectWithGitAuth(row)
@@ -399,11 +403,13 @@ func (s *Store) GetProjectByWebhookToken(ctx context.Context, token string) (mod
 func (s *Store) ListProjects(ctx context.Context) ([]model.Project, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT id, name, repo_url, branch, description, webhook_token,
-		        git_auth_type, git_username_cipher, git_password_cipher, git_ssh_key_cipher,
-		        created_at, updated_at
+		`SELECT projects.id, projects.name, projects.repo_url, projects.branch, projects.description, projects.webhook_token,
+		        (CASE WHEN deploy_configs.id IS NOT NULL THEN 1 ELSE 0 END) as has_deploy_config,
+		        projects.git_auth_type, projects.git_username_cipher, projects.git_password_cipher, projects.git_ssh_key_cipher,
+		        projects.created_at, projects.updated_at
 		 FROM projects
-		 ORDER BY id DESC`,
+		 LEFT JOIN deploy_configs ON deploy_configs.project_id = projects.id
+		 ORDER BY projects.id DESC`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query projects: %w", err)
@@ -431,11 +437,13 @@ func (s *Store) CloneProject(ctx context.Context, sourceID int64, input model.Pr
 
 	sourceProjectRow := tx.QueryRowContext(
 		ctx,
-		`SELECT id, name, repo_url, branch, description, webhook_token,
-		        git_auth_type, git_username_cipher, git_password_cipher, git_ssh_key_cipher,
-		        created_at, updated_at
+		`SELECT projects.id, projects.name, projects.repo_url, projects.branch, projects.description, projects.webhook_token,
+		        (CASE WHEN deploy_configs.id IS NOT NULL THEN 1 ELSE 0 END) as has_deploy_config,
+		        projects.git_auth_type, projects.git_username_cipher, projects.git_password_cipher, projects.git_ssh_key_cipher,
+		        projects.created_at, projects.updated_at
 		 FROM projects
-		 WHERE id = ?`,
+		 LEFT JOIN deploy_configs ON deploy_configs.project_id = projects.id
+		 WHERE projects.id = ?`,
 		sourceID,
 	)
 
@@ -898,6 +906,7 @@ func scanProject(scan scanner) (model.Project, error) {
 func (s *Store) scanProjectWithGitAuth(scan scanner) (model.Project, error) {
 	var (
 		project              model.Project
+		hasDeployConfig      int64
 		gitAuthType          string
 		gitUsernameCipher    string
 		gitPasswordCipher    string
@@ -913,6 +922,7 @@ func (s *Store) scanProjectWithGitAuth(scan scanner) (model.Project, error) {
 		&project.Branch,
 		&project.Description,
 		&project.WebhookToken,
+		&hasDeployConfig,
 		&gitAuthType,
 		&gitUsernameCipher,
 		&gitPasswordCipher,
@@ -927,6 +937,7 @@ func (s *Store) scanProjectWithGitAuth(scan scanner) (model.Project, error) {
 		return model.Project{}, fmt.Errorf("scan project: %w", err)
 	}
 
+	project.HasDeployConfig = hasDeployConfig == 1
 	project.GitAuthType = gitAuthType
 
 	// 解密Git认证信息
