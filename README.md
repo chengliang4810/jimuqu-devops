@@ -1,294 +1,173 @@
-# Go Pipeline
+# 积木区 DevOps 流水线
 
-一个使用 Go 实现的轻量流水线后端，目标是解决以下场景：
+> 🚀 **简单快捷**的轻量级CI/CD部署系统 - 一键配置，自动部署
 
-- 通过 Git 仓库 webhook 触发项目构建与自动部署
-- 一个项目唯一对应一个 Git 仓库分支
-- 通过 SSH 账号密码管理目标主机
-- 使用 Docker 容器隔离编译环境
-- 支持部署配置、项目复制、运行记录和成功/失败通知
+## ✨ 核心特点
 
-当前实现包含后端 API 服务和内置管理后台页面。
+- **🎯 简单**：可视化界面，3步完成配置
+- **⚡ 快捷**：Git webhook自动触发，无需人工干预
+- **🔒 安全**：SSH密码AES加密，JWT认证登录
+- **💪 强大**：Docker隔离编译，支持任意语言项目
+- **📱 轻量**：单个二进制文件，无需依赖环境
 
-## 核心模型
+## 🎯 适用场景
 
-### 1. 项目管理
+- **前端项目**：React、Vue、Angular等前端应用自动部署
+- **后端服务**：Go、Node.js、Python等API服务部署
+- **静态站点**：Hugo、Jekyll等静态站点发布
+- **小程序开发**：小程序后端服务快速部署
 
-一个项目绑定：
+## 🚀 快速开始
 
-- 项目名称
-- Git 仓库地址
-- 分支名
-- 描述
-- webhook token
-
-约束：
-
-- 同一个仓库通过 `repo_url + branch` 唯一确定一个项目
-- 支持一键复制项目
-- 复制项目时复用源项目仓库地址，并通过新分支生成新项目
-
-### 2. 主机管理
-
-一个主机包含：
-
-- 名称
-- 地址
-- 端口
-- SSH 用户名
-- SSH 密码
-
-说明：
-
-- SSH 密码在 SQLite 中以本地密钥做 AES 加密存储
-
-### 3. 部署配置
-
-一个项目只有一份部署配置，包含：
-
-- 目标主机
-- 编译镜像名
-- 编译命令列表
-- 制品过滤模式：`none | include | exclude`
-- 制品过滤规则
-- 远程保存目录
-- 远程部署目录
-- 部署前命令
-- 部署后命令
-- 通知 webhook 地址
-- 通知 bearer token
-
-## 流水线流程
-
-固定流程：
-
-1. `git clone` 指定仓库分支
-2. 在 Docker 容器中执行编译命令
-3. 对编译结果执行包含/排除过滤
-4. 通过 SSH/SFTP 上传到远程保存目录
-5. 执行部署前命令
-6. 将保存目录内容同步到部署目录
-7. 执行部署后命令
-8. 发送通知
-
-通知规则：
-
-- 全部成功，发送成功通知
-- 任意环节失败，发送失败通知
-
-## 技术选型
-
-- HTTP 路由：`chi`
-- 存储：`SQLite`
-- SSH/SFTP：`golang.org/x/crypto/ssh` + `github.com/pkg/sftp`
-- 编译容器：本机 `docker` CLI
-- Git 克隆：本机 `git` CLI
-
-## 目录结构
-
-```text
-cmd/server              启动入口
-internal/app            应用装配
-internal/config         配置加载
-internal/crypto         敏感信息加密
-internal/httpapi        HTTP API
-internal/model          领域模型
-internal/pipeline       流水线执行器
-internal/store          SQLite 存储
-data/                   运行数据目录
-```
-
-## 启动要求
-
-运行服务的机器需要具备：
-
-- Go 1.25+
-- Git
-- Docker
-- 可访问目标主机的 SSH 网络
-- 目标主机默认按 Linux Shell 行为执行部署命令
-
-## 环境变量
-
-| 变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `APP_ADDR` | `:18080` | HTTP 监听地址 |
-| `APP_DATA_DIR` | `./data` | 数据根目录 |
-| `APP_DB_PATH` | `./data/pipeline.db` | SQLite 数据库路径 |
-| `APP_WORKSPACE_DIR` | `./data/workspaces` | 本地克隆目录 |
-| `APP_ARTIFACT_DIR` | `./data/artifacts` | 本地制品目录 |
-| `APP_SECRET` | `change-me-in-production` | 本地加密密钥 |
-
-## 运行
+### 1. 下载运行
 
 ```bash
-go run ./cmd/server
+# 编译（首次使用）
+go build -o server.exe ./cmd/server
+
+# 启动服务
+./server.exe
 ```
 
-管理后台入口：
+### 2. 打开管理界面
 
-```text
-http://127.0.0.1:18080/
-```
+访问 http://127.0.0.1:18080
 
-健康检查：
+默认账号：
+- 用户名：`admin`
+- 密码：`admin123`
 
-```bash
-curl http://127.0.0.1:18080/healthz
-```
+### 3. 三步完成配置
 
-## API 概览
+1. **添加主机**：配置目标服务器的SSH连接信息
+2. **创建项目**：添加Git仓库，选择编译镜像和命令
+3. **复制Webhook**：将webhook URL配置到Git仓库
 
-管理后台页面会直接调用以下 API。
+### 4. 享受自动部署
 
-### 主机
+每次Git提交后，系统自动：
+1. 拉取最新代码
+2. 在Docker容器中编译
+3. 上传到目标服务器
+4. 执行部署命令
+5. 发送通知结果
 
-- `POST /api/v1/hosts`
-- `GET /api/v1/hosts`
-- `GET /api/v1/hosts/{hostID}`
-- `PUT /api/v1/hosts/{hostID}`
-- `DELETE /api/v1/hosts/{hostID}`
+## 🛠️ 核心功能
 
-### 项目
+### 项目管理
+- 支持Git仓库webhook触发
+- 一键复制项目到不同分支
+- 可视化编译和部署配置
 
-- `POST /api/v1/projects`
-- `GET /api/v1/projects`
-- `GET /api/v1/projects/{projectID}`
-- `PUT /api/v1/projects/{projectID}`
-- `DELETE /api/v1/projects/{projectID}`
-- `POST /api/v1/projects/{projectID}/clone`
+### 主机管理
+- SSH密码加密存储
+- 支持多主机部署
+- 批量部署管理
 
 ### 部署配置
+- Docker容器隔离编译环境
+- 灵活的编译命令配置
+- 制品文件过滤（包含/排除）
+- 部署前后自定义命令
+- 版本回滚支持
 
-- `PUT /api/v1/projects/{projectID}/deploy-config`
-- `GET /api/v1/projects/{projectID}/deploy-config`
+### 通知渠道
+- 部署成功/失败实时通知
+- 支持企业微信、钉钉、飞书
+- 自定义Webhook通知
 
-### 执行记录
+## 📋 使用流程
 
-- `POST /api/v1/projects/{projectID}/trigger`
-- `GET /api/v1/projects/{projectID}/runs`
-- `GET /api/v1/runs/{runID}`
-- `GET /api/v1/runs/{runID}/stream`
+```mermaid
+graph LR
+    A[Git提交] --> B[Webhook触发]
+    B --> C[拉取代码]
+    C --> D[Docker编译]
+    D --> E[上传制品]
+    E --> F[执行部署]
+    F --> G[发送通知]
+```
 
-### Webhook
+## 🏗️ 技术架构
 
-- `POST /api/v1/webhooks/{token}`
+- **语言**：Go 1.25+
+- **存储**：SQLite（单文件数据库）
+- **认证**：JWT Token
+- **容器**：Docker（编译隔离）
+- **网络**：SSH/SFTP（文件传输）
+- **路由**：Chi（HTTP框架）
 
-## 示例
+## 📖 配置说明
 
-### 1. 创建主机
+### 环境变量
 
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `APP_ADDR` | `:18080` | 服务监听地址 |
+| `APP_DATA_DIR` | `./data` | 数据目录 |
+| `APP_SECRET` | `change-me` | 加密密钥 |
+
+### 目录结构
+
+```
+├── cmd/server          # 启动入口
+├── internal/           # 核心代码
+│   ├── app/           # 应用组装
+│   ├── httpapi/       # HTTP API & 界面
+│   ├── pipeline/      # 流水线执行
+│   └── store/         # 数据存储
+└── data/              # 运行数据（自动生成）
+```
+
+## 🔐 安全特性
+
+- SSH密码AES-GCM加密存储
+- JWT Token用户认证
+- Webhook Token唯一性验证
+- 敏感信息本地加密，不上传云端
+
+## 🌟 实际应用场景
+
+### 前端项目部署
+```javascript
+// 编译镜像：node:20
+// 编译命令：
+pnpm install
+pnpm run build
+
+// 制品过滤：包含 dist/ 目录
+// 部署后命令：docker restart nginx
+```
+
+### 后端API部署
 ```bash
-curl -X POST http://127.0.0.1:18080/api/v1/hosts \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name":"prod-1",
-    "address":"192.168.1.10",
-    "port":22,
-    "username":"root",
-    "password":"123456"
-  }'
+# 编译镜像：golang:1.21
+# 编译命令：
+go build -o app
+
+# 制品过滤：包含可执行文件
+# 部署后命令：systemctl restart myapp
 ```
 
-### 2. 创建项目
-
+### 静态站点发布
 ```bash
-curl -X POST http://127.0.0.1:18080/api/v1/projects \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name":"portal-prod",
-    "repo_url":"https://github.com/example/portal.git",
-    "branch":"main",
-    "description":"生产环境"
-  }'
+# 编译镜像：hugo:latest
+# 编译命令：
+hugo --minify
+
+// 制品过滤：包含 public/ 目录
+// 部署后命令：复制到web服务器目录
 ```
 
-### 3. 配置部署
+## 🤝 开源协议
 
-```bash
-curl -X PUT http://127.0.0.1:18080/api/v1/projects/1/deploy-config \
-  -H "Content-Type: application/json" \
-  -d '{
-    "host_id":1,
-    "build_image":"node:20",
-    "build_commands":[
-      "pnpm install",
-      "pnpm run build"
-    ],
-    "artifact_filter_mode":"include",
-    "artifact_rules":[
-      "dist",
-      "package.json"
-    ],
-    "remote_save_dir":"/data/releases",
-    "remote_deploy_dir":"/data/apps/portal",
-    "pre_deploy_commands":[
-      "mkdir -p /data/apps/portal"
-    ],
-    "post_deploy_commands":[
-      "docker restart app"
-    ],
-    "notify_webhook_url":"https://example.com/hooks/deploy"
-  }'
-```
+MIT License - 自由使用、修改和分发
 
-### 4. 手动触发
+## 📞 技术支持
 
-```bash
-curl -X POST http://127.0.0.1:18080/api/v1/projects/1/trigger
-```
+- **GitHub仓库**：https://github.com/chengliang4810/jimuqu-devops
+- **在线演示**：http://127.0.0.1:18080
 
-### 5. 复制项目
+---
 
-```bash
-curl -X POST http://127.0.0.1:18080/api/v1/projects/1/clone \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name":"portal-test",
-    "branch":"test"
-  }'
-```
-
-### 6. 配置 Git Webhook
-
-创建项目后，接口返回 `webhook_token`。将 Git 仓库 webhook 指向：
-
-```text
-POST http://your-server:18080/api/v1/webhooks/{webhook_token}
-```
-
-当前支持从以下字段识别分支：
-
-- `ref`，例如 `refs/heads/main`
-- `branch`
-- Bitbucket 风格 `push.changes[0].new.name`
-- Header `X-Git-Ref`
-
-## 运行记录
-
-每次触发会生成一条流水线记录，包含：
-
-- 触发方式
-- 状态
-- 日志文本
-- 错误信息
-- 开始时间
-- 结束时间
-
-管理后台在查看某条运行记录时，会通过 `SSE` 接口实时流式刷新日志与状态。
-
-## 当前实现约束
-
-- 远程部署默认面向 Linux 主机，依赖 `sh`、`cp`、`find`
-- Docker 编译阶段默认要求镜像内存在 `sh`
-- 通知当前实现为 webhook 回调
-- 已提供内置管理后台页面
-- 没有做分布式队列，执行器在当前服务进程内异步运行
-
-## 后续可扩展项
-
-- 增加 webhook 签名校验
-- 增加通知渠道，如企业微信、钉钉、飞书、邮件
-- 增加多步骤编译 UI 编排
-- 增加部署策略，如蓝绿、灰度、回滚
-- 增加并发控制、任务队列和审计日志
+**让部署变得简单快捷** 🚀
