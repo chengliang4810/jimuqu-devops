@@ -179,7 +179,7 @@ func (e *Executor) execute(ctx context.Context, runID, projectID int64, triggerT
 	}
 
 	notifyStatus := finalStatus
-	notifyErr := e.sendNotification(ctx, bundle, runID, notifyStatus, finalError, triggerType, triggerRef)
+	notifyErr := e.sendNotification(ctx, bundle, runID, notifyStatus, finalError, triggerType, triggerRef, logf)
 	if notifyErr != nil {
 		logf("notification failed: %v", notifyErr)
 		if finalError == "" {
@@ -587,6 +587,7 @@ func (e *Executor) sendNotification(
 	errorMessage string,
 	triggerType string,
 	triggerRef string,
+	logf func(string, ...any),
 ) error {
 	// 构造通知载荷
 	payload := model.NotificationPayload{
@@ -602,50 +603,122 @@ func (e *Executor) sendNotification(
 		SentAt:       time.Now().UTC().Format(time.RFC3339),
 	}
 
+	e.logger.Info("sendNotification called", "run_id", runID, "project", bundle.Project.Name, "status", status,
+		"notification_channel_id", bundle.DeployConfig.NotificationChannelID)
+	logf("stage notification: preparing to send %s notification", status)
+
 	// 优先使用配置的通知渠道
 	if bundle.DeployConfig.NotificationChannelID != nil {
 		channel, err := e.store.GetNotificationChannel(ctx, *bundle.DeployConfig.NotificationChannelID)
 		if err != nil {
 			// 如果获取通知渠道失败，尝试使用默认渠道
 			e.logger.Warn("failed to get configured notification channel, trying default", "channel_id", *bundle.DeployConfig.NotificationChannelID, "error", err)
-			return e.sendDefaultNotification(ctx, bundle, payload)
+			logf("notification: configured channel not found, trying default channel")
+			return e.sendDefaultNotification(ctx, bundle, payload, logf)
 		}
 
+		logf("notification: sending via configured channel (type=%s, id=%d)", channel.Type, channel.ID)
+		e.logger.Info("sending notification via configured channel", "channel_id", channel.ID, "channel_type", channel.Type)
+
+		// 记录发送前的详细信息 - 从Config字段解析
+		var configMap map[string]any
+		if channel.Config != "" {
+			if err := json.Unmarshal([]byte(channel.Config), &configMap); err == nil {
+				if webhookURL, ok := configMap["webhook_url"].(string); ok {
+					logf("notification: channel webhook_url=%s", webhookURL)
+				} else if url, ok := configMap["url"].(string); ok {
+					logf("notification: channel webhook_url=%s", url)
+				}
+				if secret, ok := configMap["secret"].(string); ok && secret != "" {
+					logf("notification: channel has secret configured (length=%d)", len(secret))
+				}
+			}
+		}
+
+		// 设置日志输出函数，让通知发送器能输出到部署记录
+		e.notifySender.SetLogf(logf)
+
 		if err := e.notifySender.Send(channel, payload); err != nil {
+			logf("notification: failed to send via configured channel: %v", err)
+			logf("notification: error details: %s", err.Error())
 			return fmt.Errorf("send notification via channel: %w", err)
 		}
 
+		logf("notification: successfully sent via channel (id=%d)", channel.ID)
 		e.logger.Info("notification sent via channel", "channel_id", channel.ID, "run_id", runID)
 		return nil
 	}
 
+	logf("notification: no channel configured, trying default channel")
+	e.logger.Info("no notification channel configured, trying default", "run_id", runID)
 	// 如果没有配置通知渠道，尝试使用系统默认渠道
-	return e.sendDefaultNotification(ctx, bundle, payload)
+	return e.sendDefaultNotification(ctx, bundle, payload, logf)
 }
 
-func (e *Executor) sendDefaultNotification(ctx context.Context, bundle model.ExecutionBundle, payload model.NotificationPayload) error {
+func (e *Executor) sendDefaultNotification(ctx context.Context, bundle model.ExecutionBundle, payload model.NotificationPayload, logf func(string, ...any)) error {
+	e.logger.Info("sendDefaultNotification: trying to get default channel", "run_id", payload.RunID)
+	logf("notification: looking for default notification channel")
 	channel, err := e.store.GetDefaultNotificationChannel(ctx)
 	if err != nil {
 		if !errors.Is(err, store.ErrNotFound) {
 			e.logger.Error("failed to get default notification channel", "error", err)
+			logf("notification: error getting default channel: %v", err)
+		} else {
+			e.logger.Info("no default notification channel found", "run_id", payload.RunID)
+			logf("notification: no default channel found")
 		}
 
 		// 如果没有通知渠道，尝试使用原来的webhook方式
-		return e.sendLegacyWebhook(ctx, bundle, payload)
+		return e.sendLegacyWebhook(ctx, bundle, payload, logf)
 	}
 
+	logf("notification: sending via default channel (type=%s, id=%d)", channel.Type, channel.ID)
+	e.logger.Info("sending notification via default channel", "channel_id", channel.ID, "channel_type", channel.Type, "run_id", payload.RunID)
+
+	// 记录发送前的详细信息 - 从Config字段解析
+	var configMap map[string]any
+	if channel.Config != "" {
+		if err := json.Unmarshal([]byte(channel.Config), &configMap); err == nil {
+			if webhookURL, ok := configMap["webhook_url"].(string); ok {
+				logf("notification: channel webhook_url=%s", webhookURL)
+			} else if url, ok := configMap["url"].(string); ok {
+				logf("notification: channel webhook_url=%s", url)
+			}
+			if secret, ok := configMap["secret"].(string); ok && secret != "" {
+				logf("notification: channel has secret configured (length=%d)", len(secret))
+			}
+		}
+	}
+
+	// 设置日志输出函数，让通知发送器能输出到部署记录
+	e.notifySender.SetLogf(logf)
+
 	if err := e.notifySender.Send(channel, payload); err != nil {
+		logf("notification: failed to send via default channel: %v", err)
+		logf("notification: error details: %s", err.Error())
 		return fmt.Errorf("send notification via default channel: %w", err)
 	}
 
+	logf("notification: successfully sent via default channel (id=%d)", channel.ID)
 	e.logger.Info("notification sent via default channel", "channel_id", channel.ID, "run_id", payload.RunID)
 	return nil
 }
 
-func (e *Executor) sendLegacyWebhook(ctx context.Context, bundle model.ExecutionBundle, payload model.NotificationPayload) error {
+func (e *Executor) sendLegacyWebhook(ctx context.Context, bundle model.ExecutionBundle, payload model.NotificationPayload, logf func(string, ...any)) error {
 	webhookURL := strings.TrimSpace(bundle.DeployConfig.NotifyWebhookURL)
 	if webhookURL == "" {
+		e.logger.Info("sendLegacyWebhook: no webhook URL configured, skipping notification", "run_id", payload.RunID)
+		logf("notification: no webhook URL configured, skipping notification")
 		return nil // 没有配置webhook，直接跳过
+	}
+
+	logf("notification: sending via legacy webhook")
+	e.logger.Info("sendLegacyWebhook: sending notification via legacy webhook", "run_id", payload.RunID, "webhook_url", webhookURL)
+
+	// 记录webhook URL
+	logf("notification: webhook_url=%s", webhookURL)
+	if bundle.DeployConfig.NotifyBearerToken != "" {
+		logf("notification: webhook has bearer token configured")
 	}
 
 	// 使用原来的webhook方式发送通知
@@ -664,11 +737,13 @@ func (e *Executor) sendLegacyWebhook(ctx context.Context, bundle model.Execution
 
 	body, err := json.Marshal(payloadMap)
 	if err != nil {
+		logf("notification: failed to marshal payload: %v", err)
 		return fmt.Errorf("marshal notification payload: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, bytes.NewReader(body))
 	if err != nil {
+		logf("notification: failed to create request: %v", err)
 		return fmt.Errorf("build notification request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -678,15 +753,23 @@ func (e *Executor) sendLegacyWebhook(ctx context.Context, bundle model.Execution
 
 	resp, err := e.httpClient.Do(req)
 	if err != nil {
+		logf("notification: failed to send webhook request: %v", err)
+		logf("notification: error details: %s", err.Error())
 		return fmt.Errorf("send notification request: %w", err)
 	}
 	defer resp.Body.Close()
 
+	// 读取响应体并记录
+	responseBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	logf("notification: webhook response status_code=%d body=%s", resp.StatusCode, strings.TrimSpace(string(responseBody)))
+	e.logger.Info("sendLegacyWebhook: webhook response", "run_id", payload.RunID, "status_code", resp.StatusCode, "response_body", string(responseBody))
+
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		logf("notification: successfully sent via webhook")
 		return nil
 	}
 
-	responseBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	logf("notification: webhook returned error status %d: %s", resp.StatusCode, strings.TrimSpace(string(responseBody)))
 	return fmt.Errorf("notification returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(responseBody)))
 }
 
