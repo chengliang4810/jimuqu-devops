@@ -131,6 +131,9 @@ type PipelineRun struct {
 	Status       string     `json:"status"`
 	TriggerType  string     `json:"trigger_type"`
 	TriggerRef   string     `json:"trigger_ref"`
+	CommitID     string     `json:"commit_id"`
+	CommitMessage string    `json:"commit_message"`
+	Author       string     `json:"author"`
 	LogText      string     `json:"log_text"`
 	ErrorMessage string     `json:"error_message"`
 	StartedAt    *time.Time `json:"started_at,omitempty"`

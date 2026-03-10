@@ -75,6 +75,9 @@ type NotificationPayload struct {
 	Branch       string `json:"branch"`
 	TriggerType  string `json:"trigger_type"`
 	TriggerRef   string `json:"trigger_ref"`
+	CommitID     string `json:"commit_id"`
+	CommitMessage string `json:"commit_message"`
+	Author       string `json:"author"`
 	ErrorMessage string `json:"error_message"`
 	SentAt       string `json:"sent_at"`
 }
