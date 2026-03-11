@@ -101,6 +101,7 @@ func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, c
 
 			r.Get("/runs", server.handleListAllRuns)
 			r.Get("/runs/{runID}", server.handleGetRun)
+			r.Get("/stats", server.handleStats)
 		})
 
 		// 流式接口移到认证组外面，支持查询参数传递token
@@ -112,6 +113,44 @@ func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, c
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// 获取各模块数量
+	hosts, err := s.store.ListHosts(ctx)
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+
+	projects, err := s.store.ListProjects(ctx)
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+
+	runs, err := s.store.ListAllRuns(ctx, 0, 1000)
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+
+	channels, err := s.store.ListNotificationChannels(ctx)
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+
+	stats := map[string]int{
+		"host_count":            len(hosts),
+		"project_count":         len(projects),
+		"run_count":             len(runs),
+		"notify_channel_count":  len(channels),
+	}
+
+	writeJSON(w, http.StatusOK, stats)
 }
 
 func (s *Server) handleListHosts(w http.ResponseWriter, r *http.Request) {
