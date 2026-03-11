@@ -69,3 +69,17 @@ internal/httpapi/       - HTTP API 路由和处理器，内置管理后台 UI
 
 - URL: `POST /api/v1/webhooks/{token}`
 - 支持从 `ref`、`branch`、Bitbucket 风格 `push.changes[0].new.name`、Header `X-Git-Ref` 识别分支
+
+## 前端 (web-next)
+
+**必须使用与 octopus 完全相同的技术栈：**
+- Next.js 16 (非 15)
+- React 19
+- Tailwind CSS v4 (非 v3)
+- @tailwindcss/postcss
+- tw-animate-css
+- motion (Framer Motion)
+- sonner (通知)
+- zustand (状态管理)
+
+**禁止使用 Tailwind CSS v3 或更低版本。**
