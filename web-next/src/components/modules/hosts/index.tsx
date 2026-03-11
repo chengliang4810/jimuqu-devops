@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,12 +16,18 @@ import { Badge } from "@/components/ui/badge";
 import { hostApi } from "@/api/client";
 import type { Host } from "@/types";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, X } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+
+// 全局请求缓存
+let hostsCache: Host[] | null = null;
 
 export function Hosts() {
-  const [hosts, setHosts] = useState<Host[]>([]);
+  const [hosts, setHosts] = useState<Host[]>(hostsCache || []);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingHost, setEditingHost] = useState<Host | null>(null);
+  const [deletingHost, setDeletingHost] = useState<Host | null>(null);
+  const loadingRef = useRef(false);
   const [formData, setFormData] = useState({
     name: "",
     address: "",
@@ -31,16 +37,34 @@ export function Hosts() {
   });
 
   const loadHosts = async () => {
+    if (loadingRef.current) return;
+    if (hostsCache) {
+      setHosts(hostsCache);
+      return;
+    }
+    loadingRef.current = true;
     try {
       const data = await hostApi.list();
-      setHosts(data?.hosts || []);
+      const hosts = Array.isArray(data) ? data : [];
+      hostsCache = hosts;
+      setHosts(hosts);
     } catch (error) {
       console.error(error);
+    } finally {
+      loadingRef.current = false;
     }
   };
 
   useEffect(() => {
     loadHosts();
+
+    const handleOpenDialog = (e: CustomEvent) => {
+      if (e.detail.mode === "create") {
+        openCreateDialog();
+      }
+    };
+    window.addEventListener("open-host-dialog", handleOpenDialog as EventListener);
+    return () => window.removeEventListener("open-host-dialog", handleOpenDialog as EventListener);
   }, []);
 
   const openCreateDialog = () => {
@@ -80,11 +104,12 @@ export function Hosts() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("确定要删除此主机吗？")) return;
+  const handleDelete = async (host: Host) => {
     try {
-      await hostApi.delete(id);
+      await hostApi.delete(host.id);
+      hostsCache = null; // 清除缓存
       toast.success("主机删除成功");
+      setDeletingHost(null);
       loadHosts();
     } catch (error: any) {
       toast.error(error.message || "删除失败");
@@ -93,16 +118,6 @@ export function Hosts() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-end">
-        <div className="flex items-center gap-4">
-          <Badge variant="secondary">{hosts.length} 台主机</Badge>
-          <Button onClick={openCreateDialog}>
-            <Plus className="h-4 w-4 mr-2" />
-            新增主机
-          </Button>
-        </div>
-      </div>
-
       {hosts.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center text-muted-foreground">
@@ -112,21 +127,63 @@ export function Hosts() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {hosts.map((host) => (
-            <Card key={host.id} className="relative group">
-              <CardContent className="p-6">
-                <button
-                  onClick={() => handleDelete(host.id)}
-                  className="absolute top-4 right-4 p-2 rounded-md text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-                <h3 className="font-semibold text-foreground mb-2">{host.name}</h3>
-                <p className="text-sm text-muted-foreground mb-1">{host.address}:{host.port}</p>
-                <p className="text-sm text-muted-foreground mb-4">{host.username}</p>
-                <Button variant="outline" size="sm" onClick={() => openEditDialog(host)}>
-                  <Pencil className="h-4 w-4 mr-2" />
-                  编辑
-                </Button>
+            <Card key={host.id} className="overflow-hidden">
+              <CardContent className="p-4">
+                <header className="flex items-start justify-between mb-3 relative">
+                  <h3 className="font-semibold text-foreground truncate flex-1 mr-2">{host.name}</h3>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => openEditDialog(host)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    {deletingHost?.id !== host.id ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => setDeletingHost(host)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    ) : null}
+                  </div>
+
+                  <AnimatePresence>
+                    {deletingHost?.id === host.id && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 flex items-center justify-center gap-2 bg-destructive p-2 rounded-lg"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setDeletingHost(null)}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 text-white transition-all hover:bg-white/30 active:scale-95"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(host)}
+                          className="flex-1 h-7 flex items-center justify-center gap-2 rounded-lg bg-white text-destructive text-sm font-semibold transition-all hover:bg-white/90 active:scale-[0.98]"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          确认删除
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </header>
+
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  <p>{host.address}:{host.port}</p>
+                  <p>{host.username}</p>
+                </div>
               </CardContent>
             </Card>
           ))}

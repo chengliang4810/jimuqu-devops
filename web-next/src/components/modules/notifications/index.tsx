@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +23,8 @@ import { Badge } from "@/components/ui/badge";
 import { notifyApi } from "@/api/client";
 import type { NotifyChannel, NotifyChannelType } from "@/types";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Send } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 
 const channelTypes: { value: NotifyChannelType; label: string }[] = [
   { value: "webhook", label: "Webhook" },
@@ -32,10 +33,15 @@ const channelTypes: { value: NotifyChannelType; label: string }[] = [
   { value: "feishu", label: "飞书" },
 ];
 
+// 全局缓存
+let channelsCache: NotifyChannel[] | null = null;
+
 export function Notifications() {
-  const [channels, setChannels] = useState<NotifyChannel[]>([]);
+  const [channels, setChannels] = useState<NotifyChannel[]>(channelsCache || []);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingChannel, setEditingChannel] = useState<NotifyChannel | null>(null);
+  const [deletingChannel, setDeletingChannel] = useState<NotifyChannel | null>(null);
+  const loadingRef = useRef(false);
   const [formData, setFormData] = useState({
     name: "",
     type: "webhook" as NotifyChannelType,
@@ -45,16 +51,34 @@ export function Notifications() {
   });
 
   const loadChannels = async () => {
+    if (channelsCache) {
+      setChannels(channelsCache);
+      return;
+    }
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     try {
       const data = await notifyApi.list();
-      setChannels(data?.channels || []);
+      const channels = Array.isArray(data) ? data : [];
+      channelsCache = channels;
+      setChannels(channels);
     } catch (error) {
       console.error(error);
+    } finally {
+      loadingRef.current = false;
     }
   };
 
   useEffect(() => {
     loadChannels();
+
+    const handleOpenDialog = (e: CustomEvent) => {
+      if (e.detail.mode === "create") {
+        openCreateDialog();
+      }
+    };
+    window.addEventListener("open-notify-dialog", handleOpenDialog as EventListener);
+    return () => window.removeEventListener("open-notify-dialog", handleOpenDialog as EventListener);
   }, []);
 
   const openCreateDialog = () => {
@@ -92,14 +116,24 @@ export function Notifications() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("确定要删除此通知渠道吗？")) return;
+  const handleDelete = async (channel: NotifyChannel) => {
     try {
-      await notifyApi.delete(id);
+      await notifyApi.delete(channel.id);
+      channelsCache = null;
       toast.success("通知渠道删除成功");
+      setDeletingChannel(null);
       loadChannels();
     } catch (error: any) {
       toast.error(error.message || "删除失败");
+    }
+  };
+
+  const handleTest = async (channel: NotifyChannel) => {
+    try {
+      await notifyApi.test(channel.id);
+      toast.success("测试通知发送成功");
+    } catch (error: any) {
+      toast.error(error.message || "测试通知发送失败");
     }
   };
 
@@ -109,16 +143,6 @@ export function Notifications() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-end">
-        <div className="flex items-center gap-4">
-          <Badge variant="secondary">{channels.length} 个渠道</Badge>
-          <Button onClick={openCreateDialog}>
-            <Plus className="h-4 w-4 mr-2" />
-            新增渠道
-          </Button>
-        </div>
-      </div>
-
       {channels.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center text-muted-foreground">
@@ -128,25 +152,73 @@ export function Notifications() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {channels.map((channel) => (
-            <Card key={channel.id} className="relative group">
-              <CardContent className="p-6">
-                <button
-                  onClick={() => handleDelete(channel.id)}
-                  className="absolute top-4 right-4 p-2 rounded-md text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-                <div className="mb-2">
-                  <Badge variant="outline">{getTypeLabel(channel.type)}</Badge>
-                </div>
-                <h3 className="font-semibold text-foreground mb-2">{channel.name}</h3>
-                <p className="text-sm text-muted-foreground truncate mb-4">
+            <Card key={channel.id} className="overflow-hidden">
+              <CardContent className="p-4">
+                <header className="flex items-start justify-between mb-3 relative">
+                  <div className="flex-1 mr-2 min-w-0">
+                    <Badge variant="outline" className="mb-1">{getTypeLabel(channel.type)}</Badge>
+                    <h3 className="font-semibold text-foreground truncate">{channel.name}</h3>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => handleTest(channel)}
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => openEditDialog(channel)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    {deletingChannel?.id !== channel.id ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => setDeletingChannel(channel)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    ) : null}
+                  </div>
+
+                  <AnimatePresence>
+                    {deletingChannel?.id === channel.id && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 flex items-center justify-center gap-2 bg-destructive p-2 rounded-lg"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setDeletingChannel(null)}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 text-white transition-all hover:bg-white/30 active:scale-95"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(channel)}
+                          className="flex-1 h-7 flex items-center justify-center gap-2 rounded-lg bg-white text-destructive text-sm font-semibold transition-all hover:bg-white/90 active:scale-[0.98]"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          确认删除
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </header>
+
+                <p className="text-sm text-muted-foreground truncate">
                   {channel.webhook_url}
                 </p>
-                <Button variant="outline" size="sm" onClick={() => openEditDialog(channel)}>
-                  <Pencil className="h-4 w-4 mr-2" />
-                  编辑
-                </Button>
               </CardContent>
             </Card>
           ))}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,7 +25,13 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { projectApi, hostApi, notifyApi } from "@/api/client";
 import type { Project, Host, NotifyChannel, DeployConfig } from "@/types";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Play, Copy } from "lucide-react";
+import { Plus, Pencil, Trash2, Play, Copy, X } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+
+// 全局缓存
+let projectsCache: Project[] | null = null;
+let hostsCache: Host[] | null = null;
+let channelsCache: NotifyChannel[] | null = null;
 
 const defaultDeployConfig: Partial<DeployConfig> = {
   build_image: "node:20",
@@ -41,12 +47,14 @@ const defaultDeployConfig: Partial<DeployConfig> = {
 };
 
 export function Projects() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [hosts, setHosts] = useState<Host[]>([]);
-  const [channels, setChannels] = useState<NotifyChannel[]>([]);
+  const [projects, setProjects] = useState<Project[]>(projectsCache || []);
+  const [hosts, setHosts] = useState<Host[]>(hostsCache || []);
+  const [channels, setChannels] = useState<NotifyChannel[]>(channelsCache || []);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [deletingProject, setDeletingProject] = useState<Project | null>(null);
   const [activeTab, setActiveTab] = useState("basic");
+  const loadingRef = useRef(false);
   const [formData, setFormData] = useState({
     name: "",
     branch: "main",
@@ -57,22 +65,47 @@ export function Projects() {
   });
 
   const loadData = async () => {
+    // 如果有缓存且不是强制刷新，使用缓存
+    if (projectsCache && hostsCache && channelsCache) {
+      setProjects(projectsCache);
+      setHosts(hostsCache);
+      setChannels(channelsCache);
+      return;
+    }
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     try {
       const [projRes, hostRes, chanRes] = await Promise.all([
-        projectApi.list(),
-        hostApi.list(),
-        notifyApi.list(),
+        projectsCache ? Promise.resolve(projectsCache) : projectApi.list(),
+        hostsCache ? Promise.resolve(hostsCache) : hostApi.list(),
+        channelsCache ? Promise.resolve(channelsCache) : notifyApi.list(),
       ]);
-      setProjects(projRes?.projects || []);
-      setHosts(hostRes?.hosts || []);
-      setChannels(chanRes?.channels || []);
+      const projects = Array.isArray(projRes) ? projRes : [];
+      const hosts = Array.isArray(hostRes) ? hostRes : [];
+      const channels = Array.isArray(chanRes) ? chanRes : [];
+      projectsCache = projects;
+      hostsCache = hosts;
+      channelsCache = channels;
+      setProjects(projects);
+      setHosts(hosts);
+      setChannels(channels);
     } catch (error) {
       console.error(error);
+    } finally {
+      loadingRef.current = false;
     }
   };
 
   useEffect(() => {
     loadData();
+
+    const handleOpenDialog = (e: CustomEvent) => {
+      if (e.detail.mode === "create") {
+        openCreateDialog();
+      }
+    };
+    window.addEventListener("open-project-dialog", handleOpenDialog as EventListener);
+    return () => window.removeEventListener("open-project-dialog", handleOpenDialog as EventListener);
   }, []);
 
   const resetForm = () => {
@@ -124,11 +157,12 @@ export function Projects() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("确定要删除此项目吗？")) return;
+  const handleDelete = async (project: Project) => {
     try {
-      await projectApi.delete(id);
+      await projectApi.delete(project.id);
+      projectsCache = null;
       toast.success("项目删除成功");
+      setDeletingProject(null);
       loadData();
     } catch (error: any) {
       toast.error(error.message || "删除失败");
@@ -152,16 +186,6 @@ export function Projects() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-end">
-        <div className="flex items-center gap-4">
-          <Badge variant="secondary">{projects.length} 个项目</Badge>
-          <Button onClick={openCreateDialog}>
-            <Plus className="h-4 w-4 mr-2" />
-            新增项目
-          </Button>
-        </div>
-      </div>
-
       {projects.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center text-muted-foreground">
@@ -171,33 +195,81 @@ export function Projects() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {projects.map((project) => (
-            <Card key={project.id} className="relative group">
-              <CardContent className="p-6">
-                <button
-                  onClick={() => handleDelete(project.id)}
-                  className="absolute top-4 right-4 p-2 rounded-md text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-                <div className="mb-4">
-                  <h3 className="font-semibold text-foreground">{project.name}</h3>
-                  <p className="text-sm text-muted-foreground">{project.branch}</p>
-                  <p className="text-sm text-muted-foreground truncate">{project.repo_url}</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" onClick={() => openEditDialog(project)}>
-                    <Pencil className="h-4 w-4 mr-2" />
-                    编辑
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleTrigger(project.id)}>
-                    <Play className="h-4 w-4 mr-2" />
-                    构建
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => copyWebhook(project.webhook_token)}>
-                    <Copy className="h-4 w-4 mr-2" />
-                    Webhook
-                  </Button>
-                </div>
+            <Card key={project.id} className="overflow-hidden">
+              <CardContent className="p-4">
+                <header className="flex items-start justify-between mb-3 relative">
+                  <div className="flex-1 mr-2 min-w-0">
+                    <h3 className="font-semibold text-foreground truncate">{project.name}</h3>
+                    <p className="text-sm text-muted-foreground">{project.branch}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => handleTrigger(project.id)}
+                    >
+                      <Play className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => copyWebhook(project.webhook_token)}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => openEditDialog(project)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    {deletingProject?.id !== project.id ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => setDeletingProject(project)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    ) : null}
+                  </div>
+
+                  <AnimatePresence>
+                    {deletingProject?.id === project.id && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 flex items-center justify-center gap-2 bg-destructive p-2 rounded-lg"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setDeletingProject(null)}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 text-white transition-all hover:bg-white/30 active:scale-95"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(project)}
+                          className="flex-1 h-7 flex items-center justify-center gap-2 rounded-lg bg-white text-destructive text-sm font-semibold transition-all hover:bg-white/90 active:scale-[0.98]"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          确认删除
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </header>
+
+                <p className="text-sm text-muted-foreground truncate">
+                  {project.repo_url}
+                </p>
               </CardContent>
             </Card>
           ))}
