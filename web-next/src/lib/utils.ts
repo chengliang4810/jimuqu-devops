@@ -22,30 +22,44 @@ export function formatDate(date: string | null): string {
 // 格式化持续时间（秒）
 export function formatDuration(seconds: number | null): string {
   if (seconds === null || seconds === 0) return "-";
-  if (seconds < 60) return `${seconds}秒`;
+  if (seconds < 60) return `${Math.round(seconds)}秒`;
   const minutes = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  if (minutes < 60) {
-    return secs > 0 ? `${minutes}分${secs}秒` : `${minutes}分钟`;
-  }
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return mins > 0 ? `${hours}小时${mins}分` : `${hours}小时`;
+  return `${minutes}分钟`;
 }
 
-// 状态颜色映射
-export function getStatusColor(status: string): string {
+// 计算持续时间（从开始到结束）
+export function calculateDuration(startedAt: string | null, finishedAt: string | null): number | null {
+  if (!startedAt) return null;
+  const start = new Date(startedAt).getTime();
+  const end = finishedAt ? new Date(finishedAt).getTime() : Date.now();
+  return Math.floor((end - start) / 1000);
+}
+
+// 格式化简短日期时间
+export function formatShortDateTime(date: string | null): string {
+  if (!date) return "-";
+  const d = new Date(date);
+  return d.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+// 状态 Badge variant 映射
+export function getStatusVariant(status: string): "success" | "error" | "warning" | "secondary" | "default" {
   switch (status) {
     case "success":
-      return "text-green-600 bg-green-50 border-green-200";
+      return "success";
     case "failed":
-      return "text-red-600 bg-red-50 border-red-200";
+      return "error";
     case "running":
-      return "text-blue-600 bg-blue-50 border-blue-200";
+      return "warning";
     case "queued":
-      return "text-amber-600 bg-amber-50 border-amber-200";
+      return "secondary";
     default:
-      return "text-gray-600 bg-gray-50 border-gray-200";
+      return "default";
   }
 }
 
