@@ -1,3 +1,7 @@
+/**
+ * 积木区DevOps流水线 - 前端应用
+ * 采用现代化设计风格，支持主机管理、项目配置和部署监控
+ */
 const state = {
   hosts: [],
   projects: [],
@@ -12,11 +16,13 @@ const state = {
 };
 
 // 移除轮询计时器，改用手动刷新
-// let pollTimer = null;
 let runStream = null;
 let streamingRunId = null;
 const els = {};
 
+/**
+ * 应用初始化
+ */
 document.addEventListener("DOMContentLoaded", () => {
   bindElements();
   bindEvents();
@@ -28,11 +34,11 @@ document.addEventListener("DOMContentLoaded", () => {
   } else {
     showLoginScreen();
   }
-
-  // 移除自动轮询，用户可以通过刷新按钮手动刷新
-  // startPolling();
 });
 
+/**
+ * 全局事件监听
+ */
 window.addEventListener("beforeunload", () => {
   stopRunStream();
 });
@@ -45,10 +51,12 @@ window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     closeHostModal();
     closeProjectModal();
-    // closeProjectConfigModal(); // 移除，已合并到项目模态框
   }
 });
 
+/**
+ * 绑定DOM元素引用
+ */
 function bindElements() {
   Object.assign(els, {
     // 登录相关
@@ -138,6 +146,9 @@ function bindElements() {
   });
 }
 
+/**
+ * 绑定事件监听器
+ */
 function bindEvents() {
   // 登录事件
   if (els.loginForm) {
@@ -147,6 +158,36 @@ function bindEvents() {
   // 退出登录事件
   if (els.logoutBtn) {
     els.logoutBtn.addEventListener("click", logout);
+  }
+
+  // 移动端菜单切换
+  const mobileMenuBtn = document.getElementById("mobileMenuBtn");
+  const viewNav = document.getElementById("viewNav");
+
+  if (mobileMenuBtn && viewNav) {
+    mobileMenuBtn.addEventListener("click", () => {
+      viewNav.classList.toggle("mobile-open");
+      // 切换图标
+      const svg = mobileMenuBtn.querySelector("svg");
+      if (viewNav.classList.contains("mobile-open")) {
+        // 显示关闭图标
+        svg.innerHTML = '<line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>';
+      } else {
+        // 显示菜单图标
+        svg.innerHTML = '<line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line>';
+      }
+    });
+
+    // 点击导航按钮后关闭移动端菜单
+    viewNav.querySelectorAll(".nav-button").forEach((button) => {
+      button.addEventListener("click", () => {
+        if (window.innerWidth <= 768) {
+          viewNav.classList.remove("mobile-open");
+          const svg = mobileMenuBtn.querySelector("svg");
+          svg.innerHTML = '<line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line>';
+        }
+      });
+    });
   }
 
   els.hostForm.addEventListener("submit", handleHostSubmit);
@@ -203,6 +244,10 @@ function bindEvents() {
   // els.cancelProjectConfigModalBtn.addEventListener("click", closeProjectConfigModal);
 }
 
+/**
+ * 切换Tab页
+ * @param {string} tabName - Tab名称
+ */
 function switchTab(tabName) {
   // 更新tab按钮状态
   document.querySelectorAll('.tab-button').forEach(button => {
@@ -219,11 +264,20 @@ function switchTab(tabName) {
   document.getElementById(`tab-${tabName}`).classList.add('active');
 }
 
+/**
+ * 获取初始视图
+ * @returns {string} 视图名称
+ */
 function getInitialView() {
   const raw = window.location.hash.replace("#", "").trim();
   return ["home", "hosts", "projects", "notifications", "logs"].includes(raw) ? raw : "home";
 }
 
+/**
+ * 切换视图
+ * @param {string} view - 视图名称
+ * @param {boolean} updateHash - 是否更新URL哈希
+ */
 function switchView(view, updateHash = true) {
   const normalized = ["home", "hosts", "projects", "notifications", "logs"].includes(view) ? view : "home";
   state.activeView = normalized;
@@ -240,6 +294,9 @@ function switchView(view, updateHash = true) {
   }
 }
 
+/**
+ * 刷新所有数据
+ */
 async function refreshAll() {
   try {
     const [hosts, projects, runs, notifyChannels] = await Promise.all([
@@ -274,6 +331,9 @@ async function refreshAll() {
 //   }, 5000);
 // }
 
+/**
+ * 渲染概览数据
+ */
 function renderOverview() {
   els.projectCount.textContent = String(state.projects?.length || 0);
   els.hostCount.textContent = String(state.hosts?.length || 0);
@@ -1000,6 +1060,12 @@ function showMessage(text, type) {
   }, 4200);
 }
 
+/**
+ * API请求封装
+ * @param {string} url - 请求URL
+ * @param {Object} options - 请求选项
+ * @returns {Promise<any>} 响应数据
+ */
 async function api(url, options = {}) {
   const config = {
     method: options.method || "GET",
