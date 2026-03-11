@@ -852,14 +852,21 @@ async function handleDeleteProject(projectId, projectName) {
 
 // 通知渠道相关函数
 function openNotifyChannelModal() {
-  els.notifyChannelModalTitle.textContent = "新增通知渠道";
-  document.getElementById("notifyChannelId").value = "";
-  document.getElementById("notifyChannelName").value = "";
-  document.getElementById("notifyChannelType").value = "webhook";
-  document.getElementById("notifyChannelWebhookURL").value = "";
-  document.getElementById("notifyChannelSecret").value = "";
-  document.getElementById("notifyChannelRemark").value = "";
-  els.notifyChannelModal.style.display = "flex";
+  if (els.notifyChannelModalTitle) els.notifyChannelModalTitle.textContent = "新增通知渠道";
+  const notifyChannelId = document.getElementById("notifyChannelId");
+  const notifyChannelName = document.getElementById("notifyChannelName");
+  const notifyChannelType = document.getElementById("notifyChannelType");
+  const notifyChannelWebhookURL = document.getElementById("notifyChannelWebhookURL");
+  const notifyChannelSecret = document.getElementById("notifyChannelSecret");
+  const notifyChannelRemark = document.getElementById("notifyChannelRemark");
+
+  if (notifyChannelId) notifyChannelId.value = "";
+  if (notifyChannelName) notifyChannelName.value = "";
+  if (notifyChannelType) notifyChannelType.value = "webhook";
+  if (notifyChannelWebhookURL) notifyChannelWebhookURL.value = "";
+  if (notifyChannelSecret) notifyChannelSecret.value = "";
+  if (notifyChannelRemark) notifyChannelRemark.value = "";
+  if (els.notifyChannelModal) els.notifyChannelModal.style.display = "flex";
 }
 
 async function openNotifyChannelModalForEdit(channel) {
@@ -910,9 +917,10 @@ async function openNotifyChannelModalForEdit(channel) {
 }
 
 function closeNotifyChannelModal() {
-  els.notifyChannelModal.style.display = "none";
-  els.notifyChannelForm.reset();
-  document.getElementById("notifyChannelId").value = "";
+  if (els.notifyChannelModal) els.notifyChannelModal.style.display = "none";
+  if (els.notifyChannelForm) els.notifyChannelForm.reset();
+  const notifyChannelId = document.getElementById("notifyChannelId");
+  if (notifyChannelId) notifyChannelId.value = "";
 }
 
 async function handleNotifyChannelSubmit(event) {
@@ -1160,72 +1168,75 @@ function escapeHTML(value) {
 
 // 主机模态框函数
 function openHostModalForCreate() {
-  els.hostFormId.value = "";
-  els.hostName.value = "";
-  els.hostAddress.value = "";
-  els.hostPort.value = "22";
-  els.hostUsername.value = "";
-  els.hostPassword.value = "";
-  els.hostModalTitle.textContent = "新增主机";
-  els.hostModal.style.display = "flex";
+  if (els.hostFormId) els.hostFormId.value = "";
+  if (els.hostName) els.hostName.value = "";
+  if (els.hostAddress) els.hostAddress.value = "";
+  if (els.hostPort) els.hostPort.value = "22";
+  if (els.hostUsername) els.hostUsername.value = "";
+  if (els.hostPassword) els.hostPassword.value = "";
+  if (els.hostModalTitle) els.hostModalTitle.textContent = "新增主机";
+  if (els.hostModal) els.hostModal.style.display = "flex";
 }
 
 function openHostModalForEdit(host) {
-  els.hostFormId.value = String(host.id);
-  els.hostName.value = host.name || "";
-  els.hostAddress.value = host.address || "";
-  els.hostPort.value = host.port || 22;
-  els.hostUsername.value = host.username || "";
-  els.hostPassword.value = "";
-  els.hostModalTitle.textContent = "编辑主机";
-  els.hostModal.style.display = "flex";
+  if (els.hostFormId) els.hostFormId.value = String(host.id);
+  if (els.hostName) els.hostName.value = host.name || "";
+  if (els.hostAddress) els.hostAddress.value = host.address || "";
+  if (els.hostPort) els.hostPort.value = String(host.port || 22);
+  if (els.hostUsername) els.hostUsername.value = host.username || "";
+  if (els.hostPassword) els.hostPassword.value = "";
+  if (els.hostModalTitle) els.hostModalTitle.textContent = "编辑主机";
+  if (els.hostModal) els.hostModal.style.display = "flex";
 }
 
 function closeHostModal() {
-  els.hostModal.style.display = "none";
-  els.hostForm.reset();
-  els.hostFormId.value = "";
-  els.hostPort.value = "22";
+  if (els.hostModal) els.hostModal.style.display = "none";
+  if (els.hostForm) els.hostForm.reset();
+  if (els.hostFormId) els.hostFormId.value = "";
+  if (els.hostPort) els.hostPort.value = "22";
 }
 
 // 项目模态框函数
 async function openProjectModalForCreate() {
-  els.projectId.value = "";
-  els.projectName.value = "";
-  els.projectBranch.value = "";
-  els.projectRepoURL.value = "";
-  els.projectDescription.value = "";
-  els.timeoutMinutes.value = "30";
-  els.webhookToken.value = "";
+  if (els.projectId) els.projectId.value = "";
+  if (els.projectName) els.projectName.value = "";
+  if (els.projectBranch) els.projectBranch.value = "";
+  if (els.projectRepoURL) els.projectRepoURL.value = "";
+  if (els.projectDescription) els.projectDescription.value = "";
+  if (els.timeoutMinutes) els.timeoutMinutes.value = "30";
 
   // 重置编译配置
-  els.buildImage.value = "";
-  els.buildCommands.value = "";
-  els.artifactFilterMode.value = "none";
-  els.artifactRules.value = "";
+  if (els.buildImage) els.buildImage.value = "";
+  if (els.buildCommands) els.buildCommands.value = "";
+
+  // 重置 radio 按钮
+  const excludeRadio = document.querySelector('input[name="artifactFilterMode"][value="exclude"]');
+  if (excludeRadio) excludeRadio.checked = true;
+
+  if (els.artifactRules) els.artifactRules.value = "";
 
   // 重置部署配置
-  els.deployHostId.value = "";
-  els.remoteSaveDir.value = "/data/jimuqu/projects"; // 设置默认值
-  els.remoteDeployDir.value = "";
-  els.versionCount.value = "5";
-  els.preDeployCommands.value = "";
-  els.postDeployCommands.value = "";
-  els.notificationChannelId.value = ""; // 使用默认渠道
+  if (els.deployHostId) els.deployHostId.value = "";
+  if (els.remoteSaveDir) els.remoteSaveDir.value = "/data/jimuqu/projects";
+  if (els.remoteDeployDir) els.remoteDeployDir.value = "";
+  if (els.versionCount) els.versionCount.value = "5";
+  if (els.preDeployCommands) els.preDeployCommands.value = "";
+  if (els.postDeployCommands) els.postDeployCommands.value = "";
+  if (els.notificationChannelId) els.notificationChannelId.value = "";
 
   await renderHostOptionsForConfig();
   await renderNotificationChannelOptionsForConfig();
-  els.projectModalTitle.textContent = "新增项目";
+  if (els.projectModalTitle) els.projectModalTitle.textContent = "新增项目";
   switchTab("basic");
-  els.projectModal.style.display = "flex";
+  if (els.projectModal) els.projectModal.style.display = "flex";
 }
 
 async function openProjectModalForEdit(project) {
-  els.projectId.value = String(project.id);
-  els.projectName.value = project.name || "";
-  els.projectBranch.value = project.branch || "";
-  els.projectRepoURL.value = project.repo_url || "";
-  els.projectDescription.value = project.description || "";
+  if (els.projectId) els.projectId.value = String(project.id);
+  if (els.projectName) els.projectName.value = project.name || "";
+  if (els.projectBranch) els.projectBranch.value = project.branch || "";
+  if (els.projectRepoURL) els.projectRepoURL.value = project.repo_url || "";
+  if (els.projectDescription) els.projectDescription.value = project.description || "";
 
   // 获取完整的项目详情
   try {
@@ -1234,49 +1245,57 @@ async function openProjectModalForEdit(project) {
 
     if (config) {
       // 基础信息
-      els.timeoutMinutes.value = String(Math.floor((config.timeout_seconds || 1800) / 60));
+      if (els.timeoutMinutes) els.timeoutMinutes.value = String(Math.floor((config.timeout_seconds || 1800) / 60));
 
       // 编译配置
-      els.buildImage.value = config.build_image || "";
-      els.buildCommands.value = (config.build_commands || []).join("\n");
+      if (els.buildImage) els.buildImage.value = config.build_image || "";
+      if (els.buildCommands) els.buildCommands.value = (config.build_commands || []).join("\n");
+
       // 设置制品过滤模式单选按钮
       const artifactFilterMode = config.artifact_filter_mode || "include";
       const radioButton = document.querySelector(`input[name="artifactFilterMode"][value="${artifactFilterMode}"]`);
       if (radioButton) {
         radioButton.checked = true;
       }
-      els.artifactRules.value = (config.artifact_rules || []).join("\n");
+
+      if (els.artifactRules) els.artifactRules.value = (config.artifact_rules || []).join("\n");
 
       // 部署配置
-      els.deployHostId.value = String(config.host_id);
-      els.remoteSaveDir.value = config.remote_save_dir || "";
-      els.remoteDeployDir.value = config.remote_deploy_dir || "";
-      els.versionCount.value = String(config.version_count || 5);
-      els.preDeployCommands.value = (config.pre_deploy_commands || []).join("\n");
-      els.postDeployCommands.value = (config.post_deploy_commands || []).join("\n");
+      if (els.deployHostId) els.deployHostId.value = String(config.host_id);
+      if (els.remoteSaveDir) els.remoteSaveDir.value = config.remote_save_dir || "";
+      if (els.remoteDeployDir) els.remoteDeployDir.value = config.remote_deploy_dir || "";
+      if (els.versionCount) els.versionCount.value = String(config.version_count || 5);
+      if (els.preDeployCommands) els.preDeployCommands.value = (config.pre_deploy_commands || []).join("\n");
+      if (els.postDeployCommands) els.postDeployCommands.value = (config.post_deploy_commands || []).join("\n");
 
       // 通知渠道设置
-      if (config.notification_channel_id === null) {
-        els.notificationChannelId.value = "-1"; // 不通知
-      } else if (config.notification_channel_id) {
-        els.notificationChannelId.value = String(config.notification_channel_id); // 指定渠道
-      } else {
-        els.notificationChannelId.value = ""; // 使用默认渠道
+      if (els.notificationChannelId) {
+        if (config.notification_channel_id === null) {
+          els.notificationChannelId.value = "-1"; // 不通知
+        } else if (config.notification_channel_id) {
+          els.notificationChannelId.value = String(config.notification_channel_id); // 指定渠道
+        } else {
+          els.notificationChannelId.value = ""; // 使用默认渠道
+        }
       }
     } else {
       // 重置配置表单为默认值
-      els.timeoutMinutes.value = "30";
-      els.buildImage.value = "";
-      els.buildCommands.value = "";
-      els.artifactFilterMode.value = "none";
-      els.artifactRules.value = "";
-      els.deployHostId.value = "";
-      els.remoteSaveDir.value = "/data/jimuqu/projects"; // 设置默认值
-      els.remoteDeployDir.value = "";
-      els.versionCount.value = "5";
-      els.preDeployCommands.value = "";
-      els.postDeployCommands.value = "";
-      els.notificationChannelId.value = ""; // 使用默认渠道
+      if (els.timeoutMinutes) els.timeoutMinutes.value = "30";
+      if (els.buildImage) els.buildImage.value = "";
+      if (els.buildCommands) els.buildCommands.value = "";
+
+      // 重置 radio 按钮
+      const excludeRadio = document.querySelector('input[name="artifactFilterMode"][value="exclude"]');
+      if (excludeRadio) excludeRadio.checked = true;
+
+      if (els.artifactRules) els.artifactRules.value = "";
+      if (els.deployHostId) els.deployHostId.value = "";
+      if (els.remoteSaveDir) els.remoteSaveDir.value = "/data/jimuqu/projects";
+      if (els.remoteDeployDir) els.remoteDeployDir.value = "";
+      if (els.versionCount) els.versionCount.value = "5";
+      if (els.preDeployCommands) els.preDeployCommands.value = "";
+      if (els.postDeployCommands) els.postDeployCommands.value = "";
+      if (els.notificationChannelId) els.notificationChannelId.value = "";
     }
   } catch (error) {
     console.error("Failed to load project details:", error);
@@ -1284,17 +1303,17 @@ async function openProjectModalForEdit(project) {
 
   await renderHostOptionsForConfig();
   await renderNotificationChannelOptionsForConfig();
-  els.projectModalTitle.textContent = "编辑项目";
+  if (els.projectModalTitle) els.projectModalTitle.textContent = "编辑项目";
   switchTab("basic");
-  els.projectModal.style.display = "flex";
+  if (els.projectModal) els.projectModal.style.display = "flex";
 }
 
 function closeProjectModal() {
-  els.projectModal.style.display = "none";
-  els.projectForm.reset();
-  els.buildForm.reset();
-  els.deployForm.reset();
-  els.projectId.value = "";
+  if (els.projectModal) els.projectModal.style.display = "none";
+  if (els.projectForm) els.projectForm.reset();
+  if (els.buildForm) els.buildForm.reset();
+  if (els.deployForm) els.deployForm.reset();
+  if (els.projectId) els.projectId.value = "";
 }
 
 function renderHostOptionsForConfig() {
