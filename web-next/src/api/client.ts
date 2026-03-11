@@ -41,6 +41,7 @@ async function request<T>(
   const response = await fetch(`${API_BASE}/api/v1${path}`, {
     ...options,
     headers,
+    redirect: "follow",
   });
 
   if (!response.ok) {
@@ -68,15 +69,15 @@ export const authApi = {
 
 // ==================== 主机 API ====================
 export const hostApi = {
-  list: () => request<{ hosts: import("@/types").Host[] }>("/hosts"),
-  get: (id: number) => request<{ host: import("@/types").Host }>(`/hosts/${id}`),
+  list: () => request<import("@/types").Host[]>("/hosts"),
+  get: (id: number) => request<import("@/types").Host>(`/hosts/${id}`),
   create: (data: Partial<import("@/types").Host>) =>
-    request<{ host: import("@/types").Host }>("/hosts", {
+    request<import("@/types").Host>("/hosts", {
       method: "POST",
       body: JSON.stringify(data),
     }),
   update: (id: number, data: Partial<import("@/types").Host>) =>
-    request<{ host: import("@/types").Host }>(`/hosts/${id}`, {
+    request<import("@/types").Host>(`/hosts/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
@@ -86,15 +87,15 @@ export const hostApi = {
 
 // ==================== 项目 API ====================
 export const projectApi = {
-  list: () => request<{ projects: import("@/types").Project[] }>("/projects"),
-  get: (id: number) => request<{ project: import("@/types").Project }>(`/projects/${id}`),
+  list: () => request<import("@/types").Project[]>("/projects"),
+  get: (id: number) => request<import("@/types").Project>(`/projects/${id}`),
   create: (data: any) =>
-    request<{ project: import("@/types").Project }>("/projects", {
+    request<import("@/types").Project>("/projects", {
       method: "POST",
       body: JSON.stringify(data),
     }),
   update: (id: number, data: any) =>
-    request<{ project: import("@/types").Project }>(`/projects/${id}`, {
+    request<import("@/types").Project>(`/projects/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
@@ -106,26 +107,31 @@ export const projectApi = {
 
 // ==================== 部署记录 API ====================
 export const runApi = {
-  list: () => request<{ runs: import("@/types").PipelineRun[] }>("/runs"),
-  get: (id: number) => request<{ run: import("@/types").PipelineRun }>(`/runs/${id}`),
+  list: () => request<import("@/types").PipelineRun[]>("/runs"),
+  get: (id: number) => request<import("@/types").PipelineRun>(`/runs/${id}`),
 };
 
 // ==================== 通知渠道 API ====================
 export const notifyApi = {
-  list: () => request<{ channels: import("@/types").NotifyChannel[] }>("/notification-channels"),
-  get: (id: number) => request<{ channel: import("@/types").NotifyChannel }>(`/notification-channels/${id}`),
+  list: () => request<import("@/types").NotifyChannel[]>("/notification-channels"),
+  get: (id: number) => request<import("@/types").NotifyChannel>(`/notification-channels/${id}`),
   create: (data: Partial<import("@/types").NotifyChannel>) =>
-    request<{ channel: import("@/types").NotifyChannel }>("/notification-channels", {
+    request<import("@/types").NotifyChannel>("/notification-channels", {
       method: "POST",
       body: JSON.stringify(data),
     }),
   update: (id: number, data: Partial<import("@/types").NotifyChannel>) =>
-    request<{ channel: import("@/types").NotifyChannel }>(`/notification-channels/${id}`, {
+    request<import("@/types").NotifyChannel>(`/notification-channels/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
   delete: (id: number) =>
     request(`/notification-channels/${id}`, { method: "DELETE" }),
+  test: (id: number, message?: string) =>
+    request<{ message: string }>(`/notification-channels/${id}/test`, {
+      method: "POST",
+      body: JSON.stringify({ message: message || "测试通知" }),
+    }),
 };
 
 // ==================== 统计 API ====================
