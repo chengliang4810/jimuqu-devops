@@ -48,10 +48,10 @@ export interface PipelineRun {
   project_name: string;
   branch: string;
   status: RunStatus;
-  log: string;
+  commit_message: string;
+  log_text: string;
   started_at: string;
   finished_at: string | null;
-  duration: number | null;
 }
 
 // 通知渠道类型
