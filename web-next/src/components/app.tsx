@@ -12,9 +12,8 @@ import { Projects } from "@/components/modules/projects";
 import { Logs } from "@/components/modules/logs";
 import { Notifications } from "@/components/modules/notifications";
 import { Toaster } from "@/components/ui/sonner";
-import { Button } from "@/components/ui/button";
 import Logo from "@/components/modules/logo";
-import { LogOut } from "lucide-react";
+import { Toolbar } from "@/components/modules/toolbar";
 
 const viewTitles: Record<string, string> = {
   home: "首页",
@@ -33,11 +32,6 @@ export function App() {
     setAuthenticated(isAuthenticated());
     setLoading(false);
   }, []);
-
-  const handleLogout = () => {
-    localStorage.removeItem("jwt_token");
-    window.location.reload();
-  };
 
   if (loading) {
     return (
@@ -94,10 +88,7 @@ export function App() {
             </AnimatePresence>
           </div>
           <div className="ml-auto">
-            <Button variant="outline" size="sm" onClick={handleLogout}>
-              <LogOut className="h-4 w-4 mr-2" />
-              退出登录
-            </Button>
+            <Toolbar />
           </div>
         </header>
         <AnimatePresence mode="wait" initial={false}>
