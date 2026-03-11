@@ -7,14 +7,14 @@ const createNextConfig = (phase: string): NextConfig => {
   return {
     output: "export",
     images: { unoptimized: true },
-    trailingSlash: true,
+    trailingSlash: false,
     // 开发阶段 API 代理到后端
     ...(isDev && {
       async rewrites() {
         return [
           {
-            source: "/api/:path*",
-            destination: "http://localhost:18080/api/:path*",
+            source: "/api/v1/:path*",
+            destination: "http://localhost:18080/api/v1/:path*",
           },
         ];
       },
