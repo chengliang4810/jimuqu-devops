@@ -1,14 +1,16 @@
 package httpapi
 
 import (
+	"bytes"
 	"embed"
 	"io/fs"
+	"mime"
 	"net/http"
-	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -108,17 +110,15 @@ func fsFileExists(staticFS fs.FS, filename string) bool {
 }
 
 func serveFSFile(w http.ResponseWriter, r *http.Request, staticFS fs.FS, filename string) {
-	fileServer := http.FileServer(http.FS(staticFS))
-	request := r.Clone(r.Context())
-	request.URL = cloneURL(r.URL)
-	request.URL.Path = "/" + strings.TrimPrefix(filename, "/")
-	fileServer.ServeHTTP(w, request)
-}
-
-func cloneURL(source *url.URL) *url.URL {
-	if source == nil {
-		return &url.URL{}
+	data, err := fs.ReadFile(staticFS, filename)
+	if err != nil {
+		http.NotFound(w, r)
+		return
 	}
-	cloned := *source
-	return &cloned
+
+	if contentType := mime.TypeByExtension(filepath.Ext(filename)); contentType != "" {
+		w.Header().Set("Content-Type", contentType)
+	}
+
+	http.ServeContent(w, r, path.Base(filename), time.Time{}, bytes.NewReader(data))
 }
