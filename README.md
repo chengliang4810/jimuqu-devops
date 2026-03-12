@@ -77,7 +77,7 @@ docker run -d --name jimuqu-devops \
   -v $(pwd)/data:/app/data \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e APP_SECRET="$APP_SECRET" \
-  ghcr.io/chengliang4810/jimuqu-devops:0.0.3
+  ghcr.io/chengliang4810/jimuqu-devops:latest
 ```
 
 或使用 docker compose：
@@ -96,7 +96,7 @@ docker compose up -d
 
 - 容器内需要通过 `/var/run/docker.sock` 调用宿主机 Docker，才能执行项目构建
 - 默认使用 SQLite，数据保存在挂载目录 `/app/data`
-- `docker-compose.yml` 默认使用 `ghcr.io/chengliang4810/jimuqu-devops:0.0.3`
+- `docker-compose.yml` 默认使用 `ghcr.io/chengliang4810/jimuqu-devops:latest`
 
 ### 📦 Download from Release
 
@@ -271,7 +271,7 @@ docker run -d --name jimuqu-devops \
   -v $(pwd)/data:/app/data \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e APP_SECRET="$APP_SECRET" \
-  ghcr.io/chengliang4810/jimuqu-devops:0.0.3
+  ghcr.io/chengliang4810/jimuqu-devops:latest
 ```
 
 #### 2. 访问系统
@@ -290,7 +290,7 @@ docker run -d --name jimuqu-devops \
   -e APP_DB_DRIVER=mysql \
   -e APP_DB_SOURCE='root:password@tcp(mysql:3306)/jimuqu_devops?charset=utf8mb4&parseTime=true&loc=Local' \
   -e APP_SECRET="$APP_SECRET" \
-  ghcr.io/chengliang4810/jimuqu-devops:0.0.3
+  ghcr.io/chengliang4810/jimuqu-devops:latest
 ```
 
 ### 方案三：Release 包部署

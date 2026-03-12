@@ -1,6 +1,6 @@
 services:
   app:
-    image: ghcr.io/chengliang4810/jimuqu-devops:0.0.3
+    image: ghcr.io/chengliang4810/jimuqu-devops:latest
     container_name: jimuqu-devops
     ports:
       - "18080:18080"
