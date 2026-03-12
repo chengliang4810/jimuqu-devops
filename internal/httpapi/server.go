@@ -28,20 +28,20 @@ import (
 )
 
 type Server struct {
-	store     *store.Store
-	executor  *pipeline.Executor
-	logger    *slog.Logger
-	config    config.Config
+	store      *store.Store
+	executor   *pipeline.Executor
+	logger     *slog.Logger
+	config     config.Config
 	jwtManager *auth.JWTManager
 }
 
 func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, cfg config.Config) http.Handler {
 	jwtManager := auth.NewJWTManager(cfg.JWTSecret)
 	server := &Server{
-		store:     store,
-		executor:  executor,
-		logger:    logger,
-		config:    cfg,
+		store:      store,
+		executor:   executor,
+		logger:     logger,
+		config:     cfg,
 		jwtManager: jwtManager,
 	}
 
@@ -49,6 +49,7 @@ func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, c
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
 	router.Use(middleware.Recoverer)
+	router.Use(corsMiddleware)
 
 	server.mountUI(router)
 	router.Get("/healthz", server.handleHealth)
@@ -65,6 +66,7 @@ func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, c
 			r.Route("/hosts", func(r chi.Router) {
 				r.Get("/", server.handleListHosts)
 				r.Post("/", server.handleCreateHost)
+				r.Put("/reorder", server.handleReorderHosts)
 				r.Route("/{hostID}", func(r chi.Router) {
 					r.Get("/", server.handleGetHost)
 					r.Put("/", server.handleUpdateHost)
@@ -75,6 +77,7 @@ func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, c
 			r.Route("/projects", func(r chi.Router) {
 				r.Get("/", server.handleListProjects)
 				r.Post("/", server.handleCreateProject)
+				r.Put("/reorder", server.handleReorderProjects)
 				r.Route("/{projectID}", func(r chi.Router) {
 					r.Get("/", server.handleGetProject)
 					r.Put("/", server.handleUpdateProject)
@@ -90,6 +93,7 @@ func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, c
 			r.Route("/notification-channels", func(r chi.Router) {
 				r.Get("/", server.handleListNotificationChannels)
 				r.Post("/", server.handleCreateNotificationChannel)
+				r.Put("/reorder", server.handleReorderNotificationChannels)
 				r.Route("/{channelID}", func(r chi.Router) {
 					r.Get("/", server.handleGetNotificationChannel)
 					r.Put("/", server.handleUpdateNotificationChannel)
@@ -99,9 +103,25 @@ func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, c
 				})
 			})
 
+			r.Route("/settings", func(r chi.Router) {
+				r.Get("/", server.handleListSettings)
+				r.Get("/backup", server.handleExportBackup)
+				r.Post("/restore", server.handleImportBackup)
+				r.Put("/{key}", server.handleUpdateSetting)
+			})
+
+			r.Route("/admin", func(r chi.Router) {
+				r.Get("/profile", server.handleGetAdminProfile)
+				r.Put("/username", server.handleChangeAdminUsername)
+				r.Put("/password", server.handleChangeAdminPassword)
+			})
+
 			r.Get("/runs", server.handleListAllRuns)
+			r.Delete("/runs", server.handleClearRuns)
 			r.Get("/runs/{runID}", server.handleGetRun)
 			r.Get("/stats", server.handleStats)
+			r.Get("/dashboard/home", server.handleHomeDashboard)
+			r.Get("/system/info", server.handleSystemInfo)
 		})
 
 		// 流式接口移到认证组外面，支持查询参数传递token
@@ -115,8 +135,27 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	if err := s.store.ApplyRunRetention(ctx); err != nil {
+		s.writeError(w, err)
+		return
+	}
 
 	// 获取各模块数量
 	hosts, err := s.store.ListHosts(ctx)
@@ -144,13 +183,26 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	stats := map[string]int{
-		"host_count":            len(hosts),
-		"project_count":         len(projects),
-		"run_count":             len(runs),
-		"notify_channel_count":  len(channels),
+		"host_count":           len(hosts),
+		"project_count":        len(projects),
+		"run_count":            len(runs),
+		"notify_channel_count": len(channels),
 	}
 
 	writeJSON(w, http.StatusOK, stats)
+}
+
+func (s *Server) handleHomeDashboard(w http.ResponseWriter, r *http.Request) {
+	if err := s.store.ApplyRunRetention(r.Context()); err != nil {
+		s.writeError(w, err)
+		return
+	}
+	dashboard, err := s.store.GetHomeDashboard(r.Context())
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, dashboard)
 }
 
 func (s *Server) handleListHosts(w http.ResponseWriter, r *http.Request) {
@@ -241,6 +293,23 @@ func (s *Server) handleDeleteHost(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (s *Server) handleReorderHosts(w http.ResponseWriter, r *http.Request) {
+	var input model.ReorderInput
+	if err := decodeJSON(r.Body, &input); err != nil {
+		s.writeBadRequest(w, err)
+		return
+	}
+	if len(input.IDs) == 0 {
+		s.writeBadRequest(w, errors.New("ids are required"))
+		return
+	}
+	if err := s.store.ReorderHosts(r.Context(), input.IDs); err != nil {
+		s.writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request) {
 	projects, err := s.store.ListProjects(r.Context())
 	if err != nil {
@@ -322,6 +391,23 @@ func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (s *Server) handleReorderProjects(w http.ResponseWriter, r *http.Request) {
+	var input model.ReorderInput
+	if err := decodeJSON(r.Body, &input); err != nil {
+		s.writeBadRequest(w, err)
+		return
+	}
+	if len(input.IDs) == 0 {
+		s.writeBadRequest(w, errors.New("ids are required"))
+		return
+	}
+	if err := s.store.ReorderProjects(r.Context(), input.IDs); err != nil {
+		s.writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) handleCloneProject(w http.ResponseWriter, r *http.Request) {
 	projectID, err := parseInt64Param(r, "projectID")
 	if err != nil {
@@ -388,6 +474,10 @@ func (s *Server) handleGetDeployConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListProjectRuns(w http.ResponseWriter, r *http.Request) {
+	if err := s.store.ApplyRunRetention(r.Context()); err != nil {
+		s.writeError(w, err)
+		return
+	}
 	projectID, err := parseInt64Param(r, "projectID")
 	if err != nil {
 		s.writeBadRequest(w, err)
@@ -403,6 +493,10 @@ func (s *Server) handleListProjectRuns(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListAllRuns(w http.ResponseWriter, r *http.Request) {
+	if err := s.store.ApplyRunRetention(r.Context()); err != nil {
+		s.writeError(w, err)
+		return
+	}
 	// 解析分页参数，默认显示前100条记录
 	offset := 0
 	limit := 100
@@ -443,6 +537,10 @@ func (s *Server) handleTriggerProject(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
+	if err := s.store.ApplyRunRetention(r.Context()); err != nil {
+		s.writeError(w, err)
+		return
+	}
 	runID, err := parseInt64Param(r, "runID")
 	if err != nil {
 		s.writeBadRequest(w, err)
@@ -575,7 +673,7 @@ func validateProjectInput(input model.ProjectUpsert) error {
 	}
 
 	validGitTypes := map[string]bool{
-		model.GitAuthTypeNone:    true,
+		model.GitAuthTypeNone:     true,
 		model.GitAuthTypeUsername: true,
 		model.GitAuthTypeToken:    true,
 		model.GitAuthTypeSSH:      true,
@@ -776,6 +874,23 @@ func (s *Server) handleSetDefaultNotificationChannel(w http.ResponseWriter, r *h
 	}
 
 	if err = s.store.SetDefaultNotificationChannel(r.Context(), channelID); err != nil {
+		s.writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleReorderNotificationChannels(w http.ResponseWriter, r *http.Request) {
+	var input model.ReorderInput
+	if err := decodeJSON(r.Body, &input); err != nil {
+		s.writeBadRequest(w, err)
+		return
+	}
+	if len(input.IDs) == 0 {
+		s.writeBadRequest(w, errors.New("ids are required"))
+		return
+	}
+	if err := s.store.ReorderNotificationChannels(r.Context(), input.IDs); err != nil {
 		s.writeError(w, err)
 		return
 	}

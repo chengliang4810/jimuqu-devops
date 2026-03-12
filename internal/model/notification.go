@@ -12,6 +12,7 @@ const (
 
 type NotificationChannel struct {
 	ID        int64     `json:"id"`
+	SortOrder int64     `json:"sort_order"`
 	Name      string    `json:"name"`
 	Type      string    `json:"type"`
 	IsDefault bool      `json:"is_default"`

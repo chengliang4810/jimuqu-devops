@@ -243,14 +243,22 @@ func (e *Executor) runPipeline(ctx context.Context, runID int64, bundle model.Ex
 
 func (e *Executor) runLocalCommand(ctx context.Context, name string, args []string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Env = os.Environ()
+	env, err := e.buildCommandEnv(ctx)
+	if err != nil {
+		return "", err
+	}
+	cmd.Env = env
 	output, err := cmd.CombinedOutput()
 	return string(output), err
 }
 
 func (e *Executor) runLocalCommandWithLogging(ctx context.Context, logf func(string, ...any), name string, args []string) error {
 	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Env = os.Environ()
+	env, err := e.buildCommandEnv(ctx)
+	if err != nil {
+		return err
+	}
+	cmd.Env = env
 
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
@@ -301,16 +309,32 @@ func (e *Executor) runDockerBuild(ctx context.Context, sourceDir, image string, 
 	if err != nil {
 		return "", fmt.Errorf("resolve source dir: %w", err)
 	}
-
-	mountDir := filepath.ToSlash(absSourceDir)
-	args := []string{
-		"run", "--rm",
-		"-v", fmt.Sprintf("%s:/workspace", mountDir),
-		"-w", "/workspace",
-		image,
-		"sh", "-lc", script,
+	candidateImages, err := e.resolveBuildImages(ctx, image)
+	if err != nil {
+		return "", err
 	}
-	return e.runLocalCommand(ctx, "docker", args)
+	envArgs, err := e.dockerEnvArgs(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	var combinedOutput strings.Builder
+	for _, candidateImage := range candidateImages {
+		output, runErr := e.runDockerCommand(ctx, absSourceDir, candidateImage, script, envArgs)
+		if runErr == nil {
+			return output, nil
+		}
+		if combinedOutput.Len() > 0 {
+			combinedOutput.WriteString("\n")
+		}
+		combinedOutput.WriteString(fmt.Sprintf("image %s failed: %v", candidateImage, runErr))
+		if strings.TrimSpace(output) != "" {
+			combinedOutput.WriteString("\n")
+			combinedOutput.WriteString(strings.TrimSpace(output))
+		}
+	}
+
+	return combinedOutput.String(), fmt.Errorf("all docker mirror candidates failed")
 }
 
 func (e *Executor) runDockerBuildWithLogging(ctx context.Context, sourceDir, image string, commands []string, logf func(string, ...any)) error {
@@ -319,16 +343,133 @@ func (e *Executor) runDockerBuildWithLogging(ctx context.Context, sourceDir, ima
 	if err != nil {
 		return fmt.Errorf("resolve source dir: %w", err)
 	}
+	candidateImages, err := e.resolveBuildImages(ctx, image)
+	if err != nil {
+		return err
+	}
+	envArgs, err := e.dockerEnvArgs(ctx)
+	if err != nil {
+		return err
+	}
 
+	var lastErr error
+	for _, candidateImage := range candidateImages {
+		logf("stage build: trying image source=%s", candidateImage)
+		runErr := e.runDockerCommandWithLogging(ctx, absSourceDir, candidateImage, script, envArgs, logf)
+		if runErr == nil {
+			return nil
+		}
+		lastErr = runErr
+		logf("stage build: image source failed=%s error=%v", candidateImage, runErr)
+	}
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("all docker mirror candidates failed")
+	}
+	return lastErr
+}
+
+func (e *Executor) runDockerCommand(ctx context.Context, absSourceDir, image, script string, envArgs []string) (string, error) {
 	mountDir := filepath.ToSlash(absSourceDir)
 	args := []string{
 		"run", "--rm",
 		"-v", fmt.Sprintf("%s:/workspace", mountDir),
 		"-w", "/workspace",
-		image,
-		"sh", "-lc", script,
 	}
+	args = append(args, envArgs...)
+	args = append(args, image, "sh", "-lc", script)
+	return e.runLocalCommand(ctx, "docker", args)
+}
+
+func (e *Executor) runDockerCommandWithLogging(ctx context.Context, absSourceDir, image, script string, envArgs []string, logf func(string, ...any)) error {
+	mountDir := filepath.ToSlash(absSourceDir)
+	args := []string{
+		"run", "--rm",
+		"-v", fmt.Sprintf("%s:/workspace", mountDir),
+		"-w", "/workspace",
+	}
+	args = append(args, envArgs...)
+	args = append(args, image, "sh", "-lc", script)
 	return e.runLocalCommandWithLogging(ctx, logf, "docker", args)
+}
+
+func (e *Executor) buildCommandEnv(ctx context.Context) ([]string, error) {
+	env := os.Environ()
+
+	proxyURL, err := e.store.GetSettingValue(ctx, model.SettingProxyURL)
+	if err != nil {
+		return nil, fmt.Errorf("load proxy setting: %w", err)
+	}
+	proxyURL = strings.TrimSpace(proxyURL)
+	if proxyURL == "" {
+		return env, nil
+	}
+
+	env = append(env,
+		"HTTP_PROXY="+proxyURL,
+		"HTTPS_PROXY="+proxyURL,
+		"http_proxy="+proxyURL,
+		"https_proxy="+proxyURL,
+	)
+	return env, nil
+}
+
+func (e *Executor) dockerEnvArgs(ctx context.Context) ([]string, error) {
+	proxyURL, err := e.store.GetSettingValue(ctx, model.SettingProxyURL)
+	if err != nil {
+		return nil, fmt.Errorf("load proxy setting: %w", err)
+	}
+	proxyURL = strings.TrimSpace(proxyURL)
+	if proxyURL == "" {
+		return nil, nil
+	}
+
+	return []string{
+		"-e", "HTTP_PROXY=" + proxyURL,
+		"-e", "HTTPS_PROXY=" + proxyURL,
+		"-e", "http_proxy=" + proxyURL,
+		"-e", "https_proxy=" + proxyURL,
+	}, nil
+}
+
+func (e *Executor) resolveBuildImages(ctx context.Context, image string) ([]string, error) {
+	mirrorValue, err := e.store.GetSettingValue(ctx, model.SettingDockerMirrorURL)
+	if err != nil {
+		return nil, fmt.Errorf("load docker mirror setting: %w", err)
+	}
+
+	candidates := make([]string, 0, 4)
+	seen := make(map[string]struct{})
+	addCandidate := func(candidate string) {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			return
+		}
+		if _, exists := seen[candidate]; exists {
+			return
+		}
+		seen[candidate] = struct{}{}
+		candidates = append(candidates, candidate)
+	}
+
+	for _, line := range strings.Split(strings.ReplaceAll(mirrorValue, "\r\n", "\n"), "\n") {
+		mirrorURL := strings.TrimSpace(line)
+		if mirrorURL == "" {
+			continue
+		}
+		mirrorURL = strings.TrimPrefix(mirrorURL, "https://")
+		mirrorURL = strings.TrimPrefix(mirrorURL, "http://")
+		mirrorURL = strings.TrimSuffix(mirrorURL, "/")
+		addCandidate(mirrorURL + "/" + strings.TrimPrefix(image, "/"))
+	}
+
+	addCandidate(image)
+
+	if len(candidates) == 0 {
+		return nil, fmt.Errorf("no docker image candidates resolved")
+	}
+
+	return candidates, nil
 }
 
 func filterArtifacts(sourceDir, artifactDir, mode string, rules []string) error {

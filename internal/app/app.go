@@ -26,9 +26,11 @@ type App struct {
 func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	dirs := []string{
 		cfg.DataDir,
-		filepath.Dir(cfg.DBPath),
 		cfg.WorkspaceDir,
 		cfg.ArtifactDir,
+	}
+	if cfg.DBDriver == "" || cfg.DBDriver == store.DriverSQLite {
+		dirs = append(dirs, filepath.Dir(cfg.DBSource))
 	}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -36,12 +38,12 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		}
 	}
 
-	db, err := store.Open(cfg.DBPath)
+	db, err := store.Open(cfg.DBDriver, cfg.DBSource)
 	if err != nil {
 		return nil, err
 	}
 
-	appStore := store.New(db, cryptoutil.New(cfg.Secret))
+	appStore := store.New(db, cryptoutil.New(cfg.Secret), cfg.DBDriver)
 	if err = appStore.Migrate(context.Background()); err != nil {
 		db.Close()
 		return nil, err
@@ -51,6 +53,10 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	if err = initializeAdminUser(context.Background(), appStore, cfg); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("initialize admin user: %w", err)
+	}
+	if err = appStore.ApplyRunRetention(context.Background()); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("apply run retention: %w", err)
 	}
 
 	executor := pipeline.NewExecutor(appStore, logger, cfg.WorkspaceDir, cfg.ArtifactDir)

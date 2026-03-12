@@ -8,150 +8,44 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	cryptoutil "devops-pipeline/internal/crypto"
 	"devops-pipeline/internal/model"
-
-	_ "modernc.org/sqlite"
 )
 
 var ErrNotFound = errors.New("store: not found")
-
-type Store struct {
-	db     *sql.DB
-	cipher *cryptoutil.Cipher
-}
-
-func Open(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", path)
-	if err != nil {
-		return nil, fmt.Errorf("open sqlite: %w", err)
-	}
-
-	db.SetMaxOpenConns(1)
-	db.SetConnMaxLifetime(0)
-
-	if _, err = db.Exec("PRAGMA foreign_keys = ON;"); err != nil {
-		return nil, fmt.Errorf("enable foreign keys: %w", err)
-	}
-
-	return db, nil
-}
-
-func New(db *sql.DB, cipher *cryptoutil.Cipher) *Store {
-	return &Store{db: db, cipher: cipher}
-}
 
 func (s *Store) Close() error {
 	return s.db.Close()
 }
 
 func (s *Store) Migrate(ctx context.Context) error {
-	statements := []string{
-		`CREATE TABLE IF NOT EXISTS hosts (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL,
-			address TEXT NOT NULL,
-			port INTEGER NOT NULL,
-			username TEXT NOT NULL,
-			password_cipher TEXT NOT NULL,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL
-		);`,
-		`CREATE TABLE IF NOT EXISTS projects (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL,
-			repo_url TEXT NOT NULL,
-			branch TEXT NOT NULL,
-			description TEXT NOT NULL DEFAULT '',
-			webhook_token TEXT NOT NULL UNIQUE,
-			git_auth_type TEXT NOT NULL DEFAULT 'none',
-			git_username_cipher TEXT NOT NULL DEFAULT '',
-			git_password_cipher TEXT NOT NULL DEFAULT '',
-			git_ssh_key_cipher TEXT NOT NULL DEFAULT '',
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL,
-			UNIQUE(repo_url, branch)
-		);`,
-		`CREATE TABLE IF NOT EXISTS deploy_configs (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			project_id INTEGER NOT NULL UNIQUE,
-			host_id INTEGER NOT NULL,
-			build_image TEXT NOT NULL,
-			build_commands_json TEXT NOT NULL,
-			artifact_filter_mode TEXT NOT NULL,
-			artifact_rules_json TEXT NOT NULL,
-			remote_save_dir TEXT NOT NULL,
-			remote_deploy_dir TEXT NOT NULL,
-			pre_deploy_commands_json TEXT NOT NULL,
-			post_deploy_commands_json TEXT NOT NULL,
-			timeout_seconds INTEGER NOT NULL DEFAULT 1800,
-			version_count INTEGER NOT NULL DEFAULT 5,
-			notify_webhook_url TEXT NOT NULL DEFAULT '',
-			notify_token_cipher TEXT NOT NULL DEFAULT '',
-			notification_channel_id INTEGER,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL,
-			FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE,
-			FOREIGN KEY(host_id) REFERENCES hosts(id) ON DELETE RESTRICT,
-			FOREIGN KEY(notification_channel_id) REFERENCES notification_channels(id) ON DELETE SET NULL
-		);`,
-		`CREATE TABLE IF NOT EXISTS pipeline_runs (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			project_id INTEGER NOT NULL,
-			status TEXT NOT NULL,
-			trigger_type TEXT NOT NULL,
-			trigger_ref TEXT NOT NULL DEFAULT '',
-			log_text TEXT NOT NULL DEFAULT '',
-			error_message TEXT NOT NULL DEFAULT '',
-			started_at TEXT,
-			finished_at TEXT,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL,
-			FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
-		);`,
-		`CREATE TABLE IF NOT EXISTS notification_channels (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL,
-			type TEXT NOT NULL,
-			is_default INTEGER NOT NULL DEFAULT 0,
-			remark TEXT NOT NULL DEFAULT '',
-			config_json TEXT NOT NULL,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL
-		);`,
-		`CREATE TRIGGER IF NOT EXISTS unique_default_channel
-			AFTER UPDATE OF is_default ON notification_channels
-			WHEN NEW.is_default = 1
-		BEGIN
-			UPDATE notification_channels SET is_default = 0 WHERE id != NEW.id AND is_default = 1;
-		END;`,
-		`CREATE TRIGGER IF NOT EXISTS insert_default_channel
-			AFTER INSERT ON notification_channels
-			WHEN NEW.is_default = 1
-		BEGIN
-			UPDATE notification_channels SET is_default = 0 WHERE id != NEW.id AND is_default = 1;
-		END;`,
-		`CREATE TABLE IF NOT EXISTS admin_users (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			username TEXT NOT NULL UNIQUE,
-			password_hash TEXT NOT NULL,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL
-		);`,
-		`CREATE TRIGGER IF NOT EXISTS prevent_multiple_admins
-			BEFORE INSERT ON admin_users
-			WHEN (SELECT COUNT(*) FROM admin_users) >= 1
-		BEGIN
-			SELECT RAISE(ABORT, 'Only one admin user is allowed');
-		END;`,
-	}
-
-	for _, statement := range statements {
+	for _, statement := range s.migrationStatements() {
 		if _, err := s.db.ExecContext(ctx, statement); err != nil {
 			return fmt.Errorf("run migration: %w", err)
 		}
+	}
+
+	if err := s.ensureSortOrderColumn(ctx, "hosts"); err != nil {
+		return err
+	}
+	if err := s.ensureSortOrderColumn(ctx, "projects"); err != nil {
+		return err
+	}
+	if err := s.ensureSortOrderColumn(ctx, "notification_channels"); err != nil {
+		return err
+	}
+
+	if err := s.initializeSortOrder(ctx, "hosts"); err != nil {
+		return err
+	}
+	if err := s.initializeSortOrder(ctx, "projects"); err != nil {
+		return err
+	}
+	if err := s.initializeSortOrder(ctx, "notification_channels"); err != nil {
+		return err
 	}
 
 	return nil
@@ -164,11 +58,15 @@ func (s *Store) CreateHost(ctx context.Context, input model.HostUpsert) (model.H
 	}
 
 	now := nowString()
+	nextSortOrder, err := s.nextSortOrder(ctx, s.db, "hosts")
+	if err != nil {
+		return model.Host{}, err
+	}
 	result, err := s.db.ExecContext(
 		ctx,
-		`INSERT INTO hosts (name, address, port, username, password_cipher, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		input.Name, input.Address, input.Port, input.Username, encryptedPassword, now, now,
+		`INSERT INTO hosts (sort_order, name, address, port, username, password_cipher, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		nextSortOrder, input.Name, input.Address, input.Port, input.Username, encryptedPassword, now, now,
 	)
 	if err != nil {
 		return model.Host{}, fmt.Errorf("insert host: %w", err)
@@ -221,10 +119,14 @@ func (s *Store) DeleteHost(ctx context.Context, id int64) error {
 	return expectDeleted(result)
 }
 
+func (s *Store) ReorderHosts(ctx context.Context, ids []int64) error {
+	return s.reorderRecords(ctx, "hosts", ids)
+}
+
 func (s *Store) GetHost(ctx context.Context, id int64) (model.Host, error) {
 	row := s.db.QueryRowContext(
 		ctx,
-		`SELECT id, name, address, port, username, password_cipher, created_at, updated_at
+		`SELECT id, sort_order, name, address, port, username, password_cipher, created_at, updated_at
 		 FROM hosts
 		 WHERE id = ?`,
 		id,
@@ -235,9 +137,9 @@ func (s *Store) GetHost(ctx context.Context, id int64) (model.Host, error) {
 func (s *Store) ListHosts(ctx context.Context) ([]model.Host, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT id, name, address, port, username, password_cipher, created_at, updated_at
+		`SELECT id, sort_order, name, address, port, username, password_cipher, created_at, updated_at
 		 FROM hosts
-		 ORDER BY id DESC`,
+		 ORDER BY sort_order DESC, id DESC`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query hosts: %w", err)
@@ -284,11 +186,15 @@ func (s *Store) CreateProject(ctx context.Context, input model.ProjectUpsert) (m
 		return model.Project{}, fmt.Errorf("encrypt git ssh key: %w", err)
 	}
 
+	nextSortOrder, err := s.nextSortOrder(ctx, s.db, "projects")
+	if err != nil {
+		return model.Project{}, err
+	}
 	result, err := s.db.ExecContext(
 		ctx,
-		`INSERT INTO projects (name, repo_url, branch, description, webhook_token, git_auth_type, git_username_cipher, git_password_cipher, git_ssh_key_cipher, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		input.Name, input.RepoURL, input.Branch, input.Description, token, gitAuthType, gitUsernameCipher, gitPasswordCipher, gitSSHKeyCipher, now, now,
+		`INSERT INTO projects (sort_order, name, repo_url, branch, description, webhook_token, git_auth_type, git_username_cipher, git_password_cipher, git_ssh_key_cipher, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		nextSortOrder, input.Name, input.RepoURL, input.Branch, input.Description, token, gitAuthType, gitUsernameCipher, gitPasswordCipher, gitSSHKeyCipher, now, now,
 	)
 	if err != nil {
 		return model.Project{}, fmt.Errorf("insert project: %w", err)
@@ -370,10 +276,14 @@ func (s *Store) DeleteProject(ctx context.Context, id int64) error {
 	return expectDeleted(result)
 }
 
+func (s *Store) ReorderProjects(ctx context.Context, ids []int64) error {
+	return s.reorderRecords(ctx, "projects", ids)
+}
+
 func (s *Store) GetProject(ctx context.Context, id int64) (model.Project, error) {
 	row := s.db.QueryRowContext(
 		ctx,
-		`SELECT projects.id, projects.name, projects.repo_url, projects.branch, projects.description, projects.webhook_token,
+		`SELECT projects.id, projects.sort_order, projects.name, projects.repo_url, projects.branch, projects.description, projects.webhook_token,
 		        (CASE WHEN deploy_configs.id IS NOT NULL THEN 1 ELSE 0 END) as has_deploy_config,
 		        projects.git_auth_type, projects.git_username_cipher, projects.git_password_cipher, projects.git_ssh_key_cipher,
 		        projects.created_at, projects.updated_at
@@ -388,7 +298,7 @@ func (s *Store) GetProject(ctx context.Context, id int64) (model.Project, error)
 func (s *Store) GetProjectByWebhookToken(ctx context.Context, token string) (model.Project, error) {
 	row := s.db.QueryRowContext(
 		ctx,
-		`SELECT projects.id, projects.name, projects.repo_url, projects.branch, projects.description, projects.webhook_token,
+		`SELECT projects.id, projects.sort_order, projects.name, projects.repo_url, projects.branch, projects.description, projects.webhook_token,
 		        (CASE WHEN deploy_configs.id IS NOT NULL THEN 1 ELSE 0 END) as has_deploy_config,
 		        projects.git_auth_type, projects.git_username_cipher, projects.git_password_cipher, projects.git_ssh_key_cipher,
 		        projects.created_at, projects.updated_at
@@ -403,13 +313,13 @@ func (s *Store) GetProjectByWebhookToken(ctx context.Context, token string) (mod
 func (s *Store) ListProjects(ctx context.Context) ([]model.Project, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT projects.id, projects.name, projects.repo_url, projects.branch, projects.description, projects.webhook_token,
+		`SELECT projects.id, projects.sort_order, projects.name, projects.repo_url, projects.branch, projects.description, projects.webhook_token,
 		        (CASE WHEN deploy_configs.id IS NOT NULL THEN 1 ELSE 0 END) as has_deploy_config,
 		        projects.git_auth_type, projects.git_username_cipher, projects.git_password_cipher, projects.git_ssh_key_cipher,
 		        projects.created_at, projects.updated_at
 		 FROM projects
 		 LEFT JOIN deploy_configs ON deploy_configs.project_id = projects.id
-		 ORDER BY projects.id DESC`,
+		 ORDER BY projects.sort_order DESC, projects.id DESC`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query projects: %w", err)
@@ -437,7 +347,7 @@ func (s *Store) CloneProject(ctx context.Context, sourceID int64, input model.Pr
 
 	sourceProjectRow := tx.QueryRowContext(
 		ctx,
-		`SELECT projects.id, projects.name, projects.repo_url, projects.branch, projects.description, projects.webhook_token,
+		`SELECT projects.id, projects.sort_order, projects.name, projects.repo_url, projects.branch, projects.description, projects.webhook_token,
 		        (CASE WHEN deploy_configs.id IS NOT NULL THEN 1 ELSE 0 END) as has_deploy_config,
 		        projects.git_auth_type, projects.git_username_cipher, projects.git_password_cipher, projects.git_ssh_key_cipher,
 		        projects.created_at, projects.updated_at
@@ -479,11 +389,15 @@ func (s *Store) CloneProject(ctx context.Context, sourceID int64, input model.Pr
 	}
 
 	now := nowString()
+	nextSortOrder, err := s.nextSortOrder(ctx, tx, "projects")
+	if err != nil {
+		return model.ProjectDetail{}, err
+	}
 	result, err := tx.ExecContext(
 		ctx,
-		`INSERT INTO projects (name, repo_url, branch, description, webhook_token, git_auth_type, git_username_cipher, git_password_cipher, git_ssh_key_cipher, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		input.Name, sourceProject.RepoURL, input.Branch, description, token, sourceProject.GitAuthType, gitUsernameCipher, gitPasswordCipher, gitSSHKeyCipher, now, now,
+		`INSERT INTO projects (sort_order, name, repo_url, branch, description, webhook_token, git_auth_type, git_username_cipher, git_password_cipher, git_ssh_key_cipher, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		nextSortOrder, input.Name, sourceProject.RepoURL, input.Branch, description, token, sourceProject.GitAuthType, gitUsernameCipher, gitPasswordCipher, gitSSHKeyCipher, now, now,
 	)
 	if err != nil {
 		return model.ProjectDetail{}, fmt.Errorf("clone project: %w", err)
@@ -746,10 +660,13 @@ func (s *Store) FinalizeRun(ctx context.Context, runID int64, status string, err
 func (s *Store) GetRun(ctx context.Context, runID int64) (model.PipelineRun, error) {
 	row := s.db.QueryRowContext(
 		ctx,
-		`SELECT id, project_id, status, trigger_type, trigger_ref, log_text, error_message,
-		        started_at, finished_at, created_at, updated_at
+		`SELECT pipeline_runs.id, pipeline_runs.project_id, projects.name, projects.branch,
+		        pipeline_runs.status, pipeline_runs.trigger_type, pipeline_runs.trigger_ref,
+		        pipeline_runs.log_text, pipeline_runs.error_message,
+		        pipeline_runs.started_at, pipeline_runs.finished_at, pipeline_runs.created_at, pipeline_runs.updated_at
 		 FROM pipeline_runs
-		 WHERE id = ?`,
+		 JOIN projects ON projects.id = pipeline_runs.project_id
+		 WHERE pipeline_runs.id = ?`,
 		runID,
 	)
 	return scanRun(row)
@@ -758,11 +675,14 @@ func (s *Store) GetRun(ctx context.Context, runID int64) (model.PipelineRun, err
 func (s *Store) ListRunsByProject(ctx context.Context, projectID int64) ([]model.PipelineRun, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT id, project_id, status, trigger_type, trigger_ref, log_text, error_message,
-		        started_at, finished_at, created_at, updated_at
+		`SELECT pipeline_runs.id, pipeline_runs.project_id, projects.name, projects.branch,
+		        pipeline_runs.status, pipeline_runs.trigger_type, pipeline_runs.trigger_ref,
+		        pipeline_runs.log_text, pipeline_runs.error_message,
+		        pipeline_runs.started_at, pipeline_runs.finished_at, pipeline_runs.created_at, pipeline_runs.updated_at
 		 FROM pipeline_runs
-		 WHERE project_id = ?
-		 ORDER BY id DESC`,
+		 JOIN projects ON projects.id = pipeline_runs.project_id
+		 WHERE pipeline_runs.project_id = ?
+		 ORDER BY pipeline_runs.id DESC`,
 		projectID,
 	)
 	if err != nil {
@@ -783,10 +703,13 @@ func (s *Store) ListRunsByProject(ctx context.Context, projectID int64) ([]model
 }
 
 func (s *Store) ListAllRuns(ctx context.Context, offset, limit int) ([]model.PipelineRun, error) {
-	query := `SELECT id, project_id, status, trigger_type, trigger_ref, log_text, error_message,
-		        started_at, finished_at, created_at, updated_at
+	query := `SELECT pipeline_runs.id, pipeline_runs.project_id, projects.name, projects.branch,
+		        pipeline_runs.status, pipeline_runs.trigger_type, pipeline_runs.trigger_ref,
+		        pipeline_runs.log_text, pipeline_runs.error_message,
+		        pipeline_runs.started_at, pipeline_runs.finished_at, pipeline_runs.created_at, pipeline_runs.updated_at
 		 FROM pipeline_runs
-		 ORDER BY id DESC
+		 JOIN projects ON projects.id = pipeline_runs.project_id
+		 ORDER BY pipeline_runs.id DESC
 		 LIMIT ? OFFSET ?`
 
 	rows, err := s.db.QueryContext(ctx, query, limit, offset)
@@ -807,8 +730,174 @@ func (s *Store) ListAllRuns(ctx context.Context, offset, limit int) ([]model.Pip
 	return runs, rows.Err()
 }
 
+func (s *Store) GetHomeDashboard(ctx context.Context) (model.HomeDashboard, error) {
+	projects, err := s.ListProjects(ctx)
+	if err != nil {
+		return model.HomeDashboard{}, err
+	}
+
+	runs, err := s.listRunsForDashboard(ctx)
+	if err != nil {
+		return model.HomeDashboard{}, err
+	}
+
+	now := time.Now().In(time.Local)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	dailyStart := today.AddDate(0, 0, -(54*7 - 1))
+
+	dailyMap := make(map[string]*model.HomeStatsDaily, 54*7)
+	dailyStats := make([]model.HomeStatsDaily, 0, 54*7)
+	for index := 0; index < 54*7; index++ {
+		current := dailyStart.AddDate(0, 0, index)
+		key := current.Format("2006-01-02")
+		entry := model.HomeStatsDaily{Date: key}
+		dailyStats = append(dailyStats, entry)
+		dailyMap[key] = &dailyStats[len(dailyStats)-1]
+	}
+
+	hourlyStats := make([]model.HomeStatsHourly, 24)
+	for hour := 0; hour < 24; hour++ {
+		hourlyStats[hour] = model.HomeStatsHourly{Hour: fmt.Sprintf("%02d", hour)}
+	}
+
+	projectStatsMap := make(map[int64]*model.HomeProjectRank, len(projects))
+	for _, project := range projects {
+		projectCopy := model.HomeProjectRank{
+			ProjectID:   project.ID,
+			ProjectName: project.Name,
+			Branch:      project.Branch,
+		}
+		projectStatsMap[project.ID] = &projectCopy
+	}
+
+	var total model.HomeStatsTotal
+	total.ProjectCount = int64(len(projects))
+	var totalDurationSeconds int64
+	var finishedRunCount int64
+
+	for _, run := range runs {
+		total.DeployCount += 1
+		runTime := dashboardRunTime(run)
+		if total.LastDeployAt == "" || runTime.After(parseDashboardTime(total.LastDeployAt)) {
+			total.LastDeployAt = runTime.Format(time.RFC3339)
+		}
+
+		projectStat, exists := projectStatsMap[run.ProjectID]
+		if !exists {
+			projectStat = &model.HomeProjectRank{
+				ProjectID:   run.ProjectID,
+				ProjectName: run.ProjectName,
+				Branch:      run.Branch,
+			}
+			projectStatsMap[run.ProjectID] = projectStat
+		}
+		projectStat.DeployCount += 1
+		if projectStat.LastDeployAt == "" || runTime.After(parseDashboardTime(projectStat.LastDeployAt)) {
+			projectStat.LastDeployAt = runTime.Format(time.RFC3339)
+		}
+
+		if dayEntry := dailyMap[runTime.Format("2006-01-02")]; dayEntry != nil {
+			dayEntry.DeployCount += 1
+			incrementDashboardStatus(dayEntry, run.Status)
+		}
+
+		if runTime.Year() == today.Year() && runTime.YearDay() == today.YearDay() {
+			hourEntry := &hourlyStats[runTime.Hour()]
+			hourEntry.DeployCount += 1
+			incrementDashboardStatus(hourEntry, run.Status)
+		}
+
+		incrementDashboardStatus(&total, run.Status)
+		incrementProjectStatus(projectStat, run.Status)
+
+		if run.StartedAt != nil && run.FinishedAt != nil {
+			durationSeconds := int64(run.FinishedAt.Sub(*run.StartedAt).Seconds())
+			if durationSeconds >= 0 {
+				totalDurationSeconds += durationSeconds
+				finishedRunCount += 1
+			}
+		}
+	}
+
+	for index := range dailyStats {
+		dailyStats[index].SuccessRate = dashboardSuccessRate(dailyStats[index].SuccessCount, dailyStats[index].FailedCount)
+	}
+	for index := range hourlyStats {
+		hourlyStats[index].SuccessRate = dashboardSuccessRate(hourlyStats[index].SuccessCount, hourlyStats[index].FailedCount)
+	}
+
+	projectStats := make([]model.HomeProjectRank, 0, len(projectStatsMap))
+	for _, projectStat := range projectStatsMap {
+		projectStat.SuccessRate = dashboardSuccessRate(projectStat.SuccessCount, projectStat.FailedCount)
+		projectStats = append(projectStats, *projectStat)
+	}
+	sort.Slice(projectStats, func(left, right int) bool {
+		if projectStats[left].DeployCount != projectStats[right].DeployCount {
+			return projectStats[left].DeployCount > projectStats[right].DeployCount
+		}
+		if projectStats[left].SuccessRate != projectStats[right].SuccessRate {
+			return projectStats[left].SuccessRate > projectStats[right].SuccessRate
+		}
+		return parseDashboardTime(projectStats[left].LastDeployAt).After(parseDashboardTime(projectStats[right].LastDeployAt))
+	})
+
+	total.SuccessRate = dashboardSuccessRate(total.SuccessCount, total.FailedCount)
+	if total.ProjectCount > 0 {
+		total.AverageDeployPerProj = float64(total.DeployCount) / float64(total.ProjectCount)
+	}
+	if finishedRunCount > 0 {
+		total.AverageDurationSec = totalDurationSeconds / finishedRunCount
+	}
+
+	return model.HomeDashboard{
+		Total:    total,
+		Daily:    dailyStats,
+		Hourly:   hourlyStats,
+		Projects: projectStats,
+	}, nil
+}
+
+func (s *Store) listRunsForDashboard(ctx context.Context) ([]model.PipelineRun, error) {
+	rows, err := s.db.QueryContext(
+		ctx,
+		`SELECT pipeline_runs.id, pipeline_runs.project_id, projects.name, projects.branch,
+		        pipeline_runs.status, pipeline_runs.trigger_type, pipeline_runs.trigger_ref,
+		        pipeline_runs.log_text, pipeline_runs.error_message,
+		        pipeline_runs.started_at, pipeline_runs.finished_at, pipeline_runs.created_at, pipeline_runs.updated_at
+		 FROM pipeline_runs
+		 JOIN projects ON projects.id = pipeline_runs.project_id
+		 ORDER BY pipeline_runs.id DESC`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query dashboard runs: %w", err)
+	}
+	defer rows.Close()
+
+	var runs []model.PipelineRun
+	for rows.Next() {
+		run, err := scanRun(rows)
+		if err != nil {
+			return nil, err
+		}
+		runs = append(runs, run)
+	}
+
+	return runs, rows.Err()
+}
+
 type queryRowContext interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+func (s *Store) nextSortOrder(ctx context.Context, queryer queryRowContext, table string) (int64, error) {
+	row := queryer.QueryRowContext(ctx, fmt.Sprintf(`SELECT COALESCE(MAX(sort_order), 0) + 1 FROM %s`, table))
+
+	var nextSortOrder int64
+	if err := row.Scan(&nextSortOrder); err != nil {
+		return 0, fmt.Errorf("query next sort order for %s: %w", table, err)
+	}
+
+	return nextSortOrder, nil
 }
 
 type scanner interface {
@@ -825,6 +914,7 @@ func (s *Store) scanHost(scan scanner) (model.Host, error) {
 
 	err := scan.Scan(
 		&host.ID,
+		&host.SortOrder,
 		&host.Name,
 		&host.Address,
 		&host.Port,
@@ -859,15 +949,16 @@ func (s *Store) scanHost(scan scanner) (model.Host, error) {
 
 func scanProject(scan scanner) (model.Project, error) {
 	var (
-		project              model.Project
-		hasDeployConfig      int64
-		gitAuthType          string
-		createdAtString      string
-		updatedAtString      string
+		project         model.Project
+		hasDeployConfig int64
+		gitAuthType     string
+		createdAtString string
+		updatedAtString string
 	)
 
 	err := scan.Scan(
 		&project.ID,
+		&project.SortOrder,
 		&project.Name,
 		&project.RepoURL,
 		&project.Branch,
@@ -905,18 +996,19 @@ func scanProject(scan scanner) (model.Project, error) {
 
 func (s *Store) scanProjectWithGitAuth(scan scanner) (model.Project, error) {
 	var (
-		project              model.Project
-		hasDeployConfig      int64
-		gitAuthType          string
-		gitUsernameCipher    string
-		gitPasswordCipher    string
-		gitSSHKeyCipher      string
-		createdAtString      string
-		updatedAtString      string
+		project           model.Project
+		hasDeployConfig   int64
+		gitAuthType       string
+		gitUsernameCipher string
+		gitPasswordCipher string
+		gitSSHKeyCipher   string
+		createdAtString   string
+		updatedAtString   string
 	)
 
 	err := scan.Scan(
 		&project.ID,
+		&project.SortOrder,
 		&project.Name,
 		&project.RepoURL,
 		&project.Branch,
@@ -980,16 +1072,16 @@ func (s *Store) scanProjectWithGitAuth(scan scanner) (model.Project, error) {
 
 func (s *Store) scanDeployConfig(scan scanner) (model.DeployConfig, error) {
 	var (
-		config                   model.DeployConfig
-		buildCommandsJSON        string
-		artifactRulesJSON        string
-		preDeployCommands        string
-		postDeployCommands       string
-		timeoutSeconds           sql.NullInt64
-		notifyTokenCipher        string
-		notificationChannelID    sql.NullInt64
-		createdAtString          string
-		updatedAtString          string
+		config                model.DeployConfig
+		buildCommandsJSON     string
+		artifactRulesJSON     string
+		preDeployCommands     string
+		postDeployCommands    string
+		timeoutSeconds        sql.NullInt64
+		notifyTokenCipher     string
+		notificationChannelID sql.NullInt64
+		createdAtString       string
+		updatedAtString       string
 	)
 
 	err := scan.Scan(
@@ -1072,6 +1164,8 @@ func scanRun(scan scanner) (model.PipelineRun, error) {
 	err := scan.Scan(
 		&run.ID,
 		&run.ProjectID,
+		&run.ProjectName,
+		&run.Branch,
 		&run.Status,
 		&run.TriggerType,
 		&run.TriggerRef,
@@ -1116,6 +1210,83 @@ func scanRun(scan scanner) (model.PipelineRun, error) {
 	}
 
 	return run, nil
+}
+
+func incrementDashboardStatus(target interface{}, status string) {
+	switch stats := target.(type) {
+	case *model.HomeStatsTotal:
+		switch status {
+		case model.RunStatusSuccess:
+			stats.SuccessCount += 1
+		case model.RunStatusFailed:
+			stats.FailedCount += 1
+		case model.RunStatusRunning:
+			stats.RunningCount += 1
+		case model.RunStatusQueued:
+			stats.QueuedCount += 1
+		}
+	case *model.HomeStatsDaily:
+		switch status {
+		case model.RunStatusSuccess:
+			stats.SuccessCount += 1
+		case model.RunStatusFailed:
+			stats.FailedCount += 1
+		case model.RunStatusRunning:
+			stats.RunningCount += 1
+		case model.RunStatusQueued:
+			stats.QueuedCount += 1
+		}
+	case *model.HomeStatsHourly:
+		switch status {
+		case model.RunStatusSuccess:
+			stats.SuccessCount += 1
+		case model.RunStatusFailed:
+			stats.FailedCount += 1
+		case model.RunStatusRunning:
+			stats.RunningCount += 1
+		case model.RunStatusQueued:
+			stats.QueuedCount += 1
+		}
+	}
+}
+
+func incrementProjectStatus(target *model.HomeProjectRank, status string) {
+	switch status {
+	case model.RunStatusSuccess:
+		target.SuccessCount += 1
+	case model.RunStatusFailed:
+		target.FailedCount += 1
+	case model.RunStatusRunning:
+		target.RunningCount += 1
+	case model.RunStatusQueued:
+		target.QueuedCount += 1
+	}
+}
+
+func dashboardSuccessRate(successCount, failedCount int64) float64 {
+	total := successCount + failedCount
+	if total == 0 {
+		return 0
+	}
+	return float64(successCount) * 100 / float64(total)
+}
+
+func dashboardRunTime(run model.PipelineRun) time.Time {
+	if run.StartedAt != nil {
+		return run.StartedAt.In(time.Local)
+	}
+	return run.CreatedAt.In(time.Local)
+}
+
+func parseDashboardTime(value string) time.Time {
+	if value == "" {
+		return time.Time{}
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return time.Time{}
+	}
+	return parsed
 }
 
 func parseTime(value string) (time.Time, error) {
@@ -1184,11 +1355,27 @@ func (s *Store) CreateNotificationChannel(ctx context.Context, input model.Notif
 	}
 
 	now := nowString()
-	result, err := s.db.ExecContext(
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.NotificationChannel{}, fmt.Errorf("begin create notification channel transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	if input.IsDefault {
+		if _, err := tx.ExecContext(ctx, `UPDATE notification_channels SET is_default = 0 WHERE is_default = 1`); err != nil {
+			return model.NotificationChannel{}, fmt.Errorf("reset default notification channels: %w", err)
+		}
+	}
+
+	nextSortOrder, err := s.nextSortOrder(ctx, tx, "notification_channels")
+	if err != nil {
+		return model.NotificationChannel{}, err
+	}
+	result, err := tx.ExecContext(
 		ctx,
-		`INSERT INTO notification_channels (name, type, is_default, remark, config_json, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		input.Name, input.Type, boolToInt(input.IsDefault), input.Remark, string(configJSON), now, now,
+		`INSERT INTO notification_channels (sort_order, name, type, is_default, remark, config_json, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		nextSortOrder, input.Name, input.Type, boolToInt(input.IsDefault), input.Remark, string(configJSON), now, now,
 	)
 	if err != nil {
 		return model.NotificationChannel{}, fmt.Errorf("insert notification channel: %w", err)
@@ -1197,6 +1384,10 @@ func (s *Store) CreateNotificationChannel(ctx context.Context, input model.Notif
 	id, err := result.LastInsertId()
 	if err != nil {
 		return model.NotificationChannel{}, fmt.Errorf("get channel id: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return model.NotificationChannel{}, fmt.Errorf("commit create notification channel transaction: %w", err)
 	}
 
 	return s.GetNotificationChannel(ctx, id)
@@ -1213,7 +1404,19 @@ func (s *Store) UpdateNotificationChannel(ctx context.Context, id int64, input m
 	}
 
 	now := nowString()
-	_, err = s.db.ExecContext(
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.NotificationChannel{}, fmt.Errorf("begin update notification channel transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	if input.IsDefault {
+		if _, err := tx.ExecContext(ctx, `UPDATE notification_channels SET is_default = 0 WHERE id != ? AND is_default = 1`, id); err != nil {
+			return model.NotificationChannel{}, fmt.Errorf("reset default notification channels: %w", err)
+		}
+	}
+
+	_, err = tx.ExecContext(
 		ctx,
 		`UPDATE notification_channels
 		 SET name = ?, type = ?, is_default = ?, remark = ?, config_json = ?, updated_at = ?
@@ -1222,6 +1425,10 @@ func (s *Store) UpdateNotificationChannel(ctx context.Context, id int64, input m
 	)
 	if err != nil {
 		return model.NotificationChannel{}, fmt.Errorf("update notification channel: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return model.NotificationChannel{}, fmt.Errorf("commit update notification channel transaction: %w", err)
 	}
 
 	return s.GetNotificationChannel(ctx, id)
@@ -1235,10 +1442,14 @@ func (s *Store) DeleteNotificationChannel(ctx context.Context, id int64) error {
 	return expectDeleted(result)
 }
 
+func (s *Store) ReorderNotificationChannels(ctx context.Context, ids []int64) error {
+	return s.reorderRecords(ctx, "notification_channels", ids)
+}
+
 func (s *Store) GetNotificationChannel(ctx context.Context, id int64) (model.NotificationChannel, error) {
 	row := s.db.QueryRowContext(
 		ctx,
-		`SELECT id, name, type, is_default, remark, config_json, created_at, updated_at
+		`SELECT id, sort_order, name, type, is_default, remark, config_json, created_at, updated_at
 		 FROM notification_channels
 		 WHERE id = ?`,
 		id,
@@ -1249,7 +1460,7 @@ func (s *Store) GetNotificationChannel(ctx context.Context, id int64) (model.Not
 func (s *Store) GetNotificationChannelWithConfig(ctx context.Context, id int64) (model.NotificationChannelWithConfig, error) {
 	row := s.db.QueryRowContext(
 		ctx,
-		`SELECT id, name, type, is_default, remark, config_json, created_at, updated_at
+		`SELECT id, sort_order, name, type, is_default, remark, config_json, created_at, updated_at
 		 FROM notification_channels
 		 WHERE id = ?`,
 		id,
@@ -1260,9 +1471,9 @@ func (s *Store) GetNotificationChannelWithConfig(ctx context.Context, id int64) 
 func (s *Store) ListNotificationChannels(ctx context.Context) ([]model.NotificationChannel, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT id, name, type, is_default, remark, config_json, created_at, updated_at
+		`SELECT id, sort_order, name, type, is_default, remark, config_json, created_at, updated_at
 		 FROM notification_channels
-		 ORDER BY is_default DESC, id DESC`,
+		 ORDER BY sort_order DESC, id DESC`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query notification channels: %w", err)
@@ -1284,36 +1495,49 @@ func (s *Store) ListNotificationChannels(ctx context.Context) ([]model.Notificat
 func (s *Store) GetDefaultNotificationChannel(ctx context.Context) (model.NotificationChannel, error) {
 	row := s.db.QueryRowContext(
 		ctx,
-		`SELECT id, name, type, is_default, remark, config_json, created_at, updated_at
+		`SELECT id, sort_order, name, type, is_default, remark, config_json, created_at, updated_at
 		 FROM notification_channels
 		 WHERE is_default = 1
+		 ORDER BY sort_order DESC, id DESC
 		 LIMIT 1`,
 	)
 	return s.scanNotificationChannel(row)
 }
 
 func (s *Store) SetDefaultNotificationChannel(ctx context.Context, id int64) error {
-	_, err := s.db.ExecContext(
-		ctx,
-		`UPDATE notification_channels SET is_default = 1 WHERE id = ?`,
-		id,
-	)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin set default notification channel transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `UPDATE notification_channels SET is_default = 0 WHERE is_default = 1`); err != nil {
+		return fmt.Errorf("reset default notification channels: %w", err)
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE notification_channels SET is_default = 1 WHERE id = ?`, id)
 	if err != nil {
 		return fmt.Errorf("set default notification channel: %w", err)
+	}
+	if err := expectDeleted(result); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit set default notification channel transaction: %w", err)
 	}
 	return nil
 }
 
 func (s *Store) scanNotificationChannel(scan scanner) (model.NotificationChannel, error) {
 	var (
-		channel        model.NotificationChannel
-		configJSON     string
-		createdAtStr   string
-		updatedAtStr   string
+		channel      model.NotificationChannel
+		configJSON   string
+		createdAtStr string
+		updatedAtStr string
 	)
 
 	err := scan.Scan(
 		&channel.ID,
+		&channel.SortOrder,
 		&channel.Name,
 		&channel.Type,
 		&channel.IsDefault,
@@ -1347,14 +1571,15 @@ func (s *Store) scanNotificationChannel(scan scanner) (model.NotificationChannel
 
 func (s *Store) scanNotificationChannelWithConfig(scan scanner) (model.NotificationChannelWithConfig, error) {
 	var (
-		channel        model.NotificationChannelWithConfig
-		configJSON     string
-		createdAtStr   string
-		updatedAtStr   string
+		channel      model.NotificationChannelWithConfig
+		configJSON   string
+		createdAtStr string
+		updatedAtStr string
 	)
 
 	err := scan.Scan(
 		&channel.ID,
+		&channel.SortOrder,
 		&channel.Name,
 		&channel.Type,
 		&channel.IsDefault,
@@ -1395,6 +1620,139 @@ func boolToInt(b bool) int {
 	return 0
 }
 
+func (s *Store) ensureSortOrderColumn(ctx context.Context, table string) error {
+	if s.isMySQL() {
+		var count int
+		if err := s.db.QueryRowContext(
+			ctx,
+			`SELECT COUNT(*) FROM information_schema.COLUMNS
+			 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'sort_order'`,
+			table,
+		).Scan(&count); err != nil {
+			return fmt.Errorf("read %s columns: %w", table, err)
+		}
+		if count > 0 {
+			return nil
+		}
+		if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE %s ADD COLUMN sort_order BIGINT NOT NULL DEFAULT 0`, table)); err != nil {
+			return fmt.Errorf("add sort_order to %s: %w", table, err)
+		}
+		return nil
+	}
+
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`PRAGMA table_info(%s)`, table))
+	if err != nil {
+		return fmt.Errorf("read %s columns: %w", table, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			cid          int
+			name         string
+			columnType   string
+			notNull      int
+			defaultValue sql.NullString
+			primaryKey   int
+		)
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			return fmt.Errorf("scan %s columns: %w", table, err)
+		}
+		if name == "sort_order" {
+			return nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate %s columns: %w", table, err)
+	}
+
+	if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE %s ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`, table)); err != nil {
+		return fmt.Errorf("add sort_order to %s: %w", table, err)
+	}
+
+	return nil
+}
+
+func (s *Store) initializeSortOrder(ctx context.Context, table string) error {
+	if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`UPDATE %s SET sort_order = id WHERE sort_order = 0`, table)); err != nil {
+		return fmt.Errorf("initialize %s sort_order: %w", table, err)
+	}
+	return nil
+}
+
+func (s *Store) reorderRecords(ctx context.Context, table string, ids []int64) error {
+	if len(ids) == 0 {
+		return errors.New("ids are required")
+	}
+
+	existingIDs, err := s.listRecordIDs(ctx, table)
+	if err != nil {
+		return err
+	}
+	if len(existingIDs) != len(ids) {
+		return fmt.Errorf("ids length mismatch for %s", table)
+	}
+
+	expected := make(map[int64]struct{}, len(existingIDs))
+	for _, id := range existingIDs {
+		expected[id] = struct{}{}
+	}
+	seen := make(map[int64]struct{}, len(ids))
+	for _, id := range ids {
+		if _, ok := expected[id]; !ok {
+			return fmt.Errorf("invalid id %d for %s", id, table)
+		}
+		if _, duplicated := seen[id]; duplicated {
+			return fmt.Errorf("duplicate id %d for %s", id, table)
+		}
+		seen[id] = struct{}{}
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin reorder %s transaction: %w", table, err)
+	}
+	defer tx.Rollback()
+
+	query := fmt.Sprintf(`UPDATE %s SET sort_order = ?, updated_at = ? WHERE id = ?`, table)
+	now := nowString()
+	total := len(ids)
+	for index, id := range ids {
+		sortOrder := total - index
+		if _, err := tx.ExecContext(ctx, query, sortOrder, now, id); err != nil {
+			return fmt.Errorf("reorder %s: %w", table, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit reorder %s: %w", table, err)
+	}
+
+	return nil
+}
+
+func (s *Store) listRecordIDs(ctx context.Context, table string) ([]int64, error) {
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`SELECT id FROM %s ORDER BY sort_order DESC, id DESC`, table))
+	if err != nil {
+		return nil, fmt.Errorf("query %s ids: %w", table, err)
+	}
+	defer rows.Close()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan %s id: %w", table, err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate %s ids: %w", table, err)
+	}
+
+	return ids, nil
+}
+
 // 管理员用户管理
 
 func (s *Store) GetAdminUser(ctx context.Context) (model.AdminUser, error) {
@@ -1409,7 +1767,21 @@ func (s *Store) GetAdminUser(ctx context.Context) (model.AdminUser, error) {
 
 func (s *Store) CreateAdminUser(ctx context.Context, username, passwordHash string) (model.AdminUser, error) {
 	now := nowString()
-	result, err := s.db.ExecContext(
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.AdminUser{}, fmt.Errorf("begin create admin user transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	var count int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM admin_users`).Scan(&count); err != nil {
+		return model.AdminUser{}, fmt.Errorf("count admin users: %w", err)
+	}
+	if count > 0 {
+		return model.AdminUser{}, fmt.Errorf("only one admin user is allowed")
+	}
+
+	result, err := tx.ExecContext(
 		ctx,
 		`INSERT INTO admin_users (username, password_hash, created_at, updated_at)
 		 VALUES (?, ?, ?, ?)`,
@@ -1422,6 +1794,10 @@ func (s *Store) CreateAdminUser(ctx context.Context, username, passwordHash stri
 	_, err = result.LastInsertId()
 	if err != nil {
 		return model.AdminUser{}, fmt.Errorf("get admin user id: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return model.AdminUser{}, fmt.Errorf("commit create admin user transaction: %w", err)
 	}
 
 	return s.GetAdminUser(ctx)
@@ -1451,9 +1827,9 @@ func (s *Store) AdminUserExists(ctx context.Context) (bool, error) {
 
 func (s *Store) scanAdminUser(scan scanner) (model.AdminUser, error) {
 	var (
-		user          model.AdminUser
-		createdAtStr  string
-		updatedAtStr  string
+		user         model.AdminUser
+		createdAtStr string
+		updatedAtStr string
 	)
 
 	err := scan.Scan(

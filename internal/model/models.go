@@ -15,7 +15,7 @@ const (
 	TriggerTypeWebhook = "webhook"
 	TriggerTypeManual  = "manual"
 
-	GitAuthTypeNone    = "none"
+	GitAuthTypeNone     = "none"
 	GitAuthTypeUsername = "username" // 用户名密码认证
 	GitAuthTypeToken    = "token"    // Token认证
 	GitAuthTypeSSH      = "ssh"      // SSH密钥认证
@@ -23,6 +23,7 @@ const (
 
 type Host struct {
 	ID          int64     `json:"id"`
+	SortOrder   int64     `json:"sort_order"`
 	Name        string    `json:"name"`
 	Address     string    `json:"address"`
 	Port        int       `json:"port"`
@@ -43,30 +44,31 @@ type HostUpsert struct {
 
 type Project struct {
 	ID              int64     `json:"id"`
+	SortOrder       int64     `json:"sort_order"`
 	Name            string    `json:"name"`
 	RepoURL         string    `json:"repo_url"`
 	Branch          string    `json:"branch"`
 	Description     string    `json:"description"`
 	WebhookToken    string    `json:"webhook_token"`
 	HasDeployConfig bool      `json:"has_deploy_config"`
-	GitAuthType     string    `json:"git_auth_type"`      // none/username/token/ssh
-	GitUsername     string    `json:"-"`                     // Git用户名（加密）
-	GitPassword     string    `json:"-"`                     // Git密码/Token（加密）
-	GitSSHKey       string    `json:"-"`                     // SSH私钥（加密）
-	HasGitAuth      bool      `json:"has_git_auth"`         // 是否配置了Git认证
+	GitAuthType     string    `json:"git_auth_type"` // none/username/token/ssh
+	GitUsername     string    `json:"-"`             // Git用户名（加密）
+	GitPassword     string    `json:"-"`             // Git密码/Token（加密）
+	GitSSHKey       string    `json:"-"`             // SSH私钥（加密）
+	HasGitAuth      bool      `json:"has_git_auth"`  // 是否配置了Git认证
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type ProjectUpsert struct {
-	Name        string `json:"name"`
-	RepoURL     string `json:"repo_url"`
-	Branch      string `json:"branch"`
-	Description string `json:"description"`
-	GitAuthType string `json:"git_auth_type"`      // none/username/token/ssh
-	GitUsername *string `json:"git_username"`      // Git用户名
-	GitPassword *string `json:"git_password"`      // Git密码/Token
-	GitSSHKey   *string `json:"git_ssh_key"`       // SSH私钥
+	Name        string  `json:"name"`
+	RepoURL     string  `json:"repo_url"`
+	Branch      string  `json:"branch"`
+	Description string  `json:"description"`
+	GitAuthType string  `json:"git_auth_type"` // none/username/token/ssh
+	GitUsername *string `json:"git_username"`  // Git用户名
+	GitPassword *string `json:"git_password"`  // Git密码/Token
+	GitSSHKey   *string `json:"git_ssh_key"`   // SSH私钥
 }
 
 type ProjectCloneInput struct {
@@ -126,20 +128,22 @@ type ExecutionBundle struct {
 }
 
 type PipelineRun struct {
-	ID           int64      `json:"id"`
-	ProjectID    int64      `json:"project_id"`
-	Status       string     `json:"status"`
-	TriggerType  string     `json:"trigger_type"`
-	TriggerRef   string     `json:"trigger_ref"`
-	CommitID     string     `json:"commit_id"`
-	CommitMessage string    `json:"commit_message"`
-	Author       string     `json:"author"`
-	LogText      string     `json:"log_text"`
-	ErrorMessage string     `json:"error_message"`
-	StartedAt    *time.Time `json:"started_at,omitempty"`
-	FinishedAt   *time.Time `json:"finished_at,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
+	ID            int64      `json:"id"`
+	ProjectID     int64      `json:"project_id"`
+	ProjectName   string     `json:"project_name"`
+	Branch        string     `json:"branch"`
+	Status        string     `json:"status"`
+	TriggerType   string     `json:"trigger_type"`
+	TriggerRef    string     `json:"trigger_ref"`
+	CommitID      string     `json:"commit_id"`
+	CommitMessage string     `json:"commit_message"`
+	Author        string     `json:"author"`
+	LogText       string     `json:"log_text"`
+	ErrorMessage  string     `json:"error_message"`
+	StartedAt     *time.Time `json:"started_at,omitempty"`
+	FinishedAt    *time.Time `json:"finished_at,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
 type RunCreateInput struct {
@@ -147,4 +151,8 @@ type RunCreateInput struct {
 	Status      string
 	TriggerType string
 	TriggerRef  string
+}
+
+type ReorderInput struct {
+	IDs []int64 `json:"ids"`
 }
