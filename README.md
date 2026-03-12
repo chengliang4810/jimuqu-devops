@@ -87,6 +87,28 @@ export APP_SECRET='replace-with-a-long-random-secret'
 docker compose up -d
 ```
 
+完整 `docker-compose.yml` 示例：
+
+```yaml
+services:
+  app:
+    image: ghcr.io/chengliang4810/jimuqu-devops:latest
+    container_name: jimuqu-devops
+    ports:
+      - "18080:18080"
+    environment:
+      APP_ADDR: ":18080"
+      APP_DATA_DIR: "/app/data"
+      APP_DB_DRIVER: "sqlite"
+      APP_DB_SOURCE: "/app/data/pipeline.db"
+      APP_WORKSPACE_DIR: "/app/data/workspaces"
+      APP_SECRET: "${APP_SECRET:?APP_SECRET is required}"
+    volumes:
+      - ./data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+```
+
 访问：
 
 - 管理台：`http://127.0.0.1:18080`
