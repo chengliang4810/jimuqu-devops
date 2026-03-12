@@ -5,6 +5,38 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function parseMultilineInput(value: string): string[] {
+  return value
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function formatMultilineValue(value?: string[] | null): string {
+  return Array.isArray(value) ? value.join("\n") : "";
+}
+
+export function moveItemById<T extends { id: number }>(
+  items: T[],
+  activeId: number,
+  overId: number
+): T[] {
+  if (activeId === overId) {
+    return items;
+  }
+
+  const fromIndex = items.findIndex((item) => item.id === activeId);
+  const toIndex = items.findIndex((item) => item.id === overId);
+  if (fromIndex === -1 || toIndex === -1) {
+    return items;
+  }
+
+  const nextItems = [...items];
+  const [movedItem] = nextItems.splice(fromIndex, 1);
+  nextItems.splice(toIndex, 0, movedItem);
+  return nextItems;
+}
+
 // 格式化日期
 export function formatDate(date: string | null): string {
   if (!date) return "-";

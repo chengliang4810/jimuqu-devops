@@ -19,8 +19,6 @@ const createNextConfig = (phase: string): NextConfig => {
         ];
       },
     }),
-    // 生产阶段静态资源前缀
-    ...(!isDev && { assetPrefix: "./" }),
   };
 };
 

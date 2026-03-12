@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+import { buildApiUrl } from "@/lib/api-base";
 
 // 获取 Token
 function getToken(): string | null {
@@ -38,7 +38,7 @@ async function request<T>(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}/api/v1${path}`, {
+  const response = await fetch(buildApiUrl(path), {
     ...options,
     headers,
     redirect: "follow",
@@ -51,11 +51,21 @@ async function request<T>(
         window.location.href = "/";
       }
     }
-    const error = await response.json().catch(() => ({ error: "请求失败" }));
+    const errorText = await response.text();
+    const error = errorText ? JSON.parse(errorText) : { error: "请求失败" };
     throw new Error(error.error || "请求失败");
   }
 
-  return response.json();
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  const text = await response.text();
+  if (!text) {
+    return undefined as T;
+  }
+
+  return JSON.parse(text) as T;
 }
 
 // ==================== 认证 API ====================
@@ -81,6 +91,11 @@ export const hostApi = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
+  reorder: (ids: number[]) =>
+    request<void>("/hosts/reorder", {
+      method: "PUT",
+      body: JSON.stringify({ ids }),
+    }),
   delete: (id: number) =>
     request(`/hosts/${id}`, { method: "DELETE" }),
 };
@@ -88,7 +103,7 @@ export const hostApi = {
 // ==================== 项目 API ====================
 export const projectApi = {
   list: () => request<import("@/types").Project[]>("/projects"),
-  get: (id: number) => request<import("@/types").Project>(`/projects/${id}`),
+  get: (id: number) => request<import("@/types").ProjectDetail>(`/projects/${id}`),
   create: (data: any) =>
     request<import("@/types").Project>("/projects", {
       method: "POST",
@@ -99,22 +114,35 @@ export const projectApi = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
+  reorder: (ids: number[]) =>
+    request<void>("/projects/reorder", {
+      method: "PUT",
+      body: JSON.stringify({ ids }),
+    }),
   delete: (id: number) =>
     request(`/projects/${id}`, { method: "DELETE" }),
+  getDeployConfig: (id: number) =>
+    request<import("@/types").DeployConfig>(`/projects/${id}/deploy-config`),
+  upsertDeployConfig: (id: number, data: any) =>
+    request<import("@/types").DeployConfig>(`/projects/${id}/deploy-config`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
   trigger: (id: number) =>
-    request<{ message: string }>(`/projects/${id}/trigger`, { method: "POST" }),
+    request<import("@/types").PipelineRun>(`/projects/${id}/trigger`, { method: "POST" }),
 };
 
 // ==================== 部署记录 API ====================
 export const runApi = {
   list: () => request<import("@/types").PipelineRun[]>("/runs"),
   get: (id: number) => request<import("@/types").PipelineRun>(`/runs/${id}`),
+  clear: () => request<{ cleared: number }>("/runs", { method: "DELETE" }),
 };
 
 // ==================== 通知渠道 API ====================
 export const notifyApi = {
   list: () => request<import("@/types").NotifyChannel[]>("/notification-channels"),
-  get: (id: number) => request<import("@/types").NotifyChannel>(`/notification-channels/${id}`),
+  get: (id: number) => request<import("@/types").NotifyChannelDetail>(`/notification-channels/${id}`),
   create: (data: Partial<import("@/types").NotifyChannel>) =>
     request<import("@/types").NotifyChannel>("/notification-channels", {
       method: "POST",
@@ -125,16 +153,54 @@ export const notifyApi = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
+  reorder: (ids: number[]) =>
+    request<void>("/notification-channels/reorder", {
+      method: "PUT",
+      body: JSON.stringify({ ids }),
+    }),
   delete: (id: number) =>
     request(`/notification-channels/${id}`, { method: "DELETE" }),
-  test: (id: number, message?: string) =>
-    request<{ message: string }>(`/notification-channels/${id}/test`, {
+  setDefault: (id: number) =>
+    request(`/notification-channels/${id}/default`, { method: "PUT" }),
+  test: (id: number, title = "测试通知", content = "这是一条来自积木区流水线的测试通知。") =>
+    request<{ status: string }>(`/notification-channels/${id}/test`, {
       method: "POST",
-      body: JSON.stringify({ message: message || "测试通知" }),
+      body: JSON.stringify({ title, content }),
     }),
 };
 
 // ==================== 统计 API ====================
 export const statsApi = {
   get: () => request<import("@/types").Stats>("/stats"),
+};
+
+export const homeApi = {
+  getDashboard: () => request<import("@/types").HomeDashboard>("/dashboard/home"),
+};
+
+export const settingApi = {
+  list: () => request<import("@/types").Setting[]>("/settings"),
+  update: (key: import("@/types").SettingKey, value: string) =>
+    request<import("@/types").Setting>(`/settings/${key}`, {
+      method: "PUT",
+      body: JSON.stringify({ value }),
+    }),
+  exportBackup: () => request<any>("/settings/backup"),
+  importBackup: (data: any) =>
+    request<import("@/types").BackupRestoreResult>("/settings/restore", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  getProfile: () => request<import("@/types").AccountProfile>("/admin/profile"),
+  changeUsername: (newUsername: string) =>
+    request<void>("/admin/username", {
+      method: "PUT",
+      body: JSON.stringify({ new_username: newUsername }),
+    }),
+  changePassword: (oldPassword: string, newPassword: string) =>
+    request<void>("/admin/password", {
+      method: "PUT",
+      body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
+    }),
+  getSystemInfo: () => request<import("@/types").SystemInfo>("/system/info"),
 };

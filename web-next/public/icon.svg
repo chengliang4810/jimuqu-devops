@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <rect width="100" height="100" rx="24" fill="#F8F5EE"/>
+  <path
+    d="M50 15L85 40V70L70 85H30L15 70V40L50 15Z"
+    stroke="#1D3C34"
+    stroke-width="6"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M35 45L50 35L65 45V65L50 75L35 65V45Z"
+    stroke="#C96442"
+    stroke-width="5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M45 55L50 50L55 55V65L50 70L45 65V55Z"
+    stroke="#D4A017"
+    stroke-width="4"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

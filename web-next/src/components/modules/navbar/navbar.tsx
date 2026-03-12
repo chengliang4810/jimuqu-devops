@@ -3,14 +3,15 @@
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { useNavStore } from "@/stores";
-import { Home, Server, FolderGit2, History, Bell } from "lucide-react";
+import { Home, Server, FolderGit2, History, Bell, Settings } from "lucide-react";
 
 const navItems = [
   { id: "home", label: "首页", icon: Home },
   { id: "hosts", label: "主机", icon: Server },
   { id: "projects", label: "项目", icon: FolderGit2 },
-  { id: "logs", label: "部署记录", icon: History },
   { id: "notifications", label: "通知渠道", icon: Bell },
+  { id: "logs", label: "部署记录", icon: History },
+  { id: "settings", label: "设置", icon: Settings },
 ];
 
 export function NavBar() {

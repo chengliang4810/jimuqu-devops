@@ -11,6 +11,7 @@ import { Hosts } from "@/components/modules/hosts";
 import { Projects } from "@/components/modules/projects";
 import { Logs } from "@/components/modules/logs";
 import { Notifications } from "@/components/modules/notifications";
+import { Setting } from "@/components/modules/setting";
 import { Toaster } from "@/components/ui/sonner";
 import Logo from "@/components/modules/logo";
 import { Toolbar } from "@/components/modules/toolbar";
@@ -21,6 +22,7 @@ const viewTitles: Record<string, string> = {
   projects: "项目管理",
   logs: "部署记录",
   notifications: "通知渠道",
+  settings: "设置",
 };
 
 export function App() {
@@ -62,6 +64,8 @@ export function App() {
         return <Logs />;
       case "notifications":
         return <Notifications />;
+      case "settings":
+        return <Setting />;
       default:
         return <Home />;
     }

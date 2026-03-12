@@ -29,10 +29,24 @@ export const useAuthStore = create<AuthState>()(
 // 导航状态
 interface NavState {
   activeView: string;
+  pendingRunId: number | null;
   setActiveView: (view: string) => void;
+  setPendingRunId: (runId: number) => void;
+  clearPendingRunId: () => void;
 }
 
-export const useNavStore = create<NavState>()((set) => ({
-  activeView: "home",
-  setActiveView: (view) => set({ activeView: view }),
-}));
+export const useNavStore = create<NavState>()(
+  persist(
+    (set) => ({
+      activeView: "home",
+      pendingRunId: null,
+      setActiveView: (view) => set({ activeView: view }),
+      setPendingRunId: (runId) => set({ pendingRunId: runId }),
+      clearPendingRunId: () => set({ pendingRunId: null }),
+    }),
+    {
+      name: "nav-storage",
+      partialize: (state) => ({ activeView: state.activeView }),
+    }
+  )
+);

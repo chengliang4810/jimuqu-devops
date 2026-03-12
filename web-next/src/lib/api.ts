@@ -1,4 +1,4 @@
-const API_BASE = "/api/v1";
+import { buildApiUrl } from "@/lib/api-base";
 
 /**
  * API 请求封装
@@ -12,7 +12,7 @@ async function api<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     ...options.headers,
   };
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
+  const response = await fetch(buildApiUrl(endpoint), {
     ...options,
     headers,
   });

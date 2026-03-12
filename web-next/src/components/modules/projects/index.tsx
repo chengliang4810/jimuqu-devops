@@ -1,6 +1,26 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import {
+  closestCenter,
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import { restrictToParentElement } from "@dnd-kit/modifiers";
+import {
+  arrayMove,
+  rectSortingStrategy,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +31,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -20,53 +41,366 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { projectApi, hostApi, notifyApi } from "@/api/client";
-import type { Project, Host, NotifyChannel, DeployConfig } from "@/types";
+import type { Project, Host, NotifyChannel, DeployConfig, ProjectDetail } from "@/types";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Play, Copy, X } from "lucide-react";
+import { Copy, GripVertical, Pencil, Play, Trash2, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { cn, formatMultilineValue, parseMultilineInput } from "@/lib/utils";
+import { useNavStore } from "@/stores";
+
+type DeployConfigFormState = {
+  host_id: string;
+  build_image: string;
+  build_commands: string;
+  artifact_filter_mode: "include" | "exclude";
+  artifact_rules: string;
+  remote_save_dir: string;
+  remote_deploy_dir: string;
+  pre_deploy_commands: string;
+  post_deploy_commands: string;
+  timeout_minutes: number;
+  notification_channel_id: string;
+};
+
+type ProjectFormState = {
+  name: string;
+  branch: string;
+  repo_url: string;
+  description: string;
+  deploy_config: DeployConfigFormState;
+};
 
 // 全局缓存
 let projectsCache: Project[] | null = null;
 let hostsCache: Host[] | null = null;
 let channelsCache: NotifyChannel[] | null = null;
 
-const defaultDeployConfig: Partial<DeployConfig> = {
+const DEFAULT_NOTIFICATION_CHANNEL = "__default__";
+
+const defaultDeployConfig: DeployConfigFormState = {
+  host_id: "",
   build_image: "node:20",
   build_commands: "",
-  artifact_filter_mode: "exclude",
+  artifact_filter_mode: "include",
   artifact_rules: "",
   remote_save_dir: "/data/jimuqu/projects",
   remote_deploy_dir: "",
   pre_deploy_commands: "",
   post_deploy_commands: "",
-  version_count: 5,
-  notification_channel_id: null,
+  timeout_minutes: 30,
+  notification_channel_id: DEFAULT_NOTIFICATION_CHANNEL,
 };
 
+function createDefaultFormData(): ProjectFormState {
+  return {
+    name: "",
+    branch: "main",
+    repo_url: "",
+    description: "",
+    deploy_config: { ...defaultDeployConfig },
+  };
+}
+
+function mapDeployConfigToForm(config?: DeployConfig | null): DeployConfigFormState {
+  if (!config) {
+    return { ...defaultDeployConfig };
+  }
+
+  return {
+    host_id: config.host_id ? String(config.host_id) : "",
+    build_image: config.build_image || defaultDeployConfig.build_image,
+    build_commands: formatMultilineValue(config.build_commands),
+    artifact_filter_mode:
+      config.artifact_filter_mode === "exclude" ? "exclude" : "include",
+    artifact_rules: formatMultilineValue(config.artifact_rules),
+    remote_save_dir: config.remote_save_dir || defaultDeployConfig.remote_save_dir,
+    remote_deploy_dir: config.remote_deploy_dir || "",
+    pre_deploy_commands: formatMultilineValue(config.pre_deploy_commands),
+    post_deploy_commands: formatMultilineValue(config.post_deploy_commands),
+    timeout_minutes: Math.max(1, Math.floor((config.timeout_seconds || 1800) / 60)),
+    notification_channel_id:
+      config.notification_channel_id == null
+        ? DEFAULT_NOTIFICATION_CHANNEL
+        : String(config.notification_channel_id),
+  };
+}
+
+function buildProjectPayload(formData: ProjectFormState) {
+  return {
+    name: formData.name.trim(),
+    branch: formData.branch.trim(),
+    repo_url: formData.repo_url.trim(),
+    description: formData.description.trim(),
+    git_auth_type: "none",
+  };
+}
+
+function buildDeployConfigPayload(formData: DeployConfigFormState) {
+  const artifactRules = parseMultilineInput(formData.artifact_rules);
+
+  return {
+    host_id: Number(formData.host_id),
+    build_image: formData.build_image.trim(),
+    build_commands: parseMultilineInput(formData.build_commands),
+    artifact_filter_mode: artifactRules.length ? formData.artifact_filter_mode : "none",
+    artifact_rules: artifactRules,
+    remote_save_dir: formData.remote_save_dir.trim(),
+    remote_deploy_dir: formData.remote_deploy_dir.trim(),
+    pre_deploy_commands: parseMultilineInput(formData.pre_deploy_commands),
+    post_deploy_commands: parseMultilineInput(formData.post_deploy_commands),
+    timeout_seconds: Math.max(1, formData.timeout_minutes) * 60,
+    notification_channel_id:
+      formData.notification_channel_id === DEFAULT_NOTIFICATION_CHANNEL
+        ? null
+        : Number(formData.notification_channel_id),
+  };
+}
+
+function getDeployConfigValidationError(formData: DeployConfigFormState): string | null {
+  if (!formData.host_id) {
+    return "请选择目标主机";
+  }
+  if (!formData.build_image.trim()) {
+    return "编译镜像不能为空";
+  }
+  if (parseMultilineInput(formData.build_commands).length === 0) {
+    return "请至少填写一条编译命令";
+  }
+  if (!formData.remote_save_dir.trim()) {
+    return "远程保存目录不能为空";
+  }
+  if (!formData.remote_deploy_dir.trim()) {
+    return "远程部署目录不能为空";
+  }
+  if (formData.timeout_minutes <= 0) {
+    return "部署超时必须大于 0 分钟";
+  }
+  return null;
+}
+
+type ProjectCardViewProps = {
+  project: Project;
+  dragHandle?: React.ReactNode;
+  isDeleting: boolean;
+  isDragging?: boolean;
+  isOverlay?: boolean;
+  onTrigger: () => void;
+  onCopyWebhook: () => void;
+  onEdit: () => void;
+  onDeleteRequest: () => void;
+  onDeleteCancel: () => void;
+  onDeleteConfirm: () => void;
+};
+
+function ProjectCardView({
+  project,
+  dragHandle,
+  isDeleting,
+  isDragging = false,
+  isOverlay = false,
+  onTrigger,
+  onCopyWebhook,
+  onEdit,
+  onDeleteRequest,
+  onDeleteCancel,
+  onDeleteConfirm,
+}: ProjectCardViewProps) {
+  return (
+    <Card
+      className={cn(
+        "h-full overflow-hidden border-border/70 transition-[opacity,box-shadow,transform] duration-200 will-change-transform",
+        isDragging && "opacity-35",
+        isOverlay && "rotate-[1deg] scale-[1.02] opacity-100 shadow-2xl ring-2 ring-primary/30"
+      )}
+    >
+      <CardContent className="p-4">
+        <header className="relative mb-3 flex items-start justify-between">
+          <div className="mr-2 min-w-0 flex-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <h3 className="truncate font-semibold text-foreground">{project.name}</h3>
+              </TooltipTrigger>
+              <TooltipContent>{project.name}</TooltipContent>
+            </Tooltip>
+            <p className="text-sm text-muted-foreground">{project.branch}</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            {dragHandle}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label="触发部署"
+                  onClick={onTrigger}
+                >
+                  <Play className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>触发部署</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label="复制 Webhook"
+                  onClick={onCopyWebhook}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>复制 Webhook</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label="编辑"
+                  onClick={onEdit}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>编辑</TooltipContent>
+            </Tooltip>
+            {!isDeleting ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    aria-label="删除"
+                    onClick={onDeleteRequest}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>删除</TooltipContent>
+              </Tooltip>
+            ) : null}
+          </div>
+
+          <AnimatePresence>
+            {isDeleting ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 flex items-center justify-center gap-2 rounded-lg bg-destructive p-2"
+              >
+                <button
+                  type="button"
+                  onClick={onDeleteCancel}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 text-white transition-all hover:bg-white/30 active:scale-95"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={onDeleteConfirm}
+                  className="flex h-7 flex-1 items-center justify-center gap-2 rounded-lg bg-white text-sm font-semibold text-destructive transition-all hover:bg-white/90 active:scale-[0.98]"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  确认删除
+                </button>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        </header>
+
+        <p className="truncate text-sm text-muted-foreground">{project.repo_url}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+type SortableProjectCardProps = {
+  project: Project;
+  isDeleting: boolean;
+  onTrigger: () => void;
+  onCopyWebhook: () => void;
+  onEdit: () => void;
+  onDeleteRequest: () => void;
+  onDeleteCancel: () => void;
+  onDeleteConfirm: () => void;
+};
+
+function SortableProjectCard(props: SortableProjectCardProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: props.project.id,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 20 : undefined,
+      }}
+      className="h-full will-change-transform"
+    >
+      <ProjectCardView
+        {...props}
+        isDragging={isDragging}
+        dragHandle={
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "h-8 w-8 cursor-grab touch-none active:cursor-grabbing",
+                  isDragging && "cursor-grabbing"
+                )}
+                aria-label="拖拽排序"
+                {...attributes}
+                {...listeners}
+              >
+                <GripVertical className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>拖拽排序</TooltipContent>
+          </Tooltip>
+        }
+      />
+    </div>
+  );
+}
+
 export function Projects() {
+  const { setActiveView, setPendingRunId } = useNavStore();
   const [projects, setProjects] = useState<Project[]>(projectsCache || []);
   const [hosts, setHosts] = useState<Host[]>(hostsCache || []);
   const [channels, setChannels] = useState<NotifyChannel[]>(channelsCache || []);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [deletingProject, setDeletingProject] = useState<Project | null>(null);
+  const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState("basic");
   const loadingRef = useRef(false);
-  const [formData, setFormData] = useState({
-    name: "",
-    branch: "main",
-    repo_url: "",
-    description: "",
-    timeout_minutes: 30,
-    deploy_config: { ...defaultDeployConfig } as Partial<DeployConfig>,
-  });
+  const [formData, setFormData] = useState<ProjectFormState>(createDefaultFormData());
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 2 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
-  const loadData = async () => {
-    // 如果有缓存且不是强制刷新，使用缓存
-    if (projectsCache && hostsCache && channelsCache) {
+  const loadData = async (forceRefresh = false) => {
+    if (!forceRefresh && projectsCache && hostsCache && channelsCache) {
       setProjects(projectsCache);
       setHosts(hostsCache);
       setChannels(channelsCache);
@@ -75,20 +409,22 @@ export function Projects() {
     if (loadingRef.current) return;
     loadingRef.current = true;
     try {
-      const [projRes, hostRes, chanRes] = await Promise.all([
-        projectsCache ? Promise.resolve(projectsCache) : projectApi.list(),
-        hostsCache ? Promise.resolve(hostsCache) : hostApi.list(),
-        channelsCache ? Promise.resolve(channelsCache) : notifyApi.list(),
+      const [projectList, hostList, channelList] = await Promise.all([
+        !forceRefresh && projectsCache ? Promise.resolve(projectsCache) : projectApi.list(),
+        !forceRefresh && hostsCache ? Promise.resolve(hostsCache) : hostApi.list(),
+        !forceRefresh && channelsCache ? Promise.resolve(channelsCache) : notifyApi.list(),
       ]);
-      const projects = Array.isArray(projRes) ? projRes : [];
-      const hosts = Array.isArray(hostRes) ? hostRes : [];
-      const channels = Array.isArray(chanRes) ? chanRes : [];
-      projectsCache = projects;
-      hostsCache = hosts;
-      channelsCache = channels;
-      setProjects(projects);
-      setHosts(hosts);
-      setChannels(channels);
+
+      const nextProjects = Array.isArray(projectList) ? projectList : [];
+      const nextHosts = Array.isArray(hostList) ? hostList : [];
+      const nextChannels = Array.isArray(channelList) ? channelList : [];
+
+      projectsCache = nextProjects;
+      hostsCache = nextHosts;
+      channelsCache = nextChannels;
+      setProjects(nextProjects);
+      setHosts(nextHosts);
+      setChannels(nextChannels);
     } catch (error) {
       console.error(error);
     } finally {
@@ -109,14 +445,7 @@ export function Projects() {
   }, []);
 
   const resetForm = () => {
-    setFormData({
-      name: "",
-      branch: "main",
-      repo_url: "",
-      description: "",
-      timeout_minutes: 30,
-      deploy_config: { ...defaultDeployConfig },
-    });
+    setFormData(createDefaultFormData());
     setActiveTab("basic");
   };
 
@@ -126,32 +455,61 @@ export function Projects() {
     setDialogOpen(true);
   };
 
-  const openEditDialog = (project: Project) => {
-    setEditingProject(project);
-    setFormData({
-      name: project.name,
-      branch: project.branch,
-      repo_url: project.repo_url,
-      description: project.description,
-      timeout_minutes: project.timeout_minutes,
-      deploy_config: project.deploy_config || { ...defaultDeployConfig },
-    });
-    setActiveTab("basic");
-    setDialogOpen(true);
+  const openEditDialog = async (project: Project) => {
+    try {
+      const detail: ProjectDetail = await projectApi.get(project.id);
+      const deployConfig =
+        detail.deploy_config ??
+        (await projectApi.getDeployConfig(project.id).catch(() => null));
+
+      setEditingProject(detail.project);
+      setFormData({
+        name: detail.project.name,
+        branch: detail.project.branch,
+        repo_url: detail.project.repo_url,
+        description: detail.project.description || "",
+        deploy_config: mapDeployConfigToForm(deployConfig),
+      });
+      setActiveTab("basic");
+      setDialogOpen(true);
+    } catch (error: any) {
+      toast.error(error.message || "加载项目详情失败");
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const deployConfigError = getDeployConfigValidationError(formData.deploy_config);
+    if (deployConfigError) {
+      setActiveTab("deploy");
+      toast.error(deployConfigError);
+      return;
+    }
+
     try {
+      const projectPayload = buildProjectPayload(formData);
+      const deployPayload = buildDeployConfigPayload(formData.deploy_config);
+
+      let projectId = editingProject?.id;
+
       if (editingProject) {
-        await projectApi.update(editingProject.id, formData);
-        toast.success("项目更新成功");
+        await projectApi.update(editingProject.id, projectPayload);
       } else {
-        await projectApi.create(formData);
-        toast.success("项目创建成功");
+        const createdProject = await projectApi.create(projectPayload);
+        projectId = createdProject.id;
       }
+
+      if (!projectId) {
+        throw new Error("项目 ID 不存在");
+      }
+
+      await projectApi.upsertDeployConfig(projectId, deployPayload);
+
+      projectsCache = null;
       setDialogOpen(false);
-      loadData();
+      await loadData(true);
+      toast.success(editingProject ? "项目更新成功" : "项目创建成功");
     } catch (error: any) {
       toast.error(error.message || "操作失败");
     }
@@ -163,7 +521,7 @@ export function Projects() {
       projectsCache = null;
       toast.success("项目删除成功");
       setDeletingProject(null);
-      loadData();
+      await loadData(true);
     } catch (error: any) {
       toast.error(error.message || "删除失败");
     }
@@ -171,7 +529,9 @@ export function Projects() {
 
   const handleTrigger = async (id: number) => {
     try {
-      await projectApi.trigger(id);
+      const run = await projectApi.trigger(id);
+      setPendingRunId(run.id);
+      setActiveView("logs");
       toast.success("构建已触发");
     } catch (error: any) {
       toast.error(error.message || "触发失败");
@@ -179,9 +539,50 @@ export function Projects() {
   };
 
   const copyWebhook = (token: string) => {
-    const url = `${window.location.origin}/api/v1/webhooks/${token}`;
+    const origin =
+      typeof window !== "undefined" ? window.location.origin : "";
+    const url = `${origin}/api/v1/webhooks/${token}`;
     navigator.clipboard.writeText(url);
     toast.success("Webhook URL 已复制");
+  };
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveProjectId(Number(event.active.id));
+  };
+
+  const handleDragCancel = () => {
+    setActiveProjectId(null);
+  };
+
+  const activeProject =
+    activeProjectId == null ? null : projects.find((item) => item.id === activeProjectId) ?? null;
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveProjectId(null);
+
+    if (!over || active.id === over.id) {
+      return;
+    }
+
+    const oldIndex = projects.findIndex((item) => item.id === Number(active.id));
+    const newIndex = projects.findIndex((item) => item.id === Number(over.id));
+    if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) {
+      return;
+    }
+
+    const nextProjects = arrayMove(projects, oldIndex, newIndex);
+    const previousProjects = projects;
+    projectsCache = nextProjects;
+    setProjects(nextProjects);
+
+    try {
+      await projectApi.reorder(nextProjects.map((item) => item.id));
+    } catch (error: any) {
+      projectsCache = previousProjects;
+      setProjects(previousProjects);
+      toast.error(error.message || "项目排序保存失败");
+    }
   };
 
   return (
@@ -193,93 +594,62 @@ export function Projects() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {projects.map((project) => (
-            <Card key={project.id} className="overflow-hidden">
-              <CardContent className="p-4">
-                <header className="flex items-start justify-between mb-3 relative">
-                  <div className="flex-1 mr-2 min-w-0">
-                    <h3 className="font-semibold text-foreground truncate">{project.name}</h3>
-                    <p className="text-sm text-muted-foreground">{project.branch}</p>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => handleTrigger(project.id)}
-                    >
-                      <Play className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => copyWebhook(project.webhook_token)}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => openEditDialog(project)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    {deletingProject?.id !== project.id ? (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={() => setDeletingProject(project)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    ) : null}
-                  </div>
-
-                  <AnimatePresence>
-                    {deletingProject?.id === project.id && (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="absolute inset-0 flex items-center justify-center gap-2 bg-destructive p-2 rounded-lg"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => setDeletingProject(null)}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 text-white transition-all hover:bg-white/30 active:scale-95"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(project)}
-                          className="flex-1 h-7 flex items-center justify-center gap-2 rounded-lg bg-white text-destructive text-sm font-semibold transition-all hover:bg-white/90 active:scale-[0.98]"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          确认删除
-                        </button>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </header>
-
-                <p className="text-sm text-muted-foreground truncate">
-                  {project.repo_url}
-                </p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          modifiers={[restrictToParentElement]}
+          onDragStart={handleDragStart}
+          onDragCancel={handleDragCancel}
+          onDragEnd={(event) => void handleDragEnd(event)}
+        >
+          <SortableContext
+            items={projects.map((project) => project.id)}
+            strategy={rectSortingStrategy}
+          >
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {projects.map((project) => (
+                <SortableProjectCard
+                  key={project.id}
+                  project={project}
+                  isDeleting={deletingProject?.id === project.id}
+                  onTrigger={() => void handleTrigger(project.id)}
+                  onCopyWebhook={() => copyWebhook(project.webhook_token)}
+                  onEdit={() => void openEditDialog(project)}
+                  onDeleteRequest={() => setDeletingProject(project)}
+                  onDeleteCancel={() => setDeletingProject(null)}
+                  onDeleteConfirm={() => void handleDelete(project)}
+                />
+              ))}
+            </div>
+          </SortableContext>
+          <DragOverlay>
+            {activeProject ? (
+              <div className="w-full max-w-[min(100%,32rem)]">
+                <ProjectCardView
+                  project={activeProject}
+                  isDeleting={false}
+                  isDragging
+                  isOverlay
+                  onTrigger={() => {}}
+                  onCopyWebhook={() => {}}
+                  onEdit={() => {}}
+                  onDeleteRequest={() => {}}
+                  onDeleteCancel={() => {}}
+                  onDeleteConfirm={() => {}}
+                />
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>{editingProject ? "编辑项目" : "新增项目"}</DialogTitle>
+            <DialogDescription className="sr-only">
+              配置项目基础信息、编译参数和部署参数。
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -289,7 +659,7 @@ export function Projects() {
                 <TabsTrigger value="deploy">部署配置</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="basic" className="space-y-4 mt-4">
+              <TabsContent value="basic" className="mt-4 space-y-4">
                 <div className="grid gap-2">
                   <Label>项目名称</Label>
                   <Input
@@ -318,15 +688,6 @@ export function Projects() {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label>部署超时(分钟)</Label>
-                  <Input
-                    type="number"
-                    value={formData.timeout_minutes}
-                    onChange={(e) => setFormData({ ...formData, timeout_minutes: parseInt(e.target.value) })}
-                    required
-                  />
-                </div>
-                <div className="grid gap-2">
                   <Label>描述</Label>
                   <Textarea
                     value={formData.description}
@@ -345,15 +706,17 @@ export function Projects() {
                 </div>
               </TabsContent>
 
-              <TabsContent value="build" className="space-y-4 mt-4">
+              <TabsContent value="build" className="mt-4 space-y-4">
                 <div className="grid gap-2">
                   <Label>编译镜像</Label>
                   <Input
                     value={formData.deploy_config.build_image}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      deploy_config: { ...formData.deploy_config, build_image: e.target.value }
-                    })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        deploy_config: { ...formData.deploy_config, build_image: e.target.value },
+                      })
+                    }
                     placeholder="node:20"
                     required
                   />
@@ -362,28 +725,35 @@ export function Projects() {
                   <Label>编译命令</Label>
                   <Textarea
                     value={formData.deploy_config.build_commands}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      deploy_config: { ...formData.deploy_config, build_commands: e.target.value }
-                    })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        deploy_config: { ...formData.deploy_config, build_commands: e.target.value },
+                      })
+                    }
                     placeholder={"每行一个命令，例如\npnpm install\npnpm run build"}
                     rows={5}
+                    required
                   />
                 </div>
                 <div className="grid gap-2">
                   <Label>制品过滤模式</Label>
                   <Select
                     value={formData.deploy_config.artifact_filter_mode}
-                    onValueChange={(v) => setFormData({
-                      ...formData,
-                      deploy_config: { ...formData.deploy_config, artifact_filter_mode: v as any }
-                    })}
+                    onValueChange={(value) =>
+                      setFormData({
+                        ...formData,
+                        deploy_config: {
+                          ...formData.deploy_config,
+                          artifact_filter_mode: value as DeployConfigFormState["artifact_filter_mode"],
+                        },
+                      })
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">无</SelectItem>
                       <SelectItem value="include">包含</SelectItem>
                       <SelectItem value="exclude">排除</SelectItem>
                     </SelectContent>
@@ -393,10 +763,12 @@ export function Projects() {
                   <Label>制品过滤规则</Label>
                   <Textarea
                     value={formData.deploy_config.artifact_rules}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      deploy_config: { ...formData.deploy_config, artifact_rules: e.target.value }
-                    })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        deploy_config: { ...formData.deploy_config, artifact_rules: e.target.value },
+                      })
+                    }
                     placeholder="每行一个目录或文件名"
                     rows={4}
                   />
@@ -411,22 +783,24 @@ export function Projects() {
                 </div>
               </TabsContent>
 
-              <TabsContent value="deploy" className="space-y-4 mt-4">
+              <TabsContent value="deploy" className="mt-4 space-y-4">
                 <div className="grid gap-2">
                   <Label>目标主机</Label>
                   <Select
-                    value={formData.deploy_config.host_id?.toString() || ""}
-                    onValueChange={(v) => setFormData({
-                      ...formData,
-                      deploy_config: { ...formData.deploy_config, host_id: parseInt(v) }
-                    })}
+                    value={formData.deploy_config.host_id}
+                    onValueChange={(value) =>
+                      setFormData({
+                        ...formData,
+                        deploy_config: { ...formData.deploy_config, host_id: value },
+                      })
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="请选择主机" />
                     </SelectTrigger>
                     <SelectContent>
                       {hosts.map((host) => (
-                        <SelectItem key={host.id} value={host.id.toString()}>
+                        <SelectItem key={host.id} value={String(host.id)}>
                           {host.name} ({host.address})
                         </SelectItem>
                       ))}
@@ -438,10 +812,12 @@ export function Projects() {
                     <Label>远程保存目录</Label>
                     <Input
                       value={formData.deploy_config.remote_save_dir}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        deploy_config: { ...formData.deploy_config, remote_save_dir: e.target.value }
-                      })}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          deploy_config: { ...formData.deploy_config, remote_save_dir: e.target.value },
+                        })
+                      }
                       placeholder="/data/jimuqu/projects"
                     />
                   </div>
@@ -449,33 +825,43 @@ export function Projects() {
                     <Label>远程部署目录</Label>
                     <Input
                       value={formData.deploy_config.remote_deploy_dir}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        deploy_config: { ...formData.deploy_config, remote_deploy_dir: e.target.value }
-                      })}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          deploy_config: { ...formData.deploy_config, remote_deploy_dir: e.target.value },
+                        })
+                      }
                       placeholder="/data/apps/portal"
                     />
                   </div>
                 </div>
                 <div className="grid gap-2">
-                  <Label>保留版本数量</Label>
+                  <Label>部署超时(分钟)</Label>
                   <Input
                     type="number"
-                    value={formData.deploy_config.version_count}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      deploy_config: { ...formData.deploy_config, version_count: parseInt(e.target.value) }
-                    })}
+                    min={1}
+                    value={formData.deploy_config.timeout_minutes}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        deploy_config: {
+                          ...formData.deploy_config,
+                          timeout_minutes: Number(e.target.value) || 0,
+                        },
+                      })
+                    }
                   />
                 </div>
                 <div className="grid gap-2">
                   <Label>部署前命令</Label>
                   <Textarea
                     value={formData.deploy_config.pre_deploy_commands}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      deploy_config: { ...formData.deploy_config, pre_deploy_commands: e.target.value }
-                    })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        deploy_config: { ...formData.deploy_config, pre_deploy_commands: e.target.value },
+                      })
+                    }
                     placeholder="每行一个远程命令"
                     rows={3}
                   />
@@ -484,10 +870,12 @@ export function Projects() {
                   <Label>部署后命令</Label>
                   <Textarea
                     value={formData.deploy_config.post_deploy_commands}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      deploy_config: { ...formData.deploy_config, post_deploy_commands: e.target.value }
-                    })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        deploy_config: { ...formData.deploy_config, post_deploy_commands: e.target.value },
+                      })
+                    }
                     placeholder={"例如\ndocker restart app"}
                     rows={3}
                   />
@@ -495,24 +883,25 @@ export function Projects() {
                 <div className="grid gap-2">
                   <Label>通知渠道</Label>
                   <Select
-                    value={formData.deploy_config.notification_channel_id?.toString() || ""}
-                    onValueChange={(v) => setFormData({
-                      ...formData,
-                      deploy_config: {
-                        ...formData.deploy_config,
-                        notification_channel_id: v ? parseInt(v) : null
-                      }
-                    })}
+                    value={formData.deploy_config.notification_channel_id}
+                    onValueChange={(value) =>
+                      setFormData({
+                        ...formData,
+                        deploy_config: {
+                          ...formData.deploy_config,
+                          notification_channel_id: value,
+                        },
+                      })
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="使用默认渠道" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">使用默认渠道</SelectItem>
-                      <SelectItem value="-1">不通知</SelectItem>
-                      {channels.map((ch) => (
-                        <SelectItem key={ch.id} value={ch.id.toString()}>
-                          {ch.name}
+                      <SelectItem value={DEFAULT_NOTIFICATION_CHANNEL}>使用默认渠道</SelectItem>
+                      {channels.map((channel) => (
+                        <SelectItem key={channel.id} value={String(channel.id)}>
+                          {channel.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
