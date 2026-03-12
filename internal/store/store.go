@@ -626,9 +626,9 @@ func (s *Store) CreateRun(ctx context.Context, input model.RunCreateInput) (mode
 	now := nowString()
 	result, err := s.db.ExecContext(
 		ctx,
-		`INSERT INTO pipeline_runs (project_id, status, trigger_type, trigger_ref, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		input.ProjectID, input.Status, input.TriggerType, input.TriggerRef, now, now,
+		`INSERT INTO pipeline_runs (project_id, status, trigger_type, trigger_ref, log_text, error_message, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		input.ProjectID, input.Status, input.TriggerType, input.TriggerRef, "", "", now, now,
 	)
 	if err != nil {
 		return model.PipelineRun{}, fmt.Errorf("insert run: %w", err)
@@ -658,11 +658,10 @@ func (s *Store) MarkRunRunning(ctx context.Context, runID int64) error {
 }
 
 func (s *Store) AppendRunLog(ctx context.Context, runID int64, line string) error {
+	query := appendRunLogQuery(s.isMySQL())
 	_, err := s.db.ExecContext(
 		ctx,
-		`UPDATE pipeline_runs
-		 SET log_text = COALESCE(log_text, '') || ?, updated_at = ?
-		 WHERE id = ?`,
+		query,
 		line,
 		nowString(),
 		runID,
@@ -671,6 +670,17 @@ func (s *Store) AppendRunLog(ctx context.Context, runID int64, line string) erro
 		return fmt.Errorf("append run log: %w", err)
 	}
 	return nil
+}
+
+func appendRunLogQuery(isMySQL bool) string {
+	if isMySQL {
+		return `UPDATE pipeline_runs
+		 SET log_text = CONCAT(COALESCE(log_text, ''), ?), updated_at = ?
+		 WHERE id = ?`
+	}
+	return `UPDATE pipeline_runs
+	 SET log_text = COALESCE(log_text, '') || ?, updated_at = ?
+	 WHERE id = ?`
 }
 
 func (s *Store) FinalizeRun(ctx context.Context, runID int64, status string, errorMessage string) error {
