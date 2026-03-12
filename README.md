@@ -2,7 +2,7 @@
 
 轻量级 CI/CD 部署系统，面向中小团队的项目发布、主机分发和部署日志追踪场景。后端使用 Go，前端管理台使用 Next.js，支持 Git Webhook 触发、Docker 隔离构建、SSH 发布、通知渠道、备份恢复、系统设置和首页统计看板。
 
-当前项目主用管理端是 `web-next`。发布包和 Docker 镜像会先编译前端，再把产物嵌入后端程序中，启动后访问同一个 `18080` 端口即可打开管理台。
+发布包和 Docker 镜像会先编译前端，再把产物嵌入后端程序中，启动后访问同一个 `18080` 端口即可打开管理台。
 
 ## 功能概览
 
@@ -63,19 +63,13 @@ graph LR
 
 ### 🐳 Docker
 
-先在仓库根目录构建镜像：
-
-```bash
-docker build -t jimuqu-devops .
-```
-
 先设置一个随机 `APP_SECRET`：
 
 ```bash
 export APP_SECRET='replace-with-a-long-random-secret'
 ```
 
-直接运行：
+直接使用 GitHub Container Registry 提供的镜像运行：
 
 ```bash
 docker run -d --name jimuqu-devops \
@@ -83,14 +77,14 @@ docker run -d --name jimuqu-devops \
   -v $(pwd)/data:/app/data \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e APP_SECRET="$APP_SECRET" \
-  jimuqu-devops
+  ghcr.io/chengliang4810/jimuqu-devops:0.0.3
 ```
 
 或使用 docker compose：
 
 ```bash
 export APP_SECRET='replace-with-a-long-random-secret'
-docker compose up -d --build
+docker compose up -d
 ```
 
 访问：
@@ -102,14 +96,7 @@ docker compose up -d --build
 
 - 容器内需要通过 `/var/run/docker.sock` 调用宿主机 Docker，才能执行项目构建
 - 默认使用 SQLite，数据保存在挂载目录 `/app/data`
-- 如果你使用 Windows PowerShell，建议优先使用 `docker compose up -d --build`
-
-PowerShell 示例：
-
-```powershell
-$env:APP_SECRET="replace-with-a-long-random-secret"
-docker compose up -d --build
-```
+- `docker-compose.yml` 默认使用 `ghcr.io/chengliang4810/jimuqu-devops:0.0.3`
 
 ### 📦 Download from Release
 
@@ -121,64 +108,29 @@ Linux / macOS：
 ./server
 ```
 
-Windows：
-
-```powershell
-.\server.exe
-```
-
 访问：
 
 - 管理台：`http://127.0.0.1:18080`
 
 如果需要指定数据库和监听端口，先设置环境变量再启动。例如 MySQL：
 
-```powershell
-$env:APP_ADDR=":18080"
-$env:APP_DB_DRIVER="mysql"
-$env:APP_DB_SOURCE="root:password@tcp(127.0.0.1:3306)/jimuqu_devops?charset=utf8mb4&parseTime=true&loc=Local"
-$env:APP_SECRET="change-me-in-production"
-.\server.exe
+```bash
+export APP_ADDR=":18080"
+export APP_DB_DRIVER="mysql"
+export APP_DB_SOURCE="root:password@tcp(127.0.0.1:3306)/jimuqu_devops?charset=utf8mb4&parseTime=true&loc=Local"
+export APP_SECRET="change-me-in-production"
+./server
 ```
 
 SQLite：
 
-```powershell
-$env:APP_ADDR=":18080"
-$env:APP_DB_DRIVER="sqlite"
-$env:APP_DB_SOURCE="./data/pipeline.db"
-$env:APP_SECRET="change-me-in-production"
-.\server.exe
+```bash
+export APP_ADDR=":18080"
+export APP_DB_DRIVER="sqlite"
+export APP_DB_SOURCE="./data/pipeline.db"
+export APP_SECRET="change-me-in-production"
+./server
 ```
-
-默认管理员账号：
-
-- 用户名：`admin`
-- 密码：`admin123`
-
-默认监听地址：
-
-- `http://127.0.0.1:18080`
-
-### 🌐 Web Console
-
-当前项目主用的管理端是 `web-next`。
-
-- 发布包 / Docker 镜像会把前端资源嵌入到后端程序中
-- 本地开发时仍然建议单独启动前端开发服务
-
-本地开发：
-
-```powershell
-cd web-next
-pnpm install
-pnpm dev
-```
-
-访问：
-
-- 新版前端：`http://127.0.0.1:3000`
-- 后端 API：`http://127.0.0.1:18080`
 
 ## 环境变量
 
@@ -310,13 +262,7 @@ POST /api/v1/webhooks/{token}
 
 适合单机、测试环境和小型生产环境：
 
-#### 1. 构建镜像
-
-```bash
-docker build -t jimuqu-devops .
-```
-
-#### 2. 启动容器
+#### 1. 启动容器
 
 ```bash
 export APP_SECRET='replace-with-a-long-random-secret'
@@ -325,15 +271,15 @@ docker run -d --name jimuqu-devops \
   -v $(pwd)/data:/app/data \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e APP_SECRET="$APP_SECRET" \
-  jimuqu-devops
+  ghcr.io/chengliang4810/jimuqu-devops:0.0.3
 ```
 
-#### 3. 访问系统
+#### 2. 访问系统
 
 - 管理台：`http://127.0.0.1:18080`
 - 健康检查：`http://127.0.0.1:18080/healthz`
 
-#### 4. 可选：切换 MySQL
+#### 3. 可选：切换 MySQL
 
 ```bash
 export APP_SECRET='replace-with-a-long-random-secret'
@@ -344,7 +290,7 @@ docker run -d --name jimuqu-devops \
   -e APP_DB_DRIVER=mysql \
   -e APP_DB_SOURCE='root:password@tcp(mysql:3306)/jimuqu_devops?charset=utf8mb4&parseTime=true&loc=Local' \
   -e APP_SECRET="$APP_SECRET" \
-  jimuqu-devops
+  ghcr.io/chengliang4810/jimuqu-devops:0.0.3
 ```
 
 ### 方案三：Release 包部署
@@ -366,12 +312,6 @@ Linux / macOS：
 
 ```bash
 ./server
-```
-
-Windows：
-
-```powershell
-.\server.exe
 ```
 
 #### 3. 反向代理

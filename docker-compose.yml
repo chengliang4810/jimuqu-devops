@@ -1,8 +1,6 @@
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/chengliang4810/jimuqu-devops:0.0.3
     container_name: jimuqu-devops
     ports:
       - "18080:18080"
