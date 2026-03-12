@@ -610,7 +610,7 @@ func (s *Server) writeError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-	case isConstraintError(err):
+	case store.IsConstraintError(err):
 		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 	default:
 		s.logger.Error("request failed", "error", err)
@@ -734,11 +734,6 @@ func validateDeployConfigInput(input model.DeployConfigUpsert) error {
 		return errors.New("remote_deploy_dir is required")
 	}
 	return nil
-}
-
-func isConstraintError(err error) bool {
-	message := err.Error()
-	return strings.Contains(message, "UNIQUE constraint failed") || strings.Contains(message, "FOREIGN KEY constraint failed")
 }
 
 type webhookPayload struct {

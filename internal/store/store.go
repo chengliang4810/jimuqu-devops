@@ -15,7 +15,10 @@ import (
 	"devops-pipeline/internal/model"
 )
 
-var ErrNotFound = errors.New("store: not found")
+var (
+	ErrNotFound = errors.New("store: not found")
+	ErrConflict = errors.New("store: conflict")
+)
 
 func (s *Store) Close() error {
 	return s.db.Close()
@@ -197,7 +200,7 @@ func (s *Store) CreateProject(ctx context.Context, input model.ProjectUpsert) (m
 		nextSortOrder, input.Name, input.RepoURL, input.Branch, input.Description, token, gitAuthType, gitUsernameCipher, gitPasswordCipher, gitSSHKeyCipher, now, now,
 	)
 	if err != nil {
-		return model.Project{}, fmt.Errorf("insert project: %w", err)
+		return model.Project{}, wrapProjectMutationError("insert", err)
 	}
 
 	id, err := result.LastInsertId()
@@ -262,7 +265,7 @@ func (s *Store) UpdateProject(ctx context.Context, id int64, input model.Project
 		input.Name, input.RepoURL, input.Branch, input.Description, gitAuthType, gitUsernameCipher, gitPasswordCipher, gitSSHKeyCipher, nowString(), id,
 	)
 	if err != nil {
-		return model.Project{}, fmt.Errorf("update project: %w", err)
+		return model.Project{}, wrapProjectMutationError("update", err)
 	}
 
 	return s.GetProject(ctx, id)
@@ -400,7 +403,7 @@ func (s *Store) CloneProject(ctx context.Context, sourceID int64, input model.Pr
 		nextSortOrder, input.Name, sourceProject.RepoURL, input.Branch, description, token, sourceProject.GitAuthType, gitUsernameCipher, gitPasswordCipher, gitSSHKeyCipher, now, now,
 	)
 	if err != nil {
-		return model.ProjectDetail{}, fmt.Errorf("clone project: %w", err)
+		return model.ProjectDetail{}, wrapProjectMutationError("clone", err)
 	}
 
 	projectID, err := result.LastInsertId()
@@ -479,28 +482,10 @@ func (s *Store) UpsertDeployConfig(ctx context.Context, projectID int64, input m
 	}
 
 	now := nowString()
+	query := deployConfigUpsertQuery(s.isMySQL())
 	_, err = s.db.ExecContext(
 		ctx,
-		`INSERT INTO deploy_configs (
-			project_id, host_id, build_image, build_commands_json, artifact_filter_mode,
-			artifact_rules_json, remote_save_dir, remote_deploy_dir, pre_deploy_commands_json,
-			post_deploy_commands_json, timeout_seconds, notify_webhook_url, notify_token_cipher, notification_channel_id, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(project_id) DO UPDATE SET
-			host_id = excluded.host_id,
-			build_image = excluded.build_image,
-			build_commands_json = excluded.build_commands_json,
-			artifact_filter_mode = excluded.artifact_filter_mode,
-			artifact_rules_json = excluded.artifact_rules_json,
-			remote_save_dir = excluded.remote_save_dir,
-			remote_deploy_dir = excluded.remote_deploy_dir,
-			pre_deploy_commands_json = excluded.pre_deploy_commands_json,
-			post_deploy_commands_json = excluded.post_deploy_commands_json,
-			timeout_seconds = excluded.timeout_seconds,
-			notify_webhook_url = excluded.notify_webhook_url,
-			notify_token_cipher = excluded.notify_token_cipher,
-			notification_channel_id = excluded.notification_channel_id,
-			updated_at = excluded.updated_at`,
+		query,
 		projectID,
 		input.HostID,
 		input.BuildImage,
@@ -523,6 +508,52 @@ func (s *Store) UpsertDeployConfig(ctx context.Context, projectID int64, input m
 	}
 
 	return s.GetDeployConfigByProjectID(ctx, projectID)
+}
+
+func deployConfigUpsertQuery(isMySQL bool) string {
+	query := `INSERT INTO deploy_configs (
+		project_id, host_id, build_image, build_commands_json, artifact_filter_mode,
+		artifact_rules_json, remote_save_dir, remote_deploy_dir, pre_deploy_commands_json,
+		post_deploy_commands_json, timeout_seconds, notify_webhook_url, notify_token_cipher, notification_channel_id, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT(project_id) DO UPDATE SET
+		host_id = excluded.host_id,
+		build_image = excluded.build_image,
+		build_commands_json = excluded.build_commands_json,
+		artifact_filter_mode = excluded.artifact_filter_mode,
+		artifact_rules_json = excluded.artifact_rules_json,
+		remote_save_dir = excluded.remote_save_dir,
+		remote_deploy_dir = excluded.remote_deploy_dir,
+		pre_deploy_commands_json = excluded.pre_deploy_commands_json,
+		post_deploy_commands_json = excluded.post_deploy_commands_json,
+		timeout_seconds = excluded.timeout_seconds,
+		notify_webhook_url = excluded.notify_webhook_url,
+		notify_token_cipher = excluded.notify_token_cipher,
+		notification_channel_id = excluded.notification_channel_id,
+		updated_at = excluded.updated_at`
+	if isMySQL {
+		query = `INSERT INTO deploy_configs (
+			project_id, host_id, build_image, build_commands_json, artifact_filter_mode,
+			artifact_rules_json, remote_save_dir, remote_deploy_dir, pre_deploy_commands_json,
+			post_deploy_commands_json, timeout_seconds, notify_webhook_url, notify_token_cipher, notification_channel_id, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+			host_id = VALUES(host_id),
+			build_image = VALUES(build_image),
+			build_commands_json = VALUES(build_commands_json),
+			artifact_filter_mode = VALUES(artifact_filter_mode),
+			artifact_rules_json = VALUES(artifact_rules_json),
+			remote_save_dir = VALUES(remote_save_dir),
+			remote_deploy_dir = VALUES(remote_deploy_dir),
+			pre_deploy_commands_json = VALUES(pre_deploy_commands_json),
+			post_deploy_commands_json = VALUES(post_deploy_commands_json),
+			timeout_seconds = VALUES(timeout_seconds),
+			notify_webhook_url = VALUES(notify_webhook_url),
+			notify_token_cipher = VALUES(notify_token_cipher),
+			notification_channel_id = VALUES(notification_channel_id),
+			updated_at = VALUES(updated_at)`
+	}
+	return query
 }
 
 func (s *Store) GetDeployConfigByProjectID(ctx context.Context, projectID int64) (model.DeployConfig, error) {
