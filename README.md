@@ -63,31 +63,39 @@ graph LR
 
 ### 🐳 Docker
 
-先设置一个随机 `APP_SECRET`：
+直接使用 GitHub Container Registry 提供的镜像运行。
 
-```bash
-export APP_SECRET='replace-with-a-long-random-secret'
-```
-
-直接使用 GitHub Container Registry 提供的镜像运行：
+SQLite 示例：
 
 ```bash
 docker run -d --name jimuqu-devops \
   -p 18080:18080 \
   -v $(pwd)/data:/app/data \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -e APP_SECRET="$APP_SECRET" \
+  -e APP_SECRET="jimuqu-devops-secret" \
+  -e ADMIN_USERNAME="admin" \
+  -e ADMIN_PASSWORD="admin123" \
   ghcr.io/chengliang4810/jimuqu-devops:latest
 ```
 
-或使用 docker compose：
+MySQL 示例：
 
 ```bash
-export APP_SECRET='replace-with-a-long-random-secret'
-docker compose up -d
+docker run -d --name jimuqu-devops \
+  -p 18080:18080 \
+  -v $(pwd)/data:/app/data \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e APP_DB_DRIVER='mysql' \
+  -e APP_DB_SOURCE='root:password@tcp(mysql:3306)/jimuqu_devops?charset=utf8mb4&parseTime=true&loc=Local' \
+  -e APP_SECRET="jimuqu-devops-secret" \
+  -e ADMIN_USERNAME="admin" \
+  -e ADMIN_PASSWORD="admin123" \
+  ghcr.io/chengliang4810/jimuqu-devops:latest
 ```
 
-完整 `docker-compose.yml` 示例：
+或使用 docker compose。
+
+SQLite 的 `docker-compose.yml` 示例：
 
 ```yaml
 services:
@@ -97,12 +105,30 @@ services:
     ports:
       - "18080:18080"
     environment:
-      APP_ADDR: ":18080"
-      APP_DATA_DIR: "/app/data"
-      APP_DB_DRIVER: "sqlite"
-      APP_DB_SOURCE: "/app/data/pipeline.db"
-      APP_WORKSPACE_DIR: "/app/data/workspaces"
-      APP_SECRET: "${APP_SECRET:?APP_SECRET is required}"
+      APP_SECRET: "jimuqu-devops-secret"
+      ADMIN_USERNAME: "admin"
+      ADMIN_PASSWORD: "admin123"
+    volumes:
+      - ./data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+```
+
+MySQL 的 `docker-compose.yml` 示例：
+
+```yaml
+services:
+  app:
+    image: ghcr.io/chengliang4810/jimuqu-devops:latest
+    container_name: jimuqu-devops
+    ports:
+      - "18080:18080"
+    environment:
+      APP_DB_DRIVER: "mysql"
+      APP_DB_SOURCE: "root:password@tcp(mysql:3306)/jimuqu_devops?charset=utf8mb4&parseTime=true&loc=Local"
+      APP_SECRET: "jimuqu-devops-secret"
+      ADMIN_USERNAME: "admin"
+      ADMIN_PASSWORD: "admin123"
     volumes:
       - ./data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
@@ -118,7 +144,10 @@ services:
 
 - 容器内需要通过 `/var/run/docker.sock` 调用宿主机 Docker，才能执行项目构建
 - 默认使用 SQLite，数据保存在挂载目录 `/app/data`
+- 默认数据目录就是 `/app/data`，工作区默认就是 `/app/data/workspaces`，不需要额外配置
 - `docker-compose.yml` 默认使用 `ghcr.io/chengliang4810/jimuqu-devops:latest`
+- 示例中的管理员默认账号是 `admin / admin123`
+- 示例中的 `APP_SECRET` 默认写成 `jimuqu-devops-secret`，生产环境建议替换
 
 ### 📦 Download from Release
 
@@ -137,20 +166,20 @@ Linux / macOS：
 如果需要指定数据库和监听端口，先设置环境变量再启动。例如 MySQL：
 
 ```bash
-export APP_ADDR=":18080"
 export APP_DB_DRIVER="mysql"
 export APP_DB_SOURCE="root:password@tcp(127.0.0.1:3306)/jimuqu_devops?charset=utf8mb4&parseTime=true&loc=Local"
-export APP_SECRET="change-me-in-production"
+export APP_SECRET="jimuqu-devops-secret"
+export ADMIN_USERNAME="admin"
+export ADMIN_PASSWORD="admin123"
 ./server
 ```
 
 SQLite：
 
 ```bash
-export APP_ADDR=":18080"
-export APP_DB_DRIVER="sqlite"
-export APP_DB_SOURCE="./data/pipeline.db"
-export APP_SECRET="change-me-in-production"
+export APP_SECRET="jimuqu-devops-secret"
+export ADMIN_USERNAME="admin"
+export ADMIN_PASSWORD="admin123"
 ./server
 ```
 
@@ -286,13 +315,16 @@ POST /api/v1/webhooks/{token}
 
 #### 1. 启动容器
 
+SQLite 示例：
+
 ```bash
-export APP_SECRET='replace-with-a-long-random-secret'
 docker run -d --name jimuqu-devops \
   -p 18080:18080 \
   -v $(pwd)/data:/app/data \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -e APP_SECRET="$APP_SECRET" \
+  -e APP_SECRET="jimuqu-devops-secret" \
+  -e ADMIN_USERNAME="admin" \
+  -e ADMIN_PASSWORD="admin123" \
   ghcr.io/chengliang4810/jimuqu-devops:latest
 ```
 
@@ -303,15 +335,18 @@ docker run -d --name jimuqu-devops \
 
 #### 3. 可选：切换 MySQL
 
+MySQL 示例：
+
 ```bash
-export APP_SECRET='replace-with-a-long-random-secret'
 docker run -d --name jimuqu-devops \
   -p 18080:18080 \
   -v $(pwd)/data:/app/data \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e APP_DB_DRIVER=mysql \
   -e APP_DB_SOURCE='root:password@tcp(mysql:3306)/jimuqu_devops?charset=utf8mb4&parseTime=true&loc=Local' \
-  -e APP_SECRET="$APP_SECRET" \
+  -e APP_SECRET="jimuqu-devops-secret" \
+  -e ADMIN_USERNAME="admin" \
+  -e ADMIN_PASSWORD="admin123" \
   ghcr.io/chengliang4810/jimuqu-devops:latest
 ```
 
