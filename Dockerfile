@@ -31,7 +31,6 @@ ENV APP_DATA_DIR=/app/data
 ENV APP_DB_DRIVER=sqlite
 ENV APP_DB_SOURCE=/app/data/pipeline.db
 ENV APP_WORKSPACE_DIR=/app/data/workspaces
-ENV APP_SECRET=change-me-in-production
 
 VOLUME ["/app/data"]
 EXPOSE 18080

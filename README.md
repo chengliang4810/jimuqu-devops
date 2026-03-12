@@ -69,6 +69,12 @@ graph LR
 docker build -t jimuqu-devops .
 ```
 
+先设置一个随机 `APP_SECRET`：
+
+```bash
+export APP_SECRET='replace-with-a-long-random-secret'
+```
+
 直接运行：
 
 ```bash
@@ -76,13 +82,14 @@ docker run -d --name jimuqu-devops \
   -p 18080:18080 \
   -v $(pwd)/data:/app/data \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -e APP_SECRET=change-me-in-production \
+  -e APP_SECRET="$APP_SECRET" \
   jimuqu-devops
 ```
 
 或使用 docker compose：
 
 ```bash
+export APP_SECRET='replace-with-a-long-random-secret'
 docker compose up -d --build
 ```
 
@@ -96,6 +103,13 @@ docker compose up -d --build
 - 容器内需要通过 `/var/run/docker.sock` 调用宿主机 Docker，才能执行项目构建
 - 默认使用 SQLite，数据保存在挂载目录 `/app/data`
 - 如果你使用 Windows PowerShell，建议优先使用 `docker compose up -d --build`
+
+PowerShell 示例：
+
+```powershell
+$env:APP_SECRET="replace-with-a-long-random-secret"
+docker compose up -d --build
+```
 
 ### 📦 Download from Release
 
@@ -305,11 +319,12 @@ docker build -t jimuqu-devops .
 #### 2. 启动容器
 
 ```bash
+export APP_SECRET='replace-with-a-long-random-secret'
 docker run -d --name jimuqu-devops \
   -p 18080:18080 \
   -v $(pwd)/data:/app/data \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -e APP_SECRET=replace-with-a-long-random-secret \
+  -e APP_SECRET="$APP_SECRET" \
   jimuqu-devops
 ```
 
@@ -321,13 +336,14 @@ docker run -d --name jimuqu-devops \
 #### 4. 可选：切换 MySQL
 
 ```bash
+export APP_SECRET='replace-with-a-long-random-secret'
 docker run -d --name jimuqu-devops \
   -p 18080:18080 \
   -v $(pwd)/data:/app/data \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e APP_DB_DRIVER=mysql \
   -e APP_DB_SOURCE='root:password@tcp(mysql:3306)/jimuqu_devops?charset=utf8mb4&parseTime=true&loc=Local' \
-  -e APP_SECRET=replace-with-a-long-random-secret \
+  -e APP_SECRET="$APP_SECRET" \
   jimuqu-devops
 ```
 

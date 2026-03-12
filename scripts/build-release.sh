@@ -9,7 +9,8 @@ ARCHIVE_DIR="$BUILD_DIR/archives"
 STAGE_DIR="$BUILD_DIR/staging"
 FRONTEND_DIR="$ROOT_DIR/web-next"
 
-VERSION="${1:-${GITHUB_REF_NAME:-$(git -C "$ROOT_DIR" describe --tags --abbrev=0 2>/dev/null || git -C "$ROOT_DIR" rev-parse --short HEAD)}}"
+RAW_VERSION="${1:-${GITHUB_REF_NAME:-$(git -C "$ROOT_DIR" describe --tags --abbrev=0 2>/dev/null || git -C "$ROOT_DIR" rev-parse --short HEAD)}}"
+VERSION="${RAW_VERSION#v}"
 COMMIT="$(git -C "$ROOT_DIR" rev-parse --short HEAD)"
 BUILD_TIME="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 

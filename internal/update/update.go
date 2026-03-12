@@ -53,10 +53,11 @@ func GetUpdateStatus(ctx context.Context, proxyURL string) (model.UpdateStatus, 
 	}
 
 	currentVersion := version.Current()
+	latestVersion := version.Normalize(release.TagName)
 	return model.UpdateStatus{
 		CurrentVersion: currentVersion,
-		LatestVersion:  release.TagName,
-		HasUpdate:      currentVersion != "" && currentVersion != "dev" && release.TagName != "" && currentVersion != release.TagName,
+		LatestVersion:  latestVersion,
+		HasUpdate:      currentVersion != "" && currentVersion != "dev" && latestVersion != "" && currentVersion != latestVersion,
 	}, nil
 }
 

@@ -1,6 +1,9 @@
 package version
 
-import "runtime/debug"
+import (
+	"runtime/debug"
+	"strings"
+)
 
 const (
 	RepoURL = "https://github.com/chengliang4810/jimuqu-devops.git"
@@ -15,7 +18,7 @@ var (
 
 func Current() string {
 	if Version != "" && Version != "dev" {
-		return Version
+		return Normalize(Version)
 	}
 
 	info, ok := debug.ReadBuildInfo()
@@ -33,8 +36,16 @@ func Current() string {
 	}
 
 	if info.Main.Version != "" && info.Main.Version != "(devel)" {
-		return info.Main.Version
+		return Normalize(info.Main.Version)
 	}
 
 	return "dev"
+}
+
+func Normalize(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) > 0 && value[0] == 'v' {
+		return value[1:]
+	}
+	return value
 }

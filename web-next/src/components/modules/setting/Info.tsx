@@ -20,6 +20,11 @@ function formatReleaseTime(value?: string) {
   return date.toLocaleString("zh-CN", { hour12: false });
 }
 
+function normalizeVersion(value?: string) {
+  if (!value) return "-";
+  return value.startsWith("v") ? value.slice(1) : value;
+}
+
 export function SettingInfo({ systemInfo }: SettingInfoProps) {
   const [latestRelease, setLatestRelease] = useState<ReleaseInfo | null>(null);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
@@ -102,7 +107,7 @@ export function SettingInfo({ systemInfo }: SettingInfoProps) {
           <Tag className="h-5 w-5 text-muted-foreground" />
           <span className="text-sm font-medium">最新版本</span>
         </div>
-        <code className="text-sm text-muted-foreground">{latestRelease?.tag_name || "-"}</code>
+        <code className="text-sm text-muted-foreground">{normalizeVersion(latestRelease?.tag_name)}</code>
       </div>
 
       <div className="flex items-center justify-between gap-4">
