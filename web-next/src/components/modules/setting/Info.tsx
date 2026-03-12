@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import packageJson from "../../../../package.json";
 import { Button } from "@/components/ui/button";
 import { settingApi } from "@/api/client";
 import { toast } from "sonner";
@@ -12,13 +11,6 @@ import type { ReleaseInfo, SystemInfo, UpdateStatus } from "@/types";
 type SettingInfoProps = {
   systemInfo: SystemInfo | null;
 };
-
-function formatReleaseTime(value?: string) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("zh-CN", { hour12: false });
-}
 
 function normalizeVersion(value?: string) {
   if (!value) return "-";
@@ -108,22 +100,6 @@ export function SettingInfo({ systemInfo }: SettingInfoProps) {
           <span className="text-sm font-medium">最新版本</span>
         </div>
         <code className="text-sm text-muted-foreground">{normalizeVersion(latestRelease?.tag_name)}</code>
-      </div>
-
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Tag className="h-5 w-5 text-muted-foreground" />
-          <span className="text-sm font-medium">发布时间</span>
-        </div>
-        <span className="text-sm text-muted-foreground">{formatReleaseTime(latestRelease?.published_at)}</span>
-      </div>
-
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Tag className="h-5 w-5 text-muted-foreground" />
-          <span className="text-sm font-medium">前端版本</span>
-        </div>
-        <code className="text-sm text-muted-foreground">{packageJson.version}</code>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
