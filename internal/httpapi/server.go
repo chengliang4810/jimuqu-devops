@@ -36,7 +36,7 @@ type Server struct {
 }
 
 func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, cfg config.Config) http.Handler {
-	jwtManager := auth.NewJWTManager(cfg.JWTSecret)
+	jwtManager := auth.NewJWTManager(cfg.Secret)
 	server := &Server{
 		store:      store,
 		executor:   executor,
@@ -51,7 +51,6 @@ func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, c
 	router.Use(middleware.Recoverer)
 	router.Use(corsMiddleware)
 
-	server.mountUI(router)
 	router.Get("/healthz", server.handleHealth)
 
 	router.Route("/api/v1", func(r chi.Router) {
@@ -108,6 +107,12 @@ func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, c
 				r.Get("/backup", server.handleExportBackup)
 				r.Post("/restore", server.handleImportBackup)
 				r.Put("/{key}", server.handleUpdateSetting)
+			})
+
+			r.Route("/update", func(r chi.Router) {
+				r.Get("/", server.handleGetLatestRelease)
+				r.Get("/now-version", server.handleGetUpdateStatus)
+				r.Post("/", server.handleApplyUpdate)
 			})
 
 			r.Route("/admin", func(r chi.Router) {
@@ -1006,7 +1011,7 @@ func (s *Server) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 生成JWT token
-	jwtManager := auth.NewJWTManager(s.config.JWTSecret)
+	jwtManager := auth.NewJWTManager(s.config.Secret)
 	token, err := jwtManager.GenerateToken(admin.ID, admin.Username, 24*time.Hour) // 24小时有效期
 	if err != nil {
 		s.logger.Error("failed to generate token", "error", err)

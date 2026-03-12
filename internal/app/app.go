@@ -24,10 +24,12 @@ type App struct {
 }
 
 func New(cfg config.Config, logger *slog.Logger) (*App, error) {
+	artifactDir := filepath.Join(cfg.DataDir, "artifacts")
+
 	dirs := []string{
 		cfg.DataDir,
 		cfg.WorkspaceDir,
-		cfg.ArtifactDir,
+		artifactDir,
 	}
 	if cfg.DBDriver == "" || cfg.DBDriver == store.DriverSQLite {
 		dirs = append(dirs, filepath.Dir(cfg.DBSource))
@@ -59,7 +61,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		return nil, fmt.Errorf("apply run retention: %w", err)
 	}
 
-	executor := pipeline.NewExecutor(appStore, logger, cfg.WorkspaceDir, cfg.ArtifactDir)
+	executor := pipeline.NewExecutor(appStore, logger, cfg.WorkspaceDir, artifactDir)
 
 	return &App{
 		store:    appStore,

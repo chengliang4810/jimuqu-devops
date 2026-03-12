@@ -11,9 +11,7 @@ type Config struct {
 	DBDriver      string
 	DBSource      string
 	WorkspaceDir  string
-	ArtifactDir   string
 	Secret        string
-	JWTSecret     string
 	AdminUsername string
 	AdminPassword string
 }
@@ -30,9 +28,7 @@ func Load() Config {
 		DBDriver:      dbDriver,
 		DBSource:      dbSource,
 		WorkspaceDir:  env("APP_WORKSPACE_DIR", filepath.Join(dataDir, "workspaces")),
-		ArtifactDir:   env("APP_ARTIFACT_DIR", filepath.Join(dataDir, "artifacts")),
 		Secret:        env("APP_SECRET", "change-me-in-production"),
-		JWTSecret:     env("JWT_SECRET", "change-me-in-production"),
 		AdminUsername: env("ADMIN_USERNAME", "admin"),
 		AdminPassword: env("ADMIN_PASSWORD", "admin123"),
 	}
