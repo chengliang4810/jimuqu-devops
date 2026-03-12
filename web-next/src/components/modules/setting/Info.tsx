@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { settingApi } from "@/api/client";
 import { toast } from "sonner";
-import { Download, ExternalLink, Github, Info, RefreshCw, Tag } from "lucide-react";
+import { Download, Github, Info, Tag } from "lucide-react";
 import type { ReleaseInfo, SystemInfo, UpdateStatus } from "@/types";
 
 type SettingInfoProps = {
@@ -20,11 +20,9 @@ function normalizeVersion(value?: string) {
 export function SettingInfo({ systemInfo }: SettingInfoProps) {
   const [latestRelease, setLatestRelease] = useState<ReleaseInfo | null>(null);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
-  const [loading, setLoading] = useState(false);
   const [updating, setUpdating] = useState(false);
 
   const loadUpdateInfo = async (showToast = false) => {
-    setLoading(true);
     try {
       const [release, status] = await Promise.all([
         settingApi.getLatestRelease(),
@@ -39,8 +37,6 @@ export function SettingInfo({ systemInfo }: SettingInfoProps) {
       if (showToast) {
         toast.error(error.message || "检查更新失败");
       }
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -99,39 +95,28 @@ export function SettingInfo({ systemInfo }: SettingInfoProps) {
           <Tag className="h-5 w-5 text-muted-foreground" />
           <span className="text-sm font-medium">最新版本</span>
         </div>
-        <code className="text-sm text-muted-foreground">{normalizeVersion(latestRelease?.tag_name)}</code>
+        <Link
+          href={latestRelease?.html_url || "https://github.com/chengliang4810/jimuqu-devops/releases"}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm text-primary hover:underline"
+        >
+          <code>{normalizeVersion(latestRelease?.tag_name)}</code>
+        </Link>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          className="rounded-xl"
-          onClick={() => void loadUpdateInfo(true)}
-          disabled={loading || updating}
-        >
-          <RefreshCw className="mr-2 h-4 w-4" />
-          检查更新
-        </Button>
-        <Button
-          type="button"
-          className="rounded-xl"
-          onClick={() => void handleApplyUpdate()}
-          disabled={!canApplyUpdate}
-        >
-          <Download className="mr-2 h-4 w-4" />
-          {updating ? "更新中" : "立即更新"}
-        </Button>
-        <Button type="button" variant="ghost" className="rounded-xl" asChild>
-          <Link
-            href={latestRelease?.html_url || "https://github.com/chengliang4810/jimuqu-devops/releases"}
-            target="_blank"
-            rel="noopener noreferrer"
+        {updateStatus?.has_update ? (
+          <Button
+            type="button"
+            className="rounded-xl"
+            onClick={() => void handleApplyUpdate()}
+            disabled={!canApplyUpdate}
           >
-            <ExternalLink className="mr-2 h-4 w-4" />
-            查看 Release
-          </Link>
-        </Button>
+            <Download className="mr-2 h-4 w-4" />
+            {updating ? "更新中" : "立即更新"}
+          </Button>
+        ) : null}
       </div>
 
       {!updateStatus?.has_update ? (
