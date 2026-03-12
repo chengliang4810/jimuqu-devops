@@ -16,14 +16,14 @@ COMMIT="$(git -C "$ROOT_DIR" rev-parse --short HEAD)"
 BUILD_TIME="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
 TARGETS=(
-  "linux amd64 amd64"
-  "linux 386 386"
+  "linux amd64 x86_64"
+  "linux 386 x86"
   "linux arm64 arm64"
   "linux arm armv7"
-  "darwin amd64 amd64"
+  "darwin amd64 x86_64"
   "darwin arm64 arm64"
-  "windows amd64 amd64"
-  "windows 386 386"
+  "windows amd64 x86_64"
+  "windows 386 x86"
   "windows arm64 arm64"
 )
 

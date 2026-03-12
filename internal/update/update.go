@@ -209,18 +209,18 @@ func releaseAssetName() (string, error) {
 	case "windows":
 		switch runtime.GOARCH {
 		case "amd64":
-			return version.AppName + "-windows-amd64.zip", nil
+			return version.AppName + "-windows-x86_64.zip", nil
 		case "386":
-			return version.AppName + "-windows-386.zip", nil
+			return version.AppName + "-windows-x86.zip", nil
 		case "arm64":
 			return version.AppName + "-windows-arm64.zip", nil
 		}
 	case "linux":
 		switch runtime.GOARCH {
 		case "amd64":
-			return version.AppName + "-linux-amd64.zip", nil
+			return version.AppName + "-linux-x86_64.zip", nil
 		case "386":
-			return version.AppName + "-linux-386.zip", nil
+			return version.AppName + "-linux-x86.zip", nil
 		case "arm64":
 			return version.AppName + "-linux-arm64.zip", nil
 		case "arm":
@@ -229,7 +229,7 @@ func releaseAssetName() (string, error) {
 	case "darwin":
 		switch runtime.GOARCH {
 		case "amd64":
-			return version.AppName + "-darwin-amd64.zip", nil
+			return version.AppName + "-darwin-x86_64.zip", nil
 		case "arm64":
 			return version.AppName + "-darwin-arm64.zip", nil
 		}
