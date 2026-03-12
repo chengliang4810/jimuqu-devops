@@ -51,6 +51,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { cn, formatMultilineValue, parseMultilineInput } from "@/lib/utils";
 import { useNavStore } from "@/stores";
 
+type GitAuthType = Project["git_auth_type"];
+
 type DeployConfigFormState = {
   host_id: string;
   build_image: string;
@@ -70,6 +72,12 @@ type ProjectFormState = {
   branch: string;
   repo_url: string;
   description: string;
+  git_auth_type: GitAuthType;
+  git_username: string;
+  git_password: string;
+  git_ssh_key: string;
+  has_existing_git_auth: boolean;
+  original_git_auth_type: GitAuthType;
   deploy_config: DeployConfigFormState;
 };
 
@@ -100,6 +108,12 @@ function createDefaultFormData(): ProjectFormState {
     branch: "main",
     repo_url: "",
     description: "",
+    git_auth_type: "none",
+    git_username: "",
+    git_password: "",
+    git_ssh_key: "",
+    has_existing_git_auth: false,
+    original_git_auth_type: "none",
     deploy_config: { ...defaultDeployConfig },
   };
 }
@@ -128,14 +142,85 @@ function mapDeployConfigToForm(config?: DeployConfig | null): DeployConfigFormSt
   };
 }
 
-function buildProjectPayload(formData: ProjectFormState) {
-  return {
+function buildProjectPayload(formData: ProjectFormState, isEditing: boolean) {
+  const payload: Record<string, unknown> = {
     name: formData.name.trim(),
     branch: formData.branch.trim(),
     repo_url: formData.repo_url.trim(),
     description: formData.description.trim(),
-    git_auth_type: "none",
+    git_auth_type: formData.git_auth_type,
   };
+
+  const canReuseUsernamePassword =
+    isEditing &&
+    formData.has_existing_git_auth &&
+    (formData.original_git_auth_type === "username" || formData.original_git_auth_type === "token") &&
+    (formData.git_auth_type === "username" || formData.git_auth_type === "token");
+
+  const canReuseSSHKey =
+    isEditing &&
+    formData.has_existing_git_auth &&
+    formData.original_git_auth_type === "ssh" &&
+    formData.git_auth_type === "ssh";
+
+  if (formData.git_auth_type === "username" || formData.git_auth_type === "token") {
+    const gitUsername = formData.git_username.trim();
+    const gitPassword = formData.git_password.trim();
+    if (gitUsername !== "" || !canReuseUsernamePassword) {
+      payload.git_username = gitUsername;
+    }
+    if (gitPassword !== "" || !canReuseUsernamePassword) {
+      payload.git_password = gitPassword;
+    }
+  }
+
+  if (formData.git_auth_type === "ssh") {
+    const gitSSHKey = formData.git_ssh_key.trim();
+    if (gitSSHKey !== "" || !canReuseSSHKey) {
+      payload.git_ssh_key = gitSSHKey;
+    }
+  }
+
+  return payload;
+}
+
+function getProjectValidationError(formData: ProjectFormState, isEditing: boolean): string | null {
+  if (!formData.name.trim()) {
+    return "项目名称不能为空";
+  }
+  if (!formData.branch.trim()) {
+    return "分支不能为空";
+  }
+  if (!formData.repo_url.trim()) {
+    return "仓库地址不能为空";
+  }
+
+  const canReuseUsernamePassword =
+    isEditing &&
+    formData.has_existing_git_auth &&
+    (formData.original_git_auth_type === "username" || formData.original_git_auth_type === "token") &&
+    (formData.git_auth_type === "username" || formData.git_auth_type === "token");
+
+  const canReuseSSHKey =
+    isEditing &&
+    formData.has_existing_git_auth &&
+    formData.original_git_auth_type === "ssh" &&
+    formData.git_auth_type === "ssh";
+
+  if (formData.git_auth_type === "username" || formData.git_auth_type === "token") {
+    if (!canReuseUsernamePassword && !formData.git_username.trim()) {
+      return "Git 用户名不能为空";
+    }
+    if (!canReuseUsernamePassword && !formData.git_password.trim()) {
+      return formData.git_auth_type === "token" ? "Git Token 不能为空" : "Git 密码不能为空";
+    }
+  }
+
+  if (formData.git_auth_type === "ssh" && !canReuseSSHKey && !formData.git_ssh_key.trim()) {
+    return "SSH 私钥不能为空";
+  }
+
+  return null;
 }
 
 function buildDeployConfigPayload(formData: DeployConfigFormState) {
@@ -468,6 +553,12 @@ export function Projects() {
         branch: detail.project.branch,
         repo_url: detail.project.repo_url,
         description: detail.project.description || "",
+        git_auth_type: detail.project.git_auth_type || "none",
+        git_username: "",
+        git_password: "",
+        git_ssh_key: "",
+        has_existing_git_auth: detail.project.has_git_auth,
+        original_git_auth_type: detail.project.git_auth_type || "none",
         deploy_config: mapDeployConfigToForm(deployConfig),
       });
       setActiveTab("basic");
@@ -480,6 +571,13 @@ export function Projects() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    const projectError = getProjectValidationError(formData, !!editingProject);
+    if (projectError) {
+      setActiveTab("basic");
+      toast.error(projectError);
+      return;
+    }
+
     const deployConfigError = getDeployConfigValidationError(formData.deploy_config);
     if (deployConfigError) {
       setActiveTab("deploy");
@@ -488,7 +586,7 @@ export function Projects() {
     }
 
     try {
-      const projectPayload = buildProjectPayload(formData);
+      const projectPayload = buildProjectPayload(formData, !!editingProject);
       const deployPayload = buildDeployConfigPayload(formData.deploy_config);
 
       let projectId = editingProject?.id;
@@ -696,6 +794,81 @@ export function Projects() {
                     rows={3}
                   />
                 </div>
+                <div className="grid gap-2">
+                  <Label>仓库认证方式</Label>
+                  <Select
+                    value={formData.git_auth_type}
+                    onValueChange={(value) =>
+                      setFormData({
+                        ...formData,
+                        git_auth_type: value as GitAuthType,
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">公开仓库（无认证）</SelectItem>
+                      <SelectItem value="username">用户名 / 密码</SelectItem>
+                      <SelectItem value="token">用户名 / Token</SelectItem>
+                      <SelectItem value="ssh">SSH 私钥</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {formData.git_auth_type === "username" || formData.git_auth_type === "token" ? (
+                  <>
+                    <div className="grid gap-2">
+                      <Label>Git 用户名</Label>
+                      <Input
+                        value={formData.git_username}
+                        onChange={(e) =>
+                          setFormData({ ...formData, git_username: e.target.value })
+                        }
+                        placeholder={formData.git_auth_type === "token" ? "gitee 用户名" : "git 用户名"}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>{formData.git_auth_type === "token" ? "Git Token" : "Git 密码"}</Label>
+                      <Input
+                        type="password"
+                        value={formData.git_password}
+                        onChange={(e) =>
+                          setFormData({ ...formData, git_password: e.target.value })
+                        }
+                        placeholder={formData.git_auth_type === "token" ? "输入访问 Token" : "输入仓库密码"}
+                      />
+                      {editingProject &&
+                      formData.has_existing_git_auth &&
+                      (formData.original_git_auth_type === "username" ||
+                        formData.original_git_auth_type === "token") ? (
+                        <p className="text-xs text-muted-foreground">
+                          留空则保留当前已保存的 Git 用户名和密码 / Token。
+                        </p>
+                      ) : null}
+                    </div>
+                  </>
+                ) : null}
+                {formData.git_auth_type === "ssh" ? (
+                  <div className="grid gap-2">
+                    <Label>SSH 私钥</Label>
+                    <Textarea
+                      value={formData.git_ssh_key}
+                      onChange={(e) =>
+                        setFormData({ ...formData, git_ssh_key: e.target.value })
+                      }
+                      placeholder={"请输入私钥内容，例如\n-----BEGIN OPENSSH PRIVATE KEY-----"}
+                      rows={6}
+                    />
+                    {editingProject &&
+                    formData.has_existing_git_auth &&
+                    formData.original_git_auth_type === "ssh" ? (
+                      <p className="text-xs text-muted-foreground">
+                        留空则保留当前已保存的 SSH 私钥。
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                     取消

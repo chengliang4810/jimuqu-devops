@@ -332,7 +332,7 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 		s.writeBadRequest(w, err)
 		return
 	}
-	if err := validateProjectInput(input); err != nil {
+	if err := validateProjectInput(input, nil); err != nil {
 		s.writeBadRequest(w, err)
 		return
 	}
@@ -372,7 +372,14 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		s.writeBadRequest(w, err)
 		return
 	}
-	if err = validateProjectInput(input); err != nil {
+
+	currentProject, err := s.store.GetProject(r.Context(), projectID)
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+
+	if err = validateProjectInput(input, &currentProject); err != nil {
 		s.writeBadRequest(w, err)
 		return
 	}
@@ -662,7 +669,7 @@ func validateHostInput(input model.HostUpsert, requirePassword bool) error {
 	return nil
 }
 
-func validateProjectInput(input model.ProjectUpsert) error {
+func validateProjectInput(input model.ProjectUpsert, current *model.Project) error {
 	if strings.TrimSpace(input.Name) == "" {
 		return errors.New("project name is required")
 	}
@@ -693,19 +700,39 @@ func validateProjectInput(input model.ProjectUpsert) error {
 	// 根据认证类型验证必填字段
 	switch gitAuthType {
 	case model.GitAuthTypeUsername, model.GitAuthTypeToken:
-		if input.GitUsername == nil || strings.TrimSpace(*input.GitUsername) == "" {
+		gitUsername := trimStringPtr(input.GitUsername)
+		gitPassword := trimStringPtr(input.GitPassword)
+		existingUsername := ""
+		existingPassword := ""
+		if current != nil {
+			existingUsername = strings.TrimSpace(current.GitUsername)
+			existingPassword = strings.TrimSpace(current.GitPassword)
+		}
+		if gitUsername == "" && existingUsername == "" {
 			return errors.New("git_username is required for username/token authentication")
 		}
-		if input.GitPassword == nil || strings.TrimSpace(*input.GitPassword) == "" {
+		if gitPassword == "" && existingPassword == "" {
 			return errors.New("git_password/token is required for username/token authentication")
 		}
 	case model.GitAuthTypeSSH:
-		if input.GitSSHKey == nil || strings.TrimSpace(*input.GitSSHKey) == "" {
+		gitSSHKey := trimStringPtr(input.GitSSHKey)
+		existingSSHKey := ""
+		if current != nil {
+			existingSSHKey = strings.TrimSpace(current.GitSSHKey)
+		}
+		if gitSSHKey == "" && existingSSHKey == "" {
 			return errors.New("git_ssh_key is required for ssh authentication")
 		}
 	}
 
 	return nil
+}
+
+func trimStringPtr(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return strings.TrimSpace(*value)
 }
 
 func validateDeployConfigInput(input model.DeployConfigUpsert) error {
