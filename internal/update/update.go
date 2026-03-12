@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"devops-pipeline/internal/model"
@@ -122,7 +123,26 @@ func ApplyUpdate(ctx context.Context, proxyURL string) (model.UpdateResult, erro
 func ScheduleRestartAndExit() {
 	go func() {
 		time.Sleep(1200 * time.Millisecond)
-		os.Exit(0)
+		if runtime.GOOS == "windows" {
+			os.Exit(0)
+			return
+		}
+
+		execPath, err := os.Executable()
+		if err != nil {
+			os.Exit(0)
+			return
+		}
+		execPath, err = filepath.Abs(execPath)
+		if err != nil {
+			os.Exit(0)
+			return
+		}
+
+		args := append([]string{execPath}, os.Args[1:]...)
+		if err := syscall.Exec(execPath, args, os.Environ()); err != nil {
+			os.Exit(0)
+		}
 	}()
 }
 
@@ -252,7 +272,7 @@ func applyUnixUpdate(archiveData []byte, targetDir, execPath string) error {
 		return err
 	}
 
-	return startDetachedUnix(execPath, os.Args[1:])
+	return nil
 }
 
 func applyWindowsUpdate(archiveData []byte, targetDir, execPath string) error {
@@ -374,20 +394,6 @@ func copyFile(sourcePath, targetPath string, mode os.FileMode) error {
 	return nil
 }
 
-func startDetachedUnix(execPath string, args []string) error {
-	quotedArgs := make([]string, 0, len(args)+1)
-	quotedArgs = append(quotedArgs, shellQuote(execPath))
-	for _, arg := range args {
-		quotedArgs = append(quotedArgs, shellQuote(arg))
-	}
-
-	command := exec.Command("sh", "-c", fmt.Sprintf("sleep 1; exec %s >/dev/null 2>&1 &", strings.Join(quotedArgs, " ")))
-	if err := command.Start(); err != nil {
-		return fmt.Errorf("schedule restart: %w", err)
-	}
-	return nil
-}
-
 func startDetachedWindowsUpdater(stagingDir, targetDir, execPath string, args []string) error {
 	updaterPath := filepath.Join(stagingDir, "update.bat")
 	quotedArgs := make([]string, 0, len(args))
@@ -413,10 +419,6 @@ func startDetachedWindowsUpdater(stagingDir, targetDir, execPath string, args []
 		return fmt.Errorf("schedule windows updater: %w", err)
 	}
 	return nil
-}
-
-func shellQuote(value string) string {
-	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
 func quoteWindowsArg(value string) string {
