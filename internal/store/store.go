@@ -162,50 +162,9 @@ func (s *Store) ListHosts(ctx context.Context) ([]model.Host, error) {
 }
 
 func (s *Store) CreateProject(ctx context.Context, input model.ProjectUpsert) (model.Project, error) {
-	now := nowString()
-	token, err := randomToken()
-	if err != nil {
-		return model.Project{}, fmt.Errorf("generate webhook token: %w", err)
-	}
-
-	// 处理Git认证信息
-	gitAuthType := input.GitAuthType
-	if gitAuthType == "" {
-		gitAuthType = model.GitAuthTypeNone
-	}
-
-	gitUsernameCipher, err := s.cipher.Encrypt(valueOrEmpty(input.GitUsername))
-	if err != nil {
-		return model.Project{}, fmt.Errorf("encrypt git username: %w", err)
-	}
-
-	gitPasswordCipher, err := s.cipher.Encrypt(valueOrEmpty(input.GitPassword))
-	if err != nil {
-		return model.Project{}, fmt.Errorf("encrypt git password: %w", err)
-	}
-
-	gitSSHKeyCipher, err := s.cipher.Encrypt(valueOrEmpty(input.GitSSHKey))
-	if err != nil {
-		return model.Project{}, fmt.Errorf("encrypt git ssh key: %w", err)
-	}
-
-	nextSortOrder, err := s.nextSortOrder(ctx, s.db, "projects")
+	id, err := s.insertProjectWithExecutor(ctx, s.db, input)
 	if err != nil {
 		return model.Project{}, err
-	}
-	result, err := s.db.ExecContext(
-		ctx,
-		`INSERT INTO projects (sort_order, name, repo_url, branch, description, webhook_token, git_auth_type, git_username_cipher, git_password_cipher, git_ssh_key_cipher, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		nextSortOrder, input.Name, input.RepoURL, input.Branch, input.Description, token, gitAuthType, gitUsernameCipher, gitPasswordCipher, gitSSHKeyCipher, now, now,
-	)
-	if err != nil {
-		return model.Project{}, wrapProjectMutationError("insert", err)
-	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		return model.Project{}, fmt.Errorf("get project id: %w", err)
 	}
 
 	return s.GetProject(ctx, id)
@@ -217,58 +176,61 @@ func (s *Store) UpdateProject(ctx context.Context, id int64, input model.Project
 		return model.Project{}, err
 	}
 
-	// 处理Git认证信息
-	gitAuthType := input.GitAuthType
-	if gitAuthType == "" {
-		gitAuthType = currentProject.GitAuthType
-	}
-
-	// 获取或加密Git认证信息
-	gitUsernameCipher, err := s.cipher.Encrypt(valueOrEmpty(input.GitUsername))
-	if err != nil {
-		return model.Project{}, fmt.Errorf("encrypt git username: %w", err)
-	}
-	if input.GitUsername == nil && currentProject.GitUsername != "" {
-		gitUsernameCipher, err = s.cipher.Encrypt(currentProject.GitUsername)
-		if err != nil {
-			return model.Project{}, fmt.Errorf("encrypt current git username: %w", err)
-		}
-	}
-
-	gitPasswordCipher, err := s.cipher.Encrypt(valueOrEmpty(input.GitPassword))
-	if err != nil {
-		return model.Project{}, fmt.Errorf("encrypt git password: %w", err)
-	}
-	if input.GitPassword == nil && currentProject.GitPassword != "" {
-		gitPasswordCipher, err = s.cipher.Encrypt(currentProject.GitPassword)
-		if err != nil {
-			return model.Project{}, fmt.Errorf("encrypt current git password: %w", err)
-		}
-	}
-
-	gitSSHKeyCipher, err := s.cipher.Encrypt(valueOrEmpty(input.GitSSHKey))
-	if err != nil {
-		return model.Project{}, fmt.Errorf("encrypt git ssh key: %w", err)
-	}
-	if input.GitSSHKey == nil && currentProject.GitSSHKey != "" {
-		gitSSHKeyCipher, err = s.cipher.Encrypt(currentProject.GitSSHKey)
-		if err != nil {
-			return model.Project{}, fmt.Errorf("encrypt current git ssh key: %w", err)
-		}
-	}
-
-	_, err = s.db.ExecContext(
-		ctx,
-		`UPDATE projects
-		 SET name = ?, repo_url = ?, branch = ?, description = ?, git_auth_type = ?, git_username_cipher = ?, git_password_cipher = ?, git_ssh_key_cipher = ?, updated_at = ?
-		 WHERE id = ?`,
-		input.Name, input.RepoURL, input.Branch, input.Description, gitAuthType, gitUsernameCipher, gitPasswordCipher, gitSSHKeyCipher, nowString(), id,
-	)
-	if err != nil {
-		return model.Project{}, wrapProjectMutationError("update", err)
+	if err := s.updateProjectWithExecutor(ctx, s.db, id, currentProject, input); err != nil {
+		return model.Project{}, err
 	}
 
 	return s.GetProject(ctx, id)
+}
+
+func (s *Store) CreateProjectDetail(ctx context.Context, input model.ProjectDetailUpsert) (model.ProjectDetail, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.ProjectDetail{}, fmt.Errorf("begin create project transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	projectID, err := s.insertProjectWithExecutor(ctx, tx, input.ProjectUpsert())
+	if err != nil {
+		return model.ProjectDetail{}, err
+	}
+
+	if err := s.upsertDeployConfigWithExecutor(ctx, tx, projectID, input.DeployConfig); err != nil {
+		return model.ProjectDetail{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return model.ProjectDetail{}, fmt.Errorf("commit create project transaction: %w", err)
+	}
+
+	return s.GetProjectDetail(ctx, projectID)
+}
+
+func (s *Store) UpdateProjectDetail(ctx context.Context, id int64, input model.ProjectDetailUpsert) (model.ProjectDetail, error) {
+	currentProject, err := s.GetProject(ctx, id)
+	if err != nil {
+		return model.ProjectDetail{}, err
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.ProjectDetail{}, fmt.Errorf("begin update project transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	if err := s.updateProjectWithExecutor(ctx, tx, id, currentProject, input.ProjectUpsert()); err != nil {
+		return model.ProjectDetail{}, err
+	}
+
+	if err := s.upsertDeployConfigWithExecutor(ctx, tx, id, input.DeployConfig); err != nil {
+		return model.ProjectDetail{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return model.ProjectDetail{}, fmt.Errorf("commit update project transaction: %w", err)
+	}
+
+	return s.GetProjectDetail(ctx, id)
 }
 
 func (s *Store) DeleteProject(ctx context.Context, id int64) error {
@@ -457,8 +419,16 @@ func (s *Store) UpsertDeployConfig(ctx context.Context, projectID int64, input m
 	if _, err := s.GetProject(ctx, projectID); err != nil {
 		return model.DeployConfig{}, err
 	}
-	if _, err := s.GetHost(ctx, input.HostID); err != nil {
+	if err := s.upsertDeployConfigWithExecutor(ctx, s.db, projectID, input); err != nil {
 		return model.DeployConfig{}, err
+	}
+
+	return s.GetDeployConfigByProjectID(ctx, projectID)
+}
+
+func (s *Store) upsertDeployConfigWithExecutor(ctx context.Context, executor execQueryRowContext, projectID int64, input model.DeployConfigUpsert) error {
+	if _, err := s.GetHost(ctx, input.HostID); err != nil {
+		return err
 	}
 
 	tokenCipher := ""
@@ -466,24 +436,24 @@ func (s *Store) UpsertDeployConfig(ctx context.Context, projectID int64, input m
 		var err error
 		tokenCipher, err = s.cipher.Encrypt(*input.NotifyBearerToken)
 		if err != nil {
-			return model.DeployConfig{}, fmt.Errorf("encrypt notify token: %w", err)
+			return fmt.Errorf("encrypt notify token: %w", err)
 		}
 	}
 
-	currentConfig, err := s.GetDeployConfigByProjectID(ctx, projectID)
+	currentConfig, err := s.getDeployConfigWithExecutor(ctx, executor, projectID)
 	if err == nil && input.NotifyBearerToken == nil {
 		tokenCipher, err = s.cipher.Encrypt(currentConfig.NotifyBearerToken)
 		if err != nil {
-			return model.DeployConfig{}, fmt.Errorf("encrypt existing notify token: %w", err)
+			return fmt.Errorf("encrypt existing notify token: %w", err)
 		}
 	}
 	if err != nil && !errors.Is(err, ErrNotFound) {
-		return model.DeployConfig{}, err
+		return err
 	}
 
 	now := nowString()
 	query := deployConfigUpsertQuery(s.isMySQL())
-	_, err = s.db.ExecContext(
+	_, err = executor.ExecContext(
 		ctx,
 		query,
 		projectID,
@@ -504,10 +474,10 @@ func (s *Store) UpsertDeployConfig(ctx context.Context, projectID int64, input m
 		now,
 	)
 	if err != nil {
-		return model.DeployConfig{}, fmt.Errorf("upsert deploy config: %w", err)
+		return fmt.Errorf("upsert deploy config: %w", err)
 	}
 
-	return s.GetDeployConfigByProjectID(ctx, projectID)
+	return nil
 }
 
 func deployConfigUpsertQuery(isMySQL bool) string {
@@ -928,6 +898,109 @@ func (s *Store) listRunsForDashboard(ctx context.Context) ([]model.PipelineRun, 
 
 type queryRowContext interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+type execQueryRowContext interface {
+	queryRowContext
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
+func (s *Store) insertProjectWithExecutor(ctx context.Context, executor execQueryRowContext, input model.ProjectUpsert) (int64, error) {
+	now := nowString()
+	token, err := randomToken()
+	if err != nil {
+		return 0, fmt.Errorf("generate webhook token: %w", err)
+	}
+
+	gitAuthType, gitUsernameCipher, gitPasswordCipher, gitSSHKeyCipher, err := s.prepareProjectGitAuth(nil, input)
+	if err != nil {
+		return 0, err
+	}
+
+	nextSortOrder, err := s.nextSortOrder(ctx, executor, "projects")
+	if err != nil {
+		return 0, err
+	}
+	result, err := executor.ExecContext(
+		ctx,
+		`INSERT INTO projects (sort_order, name, repo_url, branch, description, webhook_token, git_auth_type, git_username_cipher, git_password_cipher, git_ssh_key_cipher, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		nextSortOrder, input.Name, input.RepoURL, input.Branch, input.Description, token, gitAuthType, gitUsernameCipher, gitPasswordCipher, gitSSHKeyCipher, now, now,
+	)
+	if err != nil {
+		return 0, wrapProjectMutationError("insert", err)
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("get project id: %w", err)
+	}
+	return id, nil
+}
+
+func (s *Store) updateProjectWithExecutor(ctx context.Context, executor execQueryRowContext, id int64, currentProject model.Project, input model.ProjectUpsert) error {
+	gitAuthType, gitUsernameCipher, gitPasswordCipher, gitSSHKeyCipher, err := s.prepareProjectGitAuth(&currentProject, input)
+	if err != nil {
+		return err
+	}
+
+	_, err = executor.ExecContext(
+		ctx,
+		`UPDATE projects
+		 SET name = ?, repo_url = ?, branch = ?, description = ?, git_auth_type = ?, git_username_cipher = ?, git_password_cipher = ?, git_ssh_key_cipher = ?, updated_at = ?
+		 WHERE id = ?`,
+		input.Name, input.RepoURL, input.Branch, input.Description, gitAuthType, gitUsernameCipher, gitPasswordCipher, gitSSHKeyCipher, nowString(), id,
+	)
+	if err != nil {
+		return wrapProjectMutationError("update", err)
+	}
+	return nil
+}
+
+func (s *Store) prepareProjectGitAuth(currentProject *model.Project, input model.ProjectUpsert) (string, string, string, string, error) {
+	gitAuthType := input.GitAuthType
+	if gitAuthType == "" {
+		if currentProject != nil && currentProject.GitAuthType != "" {
+			gitAuthType = currentProject.GitAuthType
+		} else {
+			gitAuthType = model.GitAuthTypeNone
+		}
+	}
+
+	gitUsernameCipher, err := s.cipher.Encrypt(valueOrEmpty(input.GitUsername))
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("encrypt git username: %w", err)
+	}
+	if currentProject != nil && input.GitUsername == nil && currentProject.GitUsername != "" {
+		gitUsernameCipher, err = s.cipher.Encrypt(currentProject.GitUsername)
+		if err != nil {
+			return "", "", "", "", fmt.Errorf("encrypt current git username: %w", err)
+		}
+	}
+
+	gitPasswordCipher, err := s.cipher.Encrypt(valueOrEmpty(input.GitPassword))
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("encrypt git password: %w", err)
+	}
+	if currentProject != nil && input.GitPassword == nil && currentProject.GitPassword != "" {
+		gitPasswordCipher, err = s.cipher.Encrypt(currentProject.GitPassword)
+		if err != nil {
+			return "", "", "", "", fmt.Errorf("encrypt current git password: %w", err)
+		}
+	}
+
+	gitSSHKeyCipher, err := s.cipher.Encrypt(valueOrEmpty(input.GitSSHKey))
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("encrypt git ssh key: %w", err)
+	}
+	if currentProject != nil && input.GitSSHKey == nil && currentProject.GitSSHKey != "" {
+		gitSSHKeyCipher, err = s.cipher.Encrypt(currentProject.GitSSHKey)
+		if err != nil {
+			return "", "", "", "", fmt.Errorf("encrypt current git ssh key: %w", err)
+		}
+	}
+
+	return gitAuthType, gitUsernameCipher, gitPasswordCipher, gitSSHKeyCipher, nil
 }
 
 func (s *Store) nextSortOrder(ctx context.Context, queryer queryRowContext, table string) (int64, error) {

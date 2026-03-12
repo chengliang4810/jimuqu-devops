@@ -119,11 +119,9 @@ export function SettingInfo({ systemInfo }: SettingInfoProps) {
         ) : null}
       </div>
 
-      {!updateStatus?.has_update ? (
+      {!updateStatus?.has_update && updateStatus?.current_version === "dev" ? (
         <p className="text-xs text-muted-foreground">
-          {updateStatus?.current_version === "dev"
-            ? "开发构建不支持在线更新，请使用发布版压缩包或 release 二进制。"
-            : "当前已经是最新版本。"}
+          开发构建不支持在线更新，请使用发布版压缩包或 release 二进制。
         </p>
       ) : null}
     </div>

@@ -327,17 +327,21 @@ func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
-	var input model.ProjectUpsert
+	var input model.ProjectDetailUpsert
 	if err := decodeJSON(r.Body, &input); err != nil {
 		s.writeBadRequest(w, err)
 		return
 	}
-	if err := validateProjectInput(input, nil); err != nil {
+	if err := validateProjectInput(input.ProjectUpsert(), nil); err != nil {
+		s.writeBadRequest(w, err)
+		return
+	}
+	if err := validateDeployConfigInput(input.DeployConfig); err != nil {
 		s.writeBadRequest(w, err)
 		return
 	}
 
-	project, err := s.store.CreateProject(r.Context(), input)
+	project, err := s.store.CreateProjectDetail(r.Context(), input)
 	if err != nil {
 		s.writeError(w, err)
 		return
@@ -367,7 +371,7 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var input model.ProjectUpsert
+	var input model.ProjectDetailUpsert
 	if err = decodeJSON(r.Body, &input); err != nil {
 		s.writeBadRequest(w, err)
 		return
@@ -379,12 +383,16 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = validateProjectInput(input, &currentProject); err != nil {
+	if err = validateProjectInput(input.ProjectUpsert(), &currentProject); err != nil {
+		s.writeBadRequest(w, err)
+		return
+	}
+	if err = validateDeployConfigInput(input.DeployConfig); err != nil {
 		s.writeBadRequest(w, err)
 		return
 	}
 
-	project, err := s.store.UpdateProject(r.Context(), projectID, input)
+	project, err := s.store.UpdateProjectDetail(r.Context(), projectID, input)
 	if err != nil {
 		s.writeError(w, err)
 		return

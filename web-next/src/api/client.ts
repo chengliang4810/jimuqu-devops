@@ -105,12 +105,12 @@ export const projectApi = {
   list: () => request<import("@/types").Project[]>("/projects"),
   get: (id: number) => request<import("@/types").ProjectDetail>(`/projects/${id}`),
   create: (data: any) =>
-    request<import("@/types").Project>("/projects", {
+    request<import("@/types").ProjectDetail>("/projects", {
       method: "POST",
       body: JSON.stringify(data),
     }),
   update: (id: number, data: any) =>
-    request<import("@/types").Project>(`/projects/${id}`, {
+    request<import("@/types").ProjectDetail>(`/projects/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),

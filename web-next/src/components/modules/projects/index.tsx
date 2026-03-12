@@ -143,7 +143,7 @@ function mapDeployConfigToForm(config?: DeployConfig | null): DeployConfigFormSt
 }
 
 function buildProjectPayload(formData: ProjectFormState, isEditing: boolean) {
-  const payload: Record<string, unknown> = {
+  const projectPayload: Record<string, unknown> = {
     name: formData.name.trim(),
     branch: formData.branch.trim(),
     repo_url: formData.repo_url.trim(),
@@ -167,21 +167,24 @@ function buildProjectPayload(formData: ProjectFormState, isEditing: boolean) {
     const gitUsername = formData.git_username.trim();
     const gitPassword = formData.git_password.trim();
     if (gitUsername !== "" || !canReuseUsernamePassword) {
-      payload.git_username = gitUsername;
+      projectPayload.git_username = gitUsername;
     }
     if (gitPassword !== "" || !canReuseUsernamePassword) {
-      payload.git_password = gitPassword;
+      projectPayload.git_password = gitPassword;
     }
   }
 
   if (formData.git_auth_type === "ssh") {
     const gitSSHKey = formData.git_ssh_key.trim();
     if (gitSSHKey !== "" || !canReuseSSHKey) {
-      payload.git_ssh_key = gitSSHKey;
+      projectPayload.git_ssh_key = gitSSHKey;
     }
   }
 
-  return payload;
+  return {
+    ...projectPayload,
+    deploy_config: buildDeployConfigPayload(formData.deploy_config),
+  };
 }
 
 function getProjectValidationError(formData: ProjectFormState, isEditing: boolean): string | null {
@@ -587,22 +590,12 @@ export function Projects() {
 
     try {
       const projectPayload = buildProjectPayload(formData, !!editingProject);
-      const deployPayload = buildDeployConfigPayload(formData.deploy_config);
-
-      let projectId = editingProject?.id;
 
       if (editingProject) {
         await projectApi.update(editingProject.id, projectPayload);
       } else {
-        const createdProject = await projectApi.create(projectPayload);
-        projectId = createdProject.id;
+        await projectApi.create(projectPayload);
       }
-
-      if (!projectId) {
-        throw new Error("项目 ID 不存在");
-      }
-
-      await projectApi.upsertDeployConfig(projectId, deployPayload);
 
       projectsCache = null;
       setDialogOpen(false);

@@ -71,6 +71,31 @@ type ProjectUpsert struct {
 	GitSSHKey   *string `json:"git_ssh_key"`   // SSH私钥
 }
 
+type ProjectDetailUpsert struct {
+	Name         string             `json:"name"`
+	RepoURL      string             `json:"repo_url"`
+	Branch       string             `json:"branch"`
+	Description  string             `json:"description"`
+	GitAuthType  string             `json:"git_auth_type"`
+	GitUsername  *string            `json:"git_username"`
+	GitPassword  *string            `json:"git_password"`
+	GitSSHKey    *string            `json:"git_ssh_key"`
+	DeployConfig DeployConfigUpsert `json:"deploy_config"`
+}
+
+func (p ProjectDetailUpsert) ProjectUpsert() ProjectUpsert {
+	return ProjectUpsert{
+		Name:        p.Name,
+		RepoURL:     p.RepoURL,
+		Branch:      p.Branch,
+		Description: p.Description,
+		GitAuthType: p.GitAuthType,
+		GitUsername: p.GitUsername,
+		GitPassword: p.GitPassword,
+		GitSSHKey:   p.GitSSHKey,
+	}
+}
+
 type ProjectCloneInput struct {
 	Name        string `json:"name"`
 	Branch      string `json:"branch"`
