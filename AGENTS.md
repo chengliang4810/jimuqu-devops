@@ -100,7 +100,8 @@ pnpm start
 |------|--------|------|
 | `APP_ADDR` | `:18080` | 服务监听地址 |
 | `APP_DATA_DIR` | `./data` | 数据目录 |
-| `APP_DB_PATH` | `./data/pipeline.db` | SQLite 数据库路径 |
+| `APP_DB_DRIVER` | `sqlite` | 数据库驱动，支持 `sqlite` / `mysql` |
+| `APP_DB_SOURCE` | `./data/pipeline.db` | 数据源；SQLite 填文件路径，MySQL 填 DSN |
 | `APP_WORKSPACE_DIR` | `./data/workspaces` | Git 工作区目录 |
 | `APP_ARTIFACT_DIR` | `./data/artifacts` | 制品目录 |
 | `APP_SECRET` | `change-me-in-production` | AES 加密密钥 |

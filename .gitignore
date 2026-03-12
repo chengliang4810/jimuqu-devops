@@ -3,6 +3,7 @@ data/
 *.test
 *.out
 *.log
+*.err
 *.db
 *.db-shm
 *.db-wal
@@ -12,6 +13,7 @@ temp/
 *.tmp
 .DS_Store
 Thumbs.db
+.playwright-cli/
 .vscode/
 .idea/
 *.swp

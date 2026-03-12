@@ -60,7 +60,8 @@ internal/httpapi/       - HTTP API 路由和处理器，内置管理后台 UI
 |------|--------|
 | `APP_ADDR` | `:18080` |
 | `APP_DATA_DIR` | `./data` |
-| `APP_DB_PATH` | `./data/pipeline.db` |
+| `APP_DB_DRIVER` | `sqlite` |
+| `APP_DB_SOURCE` | `./data/pipeline.db` |
 | `APP_WORKSPACE_DIR` | `./data/workspaces` |
 | `APP_ARTIFACT_DIR` | `./data/artifacts` |
 | `APP_SECRET` | `change-me-in-production` |
