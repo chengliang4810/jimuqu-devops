@@ -4,11 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-这是一个使用 Go 实现的轻量级 CI/CD 流水线后端服务，支持：
+这是一个使用 Go 实现的轻量级 CI/CD 流水线系统，支持：
 - Git webhook 触发项目构建与自动部署
 - 通过 SSH 部署到远程主机
 - Docker 容器隔离编译环境
-- SQLite 数据存储，敏感信息 AES 加密
+- SQLite / MySQL 数据存储，敏感信息 AES 加密
+- `web-next` 独立前端管理台
+- GitHub Release 在线更新
+- Docker 单镜像打包与启动
 
 ## 常用命令
 
@@ -30,10 +33,12 @@ cmd/server/main.go      - 启动入口，信号处理
 internal/app/app.go     - 应用装配：初始化 Store、Executor、HTTP Handler
 internal/config/        - 环境变量配置加载
 internal/model/         - 领域模型定义（Host、Project、DeployConfig、PipelineRun）
-internal/store/         - SQLite 存储层，含数据库迁移和 CRUD 操作
+internal/store/         - SQLite / MySQL 存储层，含数据库迁移和 CRUD 操作
 internal/crypto/        - AES-GCM 加密工具，用于敏感字段加密
 internal/pipeline/      - 流水线执行器：git clone → docker build → artifact filter → SSH deploy → notify
-internal/httpapi/       - HTTP API 路由和处理器，内置管理后台 UI
+internal/httpapi/       - HTTP API 路由、静态页面挂载和处理器
+internal/update/        - GitHub Release 检查、在线更新、重启逻辑
+web-next/               - 独立前端工程
 ```
 
 ## 流水线执行流程
@@ -63,7 +68,6 @@ internal/httpapi/       - HTTP API 路由和处理器，内置管理后台 UI
 | `APP_DB_DRIVER` | `sqlite` |
 | `APP_DB_SOURCE` | `./data/pipeline.db` |
 | `APP_WORKSPACE_DIR` | `./data/workspaces` |
-| `APP_ARTIFACT_DIR` | `./data/artifacts` |
 | `APP_SECRET` | `change-me-in-production` |
 
 ## Webhook 触发
@@ -73,14 +77,17 @@ internal/httpapi/       - HTTP API 路由和处理器，内置管理后台 UI
 
 ## 前端 (web-next)
 
-**必须使用与 octopus 完全相同的技术栈：**
-- Next.js 16 (非 15)
+当前仓库前端实际使用：
+- Next.js 15.1.6
 - React 19
-- Tailwind CSS v4 (非 v3)
+- Tailwind CSS v4
 - @tailwindcss/postcss
-- tw-animate-css
-- motion (Framer Motion)
-- sonner (通知)
-- zustand (状态管理)
+- motion
+- sonner
+- zustand
+- dnd-kit
+- Recharts
 
-**禁止使用 Tailwind CSS v3 或更低版本。**
+约束：
+- 优先修改 `web-next/src/**`
+- 不要编辑 `web-next/.next/**`、`web-next/out/**`、`web-next/node_modules/**`

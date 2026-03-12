@@ -1,0 +1,11 @@
+.git
+.github
+.playwright-cli
+build
+data
+docs/images
+node_modules
+server.err
+web-next/.next
+web-next/frontend.err
+web-next/node_modules

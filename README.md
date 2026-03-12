@@ -2,7 +2,7 @@
 
 轻量级 CI/CD 部署系统，面向中小团队的项目发布、主机分发和部署日志追踪场景。后端使用 Go，前端管理台使用 Next.js，支持 Git Webhook 触发、Docker 隔离构建、SSH 发布、通知渠道、备份恢复、系统设置和首页统计看板。
 
-当前仓库同时保留了后端内置的旧版静态页面，以及 `web-next` 独立前端。本文档和截图均以当前主用的 `web-next` 管理端为准。
+当前项目主用管理端是 `web-next`。发布包和 Docker 镜像会直接携带 `web-next/out`，启动后访问同一个 `18080` 端口即可打开管理台。
 
 ## 功能概览
 
@@ -22,37 +22,20 @@
 
 ## 系统截图
 
-### 登录页
-
-![登录页](docs/images/login.png)
-
-### 首页统计
-
-![首页统计](docs/images/home.png)
-
-### 主机管理
-
-![主机管理](docs/images/hosts.png)
-
-### 项目管理
-
-![项目管理](docs/images/projects.png)
-
-### 通知渠道
-
-![通知渠道](docs/images/notifications.png)
-
-### 部署记录
-
-![部署记录](docs/images/runs.png)
-
-### 部署日志详情
-
-![部署日志详情](docs/images/run-detail.png)
-
-### 系统设置
-
-![系统设置](docs/images/settings.png)
+<table>
+  <tr>
+    <td align="center"><img src="docs/images/login.png" alt="登录页" width="100%"><br>登录页</td>
+    <td align="center"><img src="docs/images/home.png" alt="首页统计" width="100%"><br>首页统计</td>
+    <td align="center"><img src="docs/images/hosts.png" alt="主机管理" width="100%"><br>主机管理</td>
+    <td align="center"><img src="docs/images/projects.png" alt="项目管理" width="100%"><br>项目管理</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/notifications.png" alt="通知渠道" width="100%"><br>通知渠道</td>
+    <td align="center"><img src="docs/images/runs.png" alt="部署记录" width="100%"><br>部署记录</td>
+    <td align="center"><img src="docs/images/run-detail.png" alt="部署日志详情" width="100%"><br>部署日志详情</td>
+    <td align="center"><img src="docs/images/settings.png" alt="系统设置" width="100%"><br>系统设置</td>
+  </tr>
+</table>
 
 ## 执行流程
 
@@ -78,49 +61,99 @@ graph LR
 
 ## 快速开始
 
-### 1. 启动后端
+### 🐳 Docker
 
-SQLite 示例：
+先在仓库根目录构建镜像：
 
-```powershell
-$env:APP_ADDR=":18080"
-$env:APP_DATA_DIR="./data"
-$env:APP_DB_DRIVER="sqlite"
-$env:APP_DB_SOURCE="./data/pipeline.db"
-$env:APP_WORKSPACE_DIR="./data/workspaces"
-$env:APP_ARTIFACT_DIR="./data/artifacts"
-$env:APP_SECRET="change-me-in-production"
-$env:JWT_SECRET="change-me-in-production"
-$env:ADMIN_USERNAME="admin"
-$env:ADMIN_PASSWORD="admin123"
-
-go run ./cmd/server
+```bash
+docker build -t jimuqu-devops .
 ```
 
-MySQL 示例：
+直接运行：
+
+```bash
+docker run -d --name jimuqu-devops \
+  -p 18080:18080 \
+  -v $(pwd)/data:/app/data \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e APP_SECRET=change-me-in-production \
+  jimuqu-devops
+```
+
+或使用 docker compose：
+
+```bash
+docker compose up -d --build
+```
+
+访问：
+
+- 管理台：`http://127.0.0.1:18080`
+- 健康检查：`http://127.0.0.1:18080/healthz`
+
+说明：
+
+- 容器内需要通过 `/var/run/docker.sock` 调用宿主机 Docker，才能执行项目构建
+- 默认使用 SQLite，数据保存在挂载目录 `/app/data`
+- 如果你使用 Windows PowerShell，建议优先使用 `docker compose up -d --build`
+
+### 📦 Download from Release
+
+从 Releases 下载对应平台压缩包，解压后直接运行：
+
+Linux / macOS：
+
+```bash
+./server
+```
+
+Windows：
+
+```powershell
+.\server.exe
+```
+
+访问：
+
+- 管理台：`http://127.0.0.1:18080`
+
+如果需要指定数据库和监听端口，先设置环境变量再启动。例如 MySQL：
 
 ```powershell
 $env:APP_ADDR=":18080"
-$env:APP_DATA_DIR="./data"
 $env:APP_DB_DRIVER="mysql"
 $env:APP_DB_SOURCE="root:password@tcp(127.0.0.1:3306)/jimuqu_devops?charset=utf8mb4&parseTime=true&loc=Local"
-$env:APP_WORKSPACE_DIR="./data/workspaces"
-$env:APP_ARTIFACT_DIR="./data/artifacts"
 $env:APP_SECRET="change-me-in-production"
-$env:JWT_SECRET="change-me-in-production"
-$env:ADMIN_USERNAME="admin"
-$env:ADMIN_PASSWORD="admin123"
-
-go run ./cmd/server
+.\server.exe
 ```
 
-健康检查：
+SQLite：
 
 ```powershell
-curl http://127.0.0.1:18080/healthz
+$env:APP_ADDR=":18080"
+$env:APP_DB_DRIVER="sqlite"
+$env:APP_DB_SOURCE="./data/pipeline.db"
+$env:APP_SECRET="change-me-in-production"
+.\server.exe
 ```
 
-### 2. 启动前端
+默认管理员账号：
+
+- 用户名：`admin`
+- 密码：`admin123`
+
+默认监听地址：
+
+- `http://127.0.0.1:18080`
+
+### 🌐 Web Console
+
+当前项目主用的管理端是 `web-next`。
+
+- 发布包 / Docker 镜像会直接携带 `web-next/out`
+- 本地开发时仍然建议单独启动前端开发服务
+
+本地开发：
 
 ```powershell
 cd web-next
@@ -128,31 +161,31 @@ pnpm install
 pnpm dev
 ```
 
-打开：
+访问：
 
-- 前端管理台：`http://127.0.0.1:3000`
+- 新版前端：`http://127.0.0.1:3000`
 - 后端 API：`http://127.0.0.1:18080`
-
-默认账号：
-
-- 用户名：`admin`
-- 密码：`admin123`
 
 ## 环境变量
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `APP_ADDR` | `:18080` | 后端监听地址 |
+| `APP_ADDR` | `:18080` | 后端监听地址，不是对外访问 URL |
 | `APP_DATA_DIR` | `./data` | 数据目录 |
 | `APP_DB_DRIVER` | `sqlite` | 数据库驱动，支持 `sqlite` / `mysql` |
 | `APP_DB_SOURCE` | `./data/pipeline.db` | SQLite 文件路径或 MySQL DSN |
 | `APP_WORKSPACE_DIR` | `./data/workspaces` | 构建工作目录 |
-| `APP_ARTIFACT_DIR` | `./data/artifacts` | 制品暂存目录 |
-| `APP_SECRET` | `change-me-in-production` | AES 加密密钥 |
-| `JWT_SECRET` | `change-me-in-production` | JWT 签名密钥 |
+| `APP_SECRET` | `change-me-in-production` | 统一密钥，同时用于 AES-GCM 加密和 JWT 签名 |
 | `ADMIN_USERNAME` | `admin` | 初始管理员用户名 |
 | `ADMIN_PASSWORD` | `admin123` | 初始管理员密码 |
-| `NEXT_PUBLIC_API_BASE_URL` | 空 | 前端在生产环境下可手动指定 API 地址 |
+| `NEXT_PUBLIC_API_BASE_URL` | 空 | 单独部署前端时可手动指定 API 地址 |
+
+说明：
+
+- `APP_ADDR` 只决定程序监听在哪个地址，例如 `:18080` 或 `127.0.0.1:18080`
+- 用户最终访问哪个地址，取决于你是否放在 Nginx、反向代理或域名后面
+- 制品临时目录固定在 `APP_DATA_DIR/artifacts`，不需要单独配置
+- 发布包和 Docker 镜像会从磁盘加载 `web-next/out`
 
 ## 使用步骤
 
@@ -259,54 +292,84 @@ POST /api/v1/webhooks/{token}
 3. 浏览器访问 `http://127.0.0.1:3000`
 4. 前端在开发模式下会自动把 `3000` 端口页面请求转到 `18080` 后端
 
-### 方案二：生产部署
+### 方案二：Docker 部署
 
-适合单机或云服务器部署：
+适合单机、测试环境和小型生产环境：
 
-#### 1. 构建后端
+#### 1. 构建镜像
 
-```powershell
-go build -o server.exe ./cmd/server
+```bash
+docker build -t jimuqu-devops .
 ```
 
-#### 2. 构建前端静态文件
+#### 2. 启动容器
 
-```powershell
-cd web-next
-pnpm install
-pnpm build
+```bash
+docker run -d --name jimuqu-devops \
+  -p 18080:18080 \
+  -v $(pwd)/data:/app/data \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e APP_SECRET=replace-with-a-long-random-secret \
+  jimuqu-devops
 ```
 
-构建成功后，静态文件输出到：
+#### 3. 访问系统
+
+- 管理台：`http://127.0.0.1:18080`
+- 健康检查：`http://127.0.0.1:18080/healthz`
+
+#### 4. 可选：切换 MySQL
+
+```bash
+docker run -d --name jimuqu-devops \
+  -p 18080:18080 \
+  -v $(pwd)/data:/app/data \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e APP_DB_DRIVER=mysql \
+  -e APP_DB_SOURCE='root:password@tcp(mysql:3306)/jimuqu_devops?charset=utf8mb4&parseTime=true&loc=Local' \
+  -e APP_SECRET=replace-with-a-long-random-secret \
+  jimuqu-devops
+```
+
+### 方案三：Release 包部署
+
+适合不使用 Docker 的主机：
+
+#### 1. 解压 Releases 压缩包
+
+压缩包中已经包含：
 
 ```text
+server / server.exe
 web-next/out
+README.md
 ```
 
-#### 3. 启动后端服务
+#### 2. 启动服务
+
+Linux / macOS：
+
+```bash
+./server
+```
+
+Windows：
 
 ```powershell
-$env:APP_DB_DRIVER="mysql"
-$env:APP_DB_SOURCE="root:password@tcp(127.0.0.1:3306)/jimuqu_devops?charset=utf8mb4&parseTime=true&loc=Local"
 .\server.exe
 ```
 
-#### 4. 使用 Nginx 托管前端并代理 API
+#### 3. 反向代理
+
+如果你需要绑定域名，可以把整个 `18080` 端口通过 Nginx 反代出去：
 
 ```nginx
 server {
     listen 80;
     server_name devops.example.com;
 
-    root /opt/jimuqu-devops/web-next/out;
-    index index.html;
-
     location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    location /api/v1/ {
-        proxy_pass http://127.0.0.1:18080/api/v1/;
+        proxy_pass http://127.0.0.1:18080;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -314,19 +377,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_buffering off;
     }
-
-    location /healthz {
-        proxy_pass http://127.0.0.1:18080/healthz;
-        proxy_set_header Host $host;
-    }
 }
-```
-
-如果前端和后端不是同域部署，可以在前端构建前设置：
-
-```powershell
-$env:NEXT_PUBLIC_API_BASE_URL="https://api.example.com"
-pnpm build
 ```
 
 ## 目录结构
@@ -335,12 +386,14 @@ pnpm build
 cmd/server                 启动入口
 internal/app               应用装配
 internal/config            环境变量加载
-internal/httpapi           HTTP API 与旧版内置页面
+internal/httpapi           HTTP API、认证中间件、SSE/日志流
 internal/model             数据模型
 internal/pipeline          构建与部署执行器
 internal/store             SQLite / MySQL 存储实现
 web-next                   当前主用管理端
 docs/images                README 截图资源
+scripts/build-release.sh   打包 release 资源包
+.github/workflows          GitHub Actions 发布流程
 ```
 
 ## 安全说明
@@ -353,4 +406,3 @@ docs/images                README 截图资源
 ## 仓库地址
 
 - GitHub：<https://github.com/chengliang4810/jimuqu-devops.git>
-

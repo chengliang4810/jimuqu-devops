@@ -7,8 +7,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 这是一个轻量级 DevOps / CI/CD 系统，当前仓库包含：
 
 - Go 后端服务：负责认证、项目/主机/通知渠道管理、Webhook 触发、流水线执行、运行记录查询
-- 内置管理后台：后端通过 `internal/httpapi/web` 提供一套嵌入式管理界面
-- `web-next` 前端：基于 Next.js 的独立前端实现，作为新界面工程推进中
+- `web-next` 前端：基于 Next.js 的独立前端实现，发布包和 Docker 镜像会携带构建后的 `web-next/out`
 
 后端核心能力包括：
 
@@ -29,18 +28,23 @@ internal/app/app.go            - 应用装配：初始化目录、Store、Execut
 internal/auth/                 - JWT 生成与校验
 internal/config/config.go      - 环境变量配置加载
 internal/crypto/               - AES-GCM 与 HMAC 工具
-internal/httpapi/              - HTTP API、认证中间件、SSE/日志流、内置管理界面
-internal/httpapi/web/          - 嵌入式静态后台资源
+internal/httpapi/              - HTTP API、认证中间件、SSE/日志流、磁盘静态页面挂载
 internal/model/                - 领域模型：管理员、主机、项目、部署配置、运行记录、通知渠道
 internal/notification/         - 通知发送相关逻辑
 internal/pipeline/executor.go  - 流水线执行器：clone/build/filter/upload/deploy/notify
 internal/store/store.go        - SQLite 存储、迁移、CRUD、加密字段落库
+internal/update/               - GitHub Release 检查、在线更新、重启逻辑
+internal/version/              - 版本号、提交号、仓库信息
 web-next/                      - 独立前端工程（Next.js + React + Tailwind CSS v4）
 web-next/src/app/              - App Router 页面入口
 web-next/src/components/       - 页面模块与 UI 组件
 web-next/src/stores/           - Zustand 状态管理
 web-next/src/lib,src/api/      - 前端 API 封装
 data/                          - 运行期数据目录（数据库、工作区、制品等）
+scripts/build-release.sh       - Release 资源包打包脚本
+.github/workflows/             - GitHub Actions 发布流程
+Dockerfile                     - 单镜像构建后端和 web-next 静态资源
+docker-compose.yml             - 本地 / 服务器快速启动示例
 ```
 
 ## 常用命令
@@ -81,7 +85,7 @@ pnpm start
 
 后端默认监听 `:18080`，首次启动会自动：
 
-- 创建 `data`、`workspaces`、`artifacts` 等目录
+- 创建 `data`、`workspaces`、`artifacts` 等内部目录
 - 初始化 SQLite 数据库和表结构
 - 在管理员不存在时创建默认账号
 
@@ -94,6 +98,8 @@ pnpm start
 
 - `NEXT_PUBLIC_API_BASE_URL`：当前端与后端分离部署时指定 API 基础地址
 
+发布包或 Docker 镜像中，后端会从磁盘查找并挂载 `web-next/out`，默认访问同一个 `18080` 端口即可打开管理台。
+
 ## 环境变量
 
 | 变量 | 默认值 | 说明 |
@@ -103,9 +109,7 @@ pnpm start
 | `APP_DB_DRIVER` | `sqlite` | 数据库驱动，支持 `sqlite` / `mysql` |
 | `APP_DB_SOURCE` | `./data/pipeline.db` | 数据源；SQLite 填文件路径，MySQL 填 DSN |
 | `APP_WORKSPACE_DIR` | `./data/workspaces` | Git 工作区目录 |
-| `APP_ARTIFACT_DIR` | `./data/artifacts` | 制品目录 |
-| `APP_SECRET` | `change-me-in-production` | AES 加密密钥 |
-| `JWT_SECRET` | `change-me-in-production` | JWT 签名密钥 |
+| `APP_SECRET` | `change-me-in-production` | 统一密钥，同时用于 AES-GCM 加密和 JWT 签名 |
 | `ADMIN_USERNAME` | `admin` | 初始管理员用户名 |
 | `ADMIN_PASSWORD` | `admin123` | 初始管理员密码 |
 
@@ -172,5 +176,5 @@ Webhook 分支识别支持：
 - 涉及后端改动时，优先查看 `internal/httpapi/server.go`、`internal/pipeline/executor.go`、`internal/store/store.go`
 - 涉及鉴权改动时，同时检查 `internal/auth`、`internal/httpapi/middleware.go`、登录接口
 - 涉及通知渠道改动时，同时检查模型、校验逻辑、发送逻辑、存储加密逻辑
-- 涉及前端改动时，先确认是内置后台 `internal/httpapi/web` 还是独立前端 `web-next`
+- 涉及前端改动时，优先修改独立前端 `web-next`
 - 若同时修改前后端接口，保持字段命名和校验规则一致
