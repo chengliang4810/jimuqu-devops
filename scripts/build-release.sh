@@ -8,6 +8,7 @@ BUILD_DIR="$ROOT_DIR/build"
 ARCHIVE_DIR="$BUILD_DIR/archives"
 STAGE_DIR="$BUILD_DIR/staging"
 FRONTEND_DIR="$ROOT_DIR/web-next"
+EMBED_DIR="$ROOT_DIR/internal/httpapi/webdist"
 
 RAW_VERSION="${1:-${GITHUB_REF_NAME:-$(git -C "$ROOT_DIR" describe --tags --abbrev=0 2>/dev/null || git -C "$ROOT_DIR" rev-parse --short HEAD)}}"
 VERSION="${RAW_VERSION#v}"
@@ -54,17 +55,29 @@ archive_stage() {
 rm -rf "$BUILD_DIR"
 mkdir -p "$ARCHIVE_DIR" "$STAGE_DIR"
 
+cleanup_embed_dir() {
+  find "$EMBED_DIR" -mindepth 1 ! -name '.gitignore' ! -name '.keep' -exec rm -rf {} +
+}
+
+sync_embed_assets() {
+  cleanup_embed_dir
+  cp -R "$FRONTEND_DIR/out/." "$EMBED_DIR/"
+}
+
 pushd "$FRONTEND_DIR" >/dev/null
 pnpm install --frozen-lockfile
 NEXT_PUBLIC_APP_VERSION="$VERSION" pnpm build
 popd >/dev/null
+
+sync_embed_assets
+trap cleanup_embed_dir EXIT
 
 for target in "${TARGETS[@]}"; do
   read -r GOOS GOARCH ARCH_LABEL <<<"$target"
 
   PACKAGE_NAME="${APP_NAME}-${GOOS}-${ARCH_LABEL}"
   STAGE_PATH="$STAGE_DIR/$PACKAGE_NAME"
-  mkdir -p "$STAGE_PATH/web-next"
+  mkdir -p "$STAGE_PATH"
 
   BINARY_NAME="server"
   if [[ "$GOOS" == "windows" ]]; then
@@ -80,7 +93,6 @@ for target in "${TARGETS[@]}"; do
   popd >/dev/null
 
   cp "$ROOT_DIR/README.md" "$STAGE_PATH/"
-  cp -R "$FRONTEND_DIR/out" "$STAGE_PATH/web-next/out"
 
   archive_stage "$STAGE_PATH" "$ARCHIVE_DIR/$PACKAGE_NAME.zip"
 done

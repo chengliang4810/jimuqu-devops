@@ -14,7 +14,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . ./
-COPY --from=frontend-builder /app/web-next/out ./web-next/out
+RUN find ./internal/httpapi/webdist -mindepth 1 ! -name '.gitignore' ! -name '.keep' -exec rm -rf {} +
+COPY --from=frontend-builder /app/web-next/out/. ./internal/httpapi/webdist/
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server
 
 FROM alpine:3.22
@@ -23,7 +24,6 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates tzdata git openssh-client docker-cli
 
 COPY --from=backend-builder /out/server ./server
-COPY --from=frontend-builder /app/web-next/out ./web-next/out
 COPY README.md ./README.md
 
 ENV APP_ADDR=:18080

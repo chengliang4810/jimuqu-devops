@@ -2,7 +2,7 @@
 
 轻量级 CI/CD 部署系统，面向中小团队的项目发布、主机分发和部署日志追踪场景。后端使用 Go，前端管理台使用 Next.js，支持 Git Webhook 触发、Docker 隔离构建、SSH 发布、通知渠道、备份恢复、系统设置和首页统计看板。
 
-当前项目主用管理端是 `web-next`。发布包和 Docker 镜像会直接携带 `web-next/out`，启动后访问同一个 `18080` 端口即可打开管理台。
+当前项目主用管理端是 `web-next`。发布包和 Docker 镜像会先编译前端，再把产物嵌入后端程序中，启动后访问同一个 `18080` 端口即可打开管理台。
 
 ## 功能概览
 
@@ -113,7 +113,7 @@ docker compose up -d --build
 
 ### 📦 Download from Release
 
-从 Releases 下载对应平台压缩包，解压后直接运行：
+从 Releases 下载对应平台压缩包，解压后直接运行单个后端程序：
 
 Linux / macOS：
 
@@ -164,7 +164,7 @@ $env:APP_SECRET="change-me-in-production"
 
 当前项目主用的管理端是 `web-next`。
 
-- 发布包 / Docker 镜像会直接携带 `web-next/out`
+- 发布包 / Docker 镜像会把前端资源嵌入到后端程序中
 - 本地开发时仍然建议单独启动前端开发服务
 
 本地开发：
@@ -199,7 +199,7 @@ pnpm dev
 - `APP_ADDR` 只决定程序监听在哪个地址，例如 `:18080` 或 `127.0.0.1:18080`
 - 用户最终访问哪个地址，取决于你是否放在 Nginx、反向代理或域名后面
 - 制品临时目录固定在 `APP_DATA_DIR/artifacts`，不需要单独配置
-- 发布包和 Docker 镜像会从磁盘加载 `web-next/out`
+- 发布包和 Docker 镜像会在构建时把前端资源嵌入到后端程序
 
 ## 使用步骤
 
@@ -353,11 +353,10 @@ docker run -d --name jimuqu-devops \
 
 #### 1. 解压 Releases 压缩包
 
-压缩包中已经包含：
+压缩包中包含：
 
 ```text
 server / server.exe
-web-next/out
 README.md
 ```
 

@@ -12,6 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `web-next` 独立前端管理台
 - GitHub Release 在线更新
 - Docker 单镜像打包与启动
+- 前端构建产物嵌入后端二进制
 
 ## 常用命令
 

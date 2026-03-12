@@ -7,7 +7,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 这是一个轻量级 DevOps / CI/CD 系统，当前仓库包含：
 
 - Go 后端服务：负责认证、项目/主机/通知渠道管理、Webhook 触发、流水线执行、运行记录查询
-- `web-next` 前端：基于 Next.js 的独立前端实现，发布包和 Docker 镜像会携带构建后的 `web-next/out`
+- `web-next` 前端：基于 Next.js 的独立前端实现，发布包和 Docker 镜像会将前端产物嵌入后端程序
 
 后端核心能力包括：
 
@@ -98,7 +98,7 @@ pnpm start
 
 - `NEXT_PUBLIC_API_BASE_URL`：当前端与后端分离部署时指定 API 基础地址
 
-发布包或 Docker 镜像中，后端会从磁盘查找并挂载 `web-next/out`，默认访问同一个 `18080` 端口即可打开管理台。
+发布包或 Docker 镜像中，后端会优先提供嵌入式前端资源；本地开发时如果未嵌入，则回退到磁盘 `web-next/out`。
 
 ## 环境变量
 
