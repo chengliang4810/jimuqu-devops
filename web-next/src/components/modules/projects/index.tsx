@@ -77,6 +77,8 @@ type ProjectFormState = {
   git_password: string;
   git_ssh_key: string;
   has_existing_git_auth: boolean;
+  has_existing_git_password: boolean;
+  has_existing_git_ssh_key: boolean;
   original_git_auth_type: GitAuthType;
   deploy_config: DeployConfigFormState;
 };
@@ -113,6 +115,8 @@ function createDefaultFormData(): ProjectFormState {
     git_password: "",
     git_ssh_key: "",
     has_existing_git_auth: false,
+    has_existing_git_password: false,
+    has_existing_git_ssh_key: false,
     original_git_auth_type: "none",
     deploy_config: { ...defaultDeployConfig },
   };
@@ -557,10 +561,12 @@ export function Projects() {
         repo_url: detail.project.repo_url,
         description: detail.project.description || "",
         git_auth_type: detail.project.git_auth_type || "none",
-        git_username: "",
+        git_username: detail.project.git_username || "",
         git_password: "",
         git_ssh_key: "",
         has_existing_git_auth: detail.project.has_git_auth,
+        has_existing_git_password: detail.project.has_git_password,
+        has_existing_git_ssh_key: detail.project.has_git_ssh_key,
         original_git_auth_type: detail.project.git_auth_type || "none",
         deploy_config: mapDeployConfigToForm(deployConfig),
       });
@@ -742,7 +748,23 @@ export function Projects() {
               配置项目基础信息、编译参数和部署参数。
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} autoComplete="off">
+            <input
+              type="text"
+              name="username"
+              autoComplete="username"
+              tabIndex={-1}
+              aria-hidden="true"
+              className="hidden"
+            />
+            <input
+              type="password"
+              name="password"
+              autoComplete="current-password"
+              tabIndex={-1}
+              aria-hidden="true"
+              className="hidden"
+            />
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="basic">基础信息</TabsTrigger>
@@ -754,6 +776,8 @@ export function Projects() {
                 <div className="grid gap-2">
                   <Label>项目名称</Label>
                   <Input
+                    name="project_name"
+                    autoComplete="off"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="portal-prod"
@@ -763,6 +787,8 @@ export function Projects() {
                 <div className="grid gap-2">
                   <Label>分支</Label>
                   <Input
+                    name="project_branch"
+                    autoComplete="off"
                     value={formData.branch}
                     onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
                     placeholder="main"
@@ -772,19 +798,12 @@ export function Projects() {
                 <div className="grid gap-2">
                   <Label>仓库地址</Label>
                   <Input
+                    name="project_repo_url"
+                    autoComplete="off"
                     value={formData.repo_url}
                     onChange={(e) => setFormData({ ...formData, repo_url: e.target.value })}
                     placeholder="https://github.com/example/app.git"
                     required
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label>描述</Label>
-                  <Textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="可填写环境、用途或备注"
-                    rows={3}
                   />
                 </div>
                 <div className="grid gap-2">
@@ -814,6 +833,11 @@ export function Projects() {
                     <div className="grid gap-2">
                       <Label>Git 用户名</Label>
                       <Input
+                        name="git_credential_user"
+                        autoComplete="off"
+                        data-1p-ignore="true"
+                        data-lpignore="true"
+                        spellCheck={false}
                         value={formData.git_username}
                         onChange={(e) =>
                           setFormData({ ...formData, git_username: e.target.value })
@@ -825,18 +849,30 @@ export function Projects() {
                       <Label>{formData.git_auth_type === "token" ? "Git Token" : "Git 密码"}</Label>
                       <Input
                         type="password"
+                        name="git_credential_secret"
+                        autoComplete="new-password"
+                        data-1p-ignore="true"
+                        data-lpignore="true"
                         value={formData.git_password}
                         onChange={(e) =>
                           setFormData({ ...formData, git_password: e.target.value })
                         }
-                        placeholder={formData.git_auth_type === "token" ? "输入访问 Token" : "输入仓库密码"}
+                        placeholder={
+                          editingProject && formData.has_existing_git_password
+                            ? formData.git_auth_type === "token"
+                              ? "已保存 Token，留空则不修改"
+                              : "已保存密码，留空则不修改"
+                            : formData.git_auth_type === "token"
+                              ? "输入访问 Token"
+                              : "输入仓库密码"
+                        }
                       />
                       {editingProject &&
-                      formData.has_existing_git_auth &&
+                      formData.has_existing_git_password &&
                       (formData.original_git_auth_type === "username" ||
                         formData.original_git_auth_type === "token") ? (
                         <p className="text-xs text-muted-foreground">
-                          留空则保留当前已保存的 Git 用户名和密码 / Token。
+                          用户名会直接回显；密码 / Token 已保存，留空则继续沿用。
                         </p>
                       ) : null}
                     </div>
@@ -846,6 +882,11 @@ export function Projects() {
                   <div className="grid gap-2">
                     <Label>SSH 私钥</Label>
                     <Textarea
+                      name="git_credential_ssh_key"
+                      autoComplete="off"
+                      data-1p-ignore="true"
+                      data-lpignore="true"
+                      spellCheck={false}
                       value={formData.git_ssh_key}
                       onChange={(e) =>
                         setFormData({ ...formData, git_ssh_key: e.target.value })
@@ -854,7 +895,7 @@ export function Projects() {
                       rows={6}
                     />
                     {editingProject &&
-                    formData.has_existing_git_auth &&
+                    formData.has_existing_git_ssh_key &&
                     formData.original_git_auth_type === "ssh" ? (
                       <p className="text-xs text-muted-foreground">
                         留空则保留当前已保存的 SSH 私钥。

@@ -52,10 +52,12 @@ type Project struct {
 	WebhookToken    string    `json:"webhook_token"`
 	HasDeployConfig bool      `json:"has_deploy_config"`
 	GitAuthType     string    `json:"git_auth_type"` // none/username/token/ssh
-	GitUsername     string    `json:"-"`             // Git用户名（加密）
+	GitUsername     string    `json:"git_username"`  // Git用户名（加密）
 	GitPassword     string    `json:"-"`             // Git密码/Token（加密）
 	GitSSHKey       string    `json:"-"`             // SSH私钥（加密）
 	HasGitAuth      bool      `json:"has_git_auth"`  // 是否配置了Git认证
+	HasGitPassword  bool      `json:"has_git_password"`
+	HasGitSSHKey    bool      `json:"has_git_ssh_key"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }

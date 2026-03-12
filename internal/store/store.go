@@ -1168,6 +1168,9 @@ func (s *Store) scanProjectWithGitAuth(scan scanner) (model.Project, error) {
 		}
 	}
 
+	project.HasGitPassword = project.GitPassword != ""
+	project.HasGitSSHKey = project.GitSSHKey != ""
+
 	// 判断是否有Git认证信息
 	project.HasGitAuth = project.GitAuthType != model.GitAuthTypeNone &&
 		(project.GitUsername != "" || project.GitPassword != "" || project.GitSSHKey != "")

@@ -22,7 +22,10 @@ export interface Project {
   webhook_token: string;
   has_deploy_config: boolean;
   git_auth_type: "none" | "username" | "token" | "ssh";
+  git_username: string;
   has_git_auth: boolean;
+  has_git_password: boolean;
+  has_git_ssh_key: boolean;
   created_at: string;
   updated_at: string;
 }

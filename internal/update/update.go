@@ -110,14 +110,14 @@ func ApplyUpdate(ctx context.Context, proxyURL string) (model.UpdateResult, erro
 		if err := applyWindowsUpdate(archiveData, targetDir, execPath); err != nil {
 			return model.UpdateResult{}, err
 		}
-		return model.UpdateResult{Message: "update downloaded, application will restart shortly"}, nil
+		return model.UpdateResult{Message: "更新包已下载，应用即将自动重启"}, nil
 	}
 
 	if err := applyUnixUpdate(archiveData, targetDir, execPath); err != nil {
 		return model.UpdateResult{}, err
 	}
 
-	return model.UpdateResult{Message: "update applied, application will restart shortly"}, nil
+	return model.UpdateResult{Message: "更新已应用，应用即将自动重启"}, nil
 }
 
 func ScheduleRestartAndExit() {
