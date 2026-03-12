@@ -173,6 +173,29 @@ export interface SystemInfo {
   version: string;
 }
 
+export interface ReleaseAsset {
+  name: string;
+  browser_download_url: string;
+}
+
+export interface ReleaseInfo {
+  tag_name: string;
+  published_at: string;
+  body: string;
+  html_url: string;
+  assets: ReleaseAsset[];
+}
+
+export interface UpdateStatus {
+  current_version: string;
+  latest_version: string;
+  has_update: boolean;
+}
+
+export interface UpdateResult {
+  message: string;
+}
+
 // 登录请求
 export interface LoginRequest {
   username: string;

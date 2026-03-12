@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"devops-pipeline/internal/model"
+	"devops-pipeline/internal/update"
 	"devops-pipeline/internal/version"
 
 	"github.com/go-chi/chi/v5"
@@ -163,6 +164,37 @@ func (s *Server) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleGetLatestRelease(w http.ResponseWriter, r *http.Request) {
+	proxyURL := s.getProxyURL(r)
+	release, err := update.GetLatestRelease(r.Context(), proxyURL)
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, release)
+}
+
+func (s *Server) handleGetUpdateStatus(w http.ResponseWriter, r *http.Request) {
+	proxyURL := s.getProxyURL(r)
+	status, err := update.GetUpdateStatus(r.Context(), proxyURL)
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (s *Server) handleApplyUpdate(w http.ResponseWriter, r *http.Request) {
+	proxyURL := s.getProxyURL(r)
+	result, err := update.ApplyUpdate(r.Context(), proxyURL)
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+	update.ScheduleRestartAndExit()
+}
+
 func validateSettingKey(key string) error {
 	switch key {
 	case model.SettingDockerMirrorURL, model.SettingProxyURL, model.SettingRunRetentionDays:
@@ -170,6 +202,14 @@ func validateSettingKey(key string) error {
 	default:
 		return errors.New("unsupported setting key")
 	}
+}
+
+func (s *Server) getProxyURL(r *http.Request) string {
+	proxyURL, err := s.store.GetSettingValue(r.Context(), model.SettingProxyURL)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(proxyURL)
 }
 
 func validateSettingValue(key, value string) error {

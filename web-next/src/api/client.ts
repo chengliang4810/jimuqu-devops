@@ -203,4 +203,7 @@ export const settingApi = {
       body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
     }),
   getSystemInfo: () => request<import("@/types").SystemInfo>("/system/info"),
+  getLatestRelease: () => request<import("@/types").ReleaseInfo>("/update"),
+  getUpdateStatus: () => request<import("@/types").UpdateStatus>("/update/now-version"),
+  applyUpdate: () => request<import("@/types").UpdateResult>("/update", { method: "POST" }),
 };
