@@ -133,6 +133,8 @@ func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, c
 		r.Get("/runs/{runID}/stream", server.handleStreamRun)
 	})
 
+	server.mountStaticUI(router)
+
 	return router
 }
 
