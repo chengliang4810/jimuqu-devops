@@ -19,6 +19,8 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -100,6 +102,52 @@ func (e *Executor) Trigger(ctx context.Context, projectID int64, triggerType, tr
 	return run, nil
 }
 
+func (e *Executor) CancelRun(ctx context.Context, runID int64) (model.PipelineRun, error) {
+	run, err := e.store.GetRun(ctx, runID)
+	if err != nil {
+		return model.PipelineRun{}, err
+	}
+
+	switch run.Status {
+	case model.RunStatusQueued, model.RunStatusRunning:
+	default:
+		return model.PipelineRun{}, fmt.Errorf("只能取消等待中或运行中的部署任务")
+	}
+
+	e.cancelMutex.Lock()
+	if cancel, exists := e.cancelFuncs[runID]; exists {
+		cancel()
+		delete(e.cancelFuncs, runID)
+	}
+	e.cancelMutex.Unlock()
+
+	errorMessage := "deployment cancelled manually"
+	if err := e.store.FinalizeRun(ctx, runID, model.RunStatusFailed, errorMessage); err != nil {
+		return model.PipelineRun{}, err
+	}
+
+	logLine := fmt.Sprintf("[%s] %s\n", time.Now().Local().Format("2006-01-02 15:04:05"), errorMessage)
+	if err := e.store.AppendRunLog(ctx, runID, logLine); err != nil {
+		return model.PipelineRun{}, err
+	}
+
+	return e.store.GetRun(ctx, runID)
+}
+
+func (e *Executor) cleanupRunFiles(runID int64) {
+	paths := []string{
+		filepath.Join(e.workspaceRoot, fmt.Sprintf("run-%d", runID)),
+		filepath.Join(e.artifactRoot, fmt.Sprintf("run-%d", runID)),
+		filepath.Join(e.artifactRoot, fmt.Sprintf("run-%d.tgz", runID)),
+	}
+
+	for _, target := range paths {
+		if err := os.RemoveAll(target); err != nil {
+			e.logger.Warn("清理任务目录失败 (cleanup run files failed)", "run_id", runID, "path", target, "error", err)
+		}
+	}
+}
+
 func (e *Executor) cancelRunningDeployments(ctx context.Context, projectID int64) {
 	// 获取运行中的部署，只需要获取最近100条记录
 	runs, err := e.store.ListAllRuns(ctx, 0, 100)
@@ -135,6 +183,8 @@ func (e *Executor) cancelRunningDeployments(ctx context.Context, projectID int64
 }
 
 func (e *Executor) execute(ctx context.Context, runID, projectID int64, triggerType, triggerRef string) {
+	defer e.cleanupRunFiles(runID)
+
 	// 清理取消函数
 	defer func() {
 		e.cancelMutex.Lock()
@@ -598,6 +648,10 @@ func (e *Executor) deployToRemote(bundle model.ExecutionBundle, artifactDir stri
 	if err := runRemoteCommandWithLogging(client, extractCommand, logf); err != nil {
 		return fmt.Errorf("extract artifact archive failed: %w", err)
 	}
+	projectSaveDir := path.Join(bundle.DeployConfig.RemoteSaveDir, sanitizeName(bundle.Project.Name))
+	if err := pruneRemoteRunDirs(sftpClient, projectSaveDir, runID, bundle.DeployConfig.VersionCount, logf); err != nil {
+		return fmt.Errorf("prune remote run dirs: %w", err)
+	}
 
 	for _, command := range bundle.DeployConfig.PreDeployCommands {
 		logf("deploy pre-command: %s", command)
@@ -756,6 +810,79 @@ func uploadFile(client *sftp.Client, localPath, remotePath string, logf func(str
 		return fmt.Errorf("chmod remote file %s: %w", remotePath, err)
 	}
 	logf("uploaded artifact archive: %s (completed)", filepath.Base(localPath))
+	return nil
+}
+
+func pruneRemoteRunDirs(client *sftp.Client, projectSaveDir string, currentRunID int64, keepCount int, logf func(string, ...any)) error {
+	if keepCount <= 0 {
+		keepCount = 5
+	}
+
+	entries, err := client.ReadDir(projectSaveDir)
+	if err != nil {
+		return fmt.Errorf("read remote save dir %s: %w", projectSaveDir, err)
+	}
+
+	type remoteRunDir struct {
+		name  string
+		runID int64
+	}
+
+	runDirs := make([]remoteRunDir, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), "run-") {
+			continue
+		}
+		runID, parseErr := strconv.ParseInt(strings.TrimPrefix(entry.Name(), "run-"), 10, 64)
+		if parseErr != nil {
+			continue
+		}
+		runDirs = append(runDirs, remoteRunDir{name: entry.Name(), runID: runID})
+	}
+
+	sort.Slice(runDirs, func(i, j int) bool {
+		return runDirs[i].runID > runDirs[j].runID
+	})
+
+	kept := 0
+	for _, runDir := range runDirs {
+		if runDir.runID == currentRunID || kept < keepCount {
+			kept++
+			continue
+		}
+
+		target := path.Join(projectSaveDir, runDir.name)
+		logf("deploy pruning old remote version: %s", target)
+		if err := removeRemoteTree(client, target); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func removeRemoteTree(client *sftp.Client, remotePath string) error {
+	entries, err := client.ReadDir(remotePath)
+	if err != nil {
+		return fmt.Errorf("read remote path %s: %w", remotePath, err)
+	}
+
+	for _, entry := range entries {
+		childPath := path.Join(remotePath, entry.Name())
+		if entry.IsDir() {
+			if err := removeRemoteTree(client, childPath); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := client.Remove(childPath); err != nil {
+			return fmt.Errorf("remove remote file %s: %w", childPath, err)
+		}
+	}
+
+	if err := client.RemoveDirectory(remotePath); err != nil {
+		return fmt.Errorf("remove remote dir %s: %w", remotePath, err)
+	}
 	return nil
 }
 

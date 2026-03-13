@@ -136,6 +136,7 @@ export const projectApi = {
 export const runApi = {
   list: () => request<import("@/types").PipelineRun[]>("/runs"),
   get: (id: number) => request<import("@/types").PipelineRun>(`/runs/${id}`),
+  cancel: (id: number) => request<import("@/types").PipelineRun>(`/runs/${id}/cancel`, { method: "POST" }),
   clear: () => request<{ cleared: number }>("/runs", { method: "DELETE" }),
 };
 

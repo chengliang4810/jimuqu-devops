@@ -89,6 +89,7 @@ func (s *Store) ExportBackup(ctx context.Context, repoURL, version string) (mode
 				RemoteDeployDir:       detail.DeployConfig.RemoteDeployDir,
 				PreDeployCommands:     detail.DeployConfig.PreDeployCommands,
 				PostDeployCommands:    detail.DeployConfig.PostDeployCommands,
+				VersionCount:          detail.DeployConfig.VersionCount,
 				TimeoutSeconds:        detail.DeployConfig.TimeoutSeconds,
 				NotifyWebhookURL:      detail.DeployConfig.NotifyWebhookURL,
 				NotifyBearerToken:     optionalString(detail.DeployConfig.NotifyBearerToken),
@@ -183,7 +184,7 @@ func (s *Store) ImportBackup(ctx context.Context, backup model.BackupData) (mode
 	for _, setting := range backup.Settings {
 		if _, err := tx.ExecContext(
 			ctx,
-			`INSERT INTO settings (` + "`key`" + `, ` + "`value`" + `, created_at, updated_at)
+			`INSERT INTO settings (`+"`key`"+`, `+"`value`"+`, created_at, updated_at)
 			 VALUES (?, ?, ?, ?)`,
 			setting.Key, setting.Value, now, now,
 		); err != nil {
@@ -237,14 +238,18 @@ func (s *Store) ImportBackup(ctx context.Context, backup model.BackupData) (mode
 		if err != nil {
 			return model.BackupRestoreResult{}, fmt.Errorf("encrypt notify bearer token: %w", err)
 		}
+		versionCount := bundle.DeployConfig.VersionCount
+		if versionCount <= 0 {
+			versionCount = 5
+		}
 
 		if _, err := tx.ExecContext(
 			ctx,
 			`INSERT INTO deploy_configs (
 				project_id, host_id, build_image, build_commands_json, artifact_filter_mode,
 				artifact_rules_json, remote_save_dir, remote_deploy_dir, pre_deploy_commands_json,
-				post_deploy_commands_json, timeout_seconds, notify_webhook_url, notify_token_cipher, notification_channel_id, created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				post_deploy_commands_json, version_count, timeout_seconds, notify_webhook_url, notify_token_cipher, notification_channel_id, created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			bundle.DeployConfig.ProjectID,
 			bundle.DeployConfig.HostID,
 			bundle.DeployConfig.BuildImage,
@@ -255,6 +260,7 @@ func (s *Store) ImportBackup(ctx context.Context, backup model.BackupData) (mode
 			bundle.DeployConfig.RemoteDeployDir,
 			mustMarshal(bundle.DeployConfig.PreDeployCommands),
 			mustMarshal(bundle.DeployConfig.PostDeployCommands),
+			versionCount,
 			bundle.DeployConfig.TimeoutSeconds,
 			bundle.DeployConfig.NotifyWebhookURL,
 			tokenCipher,

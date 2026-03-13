@@ -124,6 +124,7 @@ func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, c
 			r.Get("/runs", server.handleListAllRuns)
 			r.Delete("/runs", server.handleClearRuns)
 			r.Get("/runs/{runID}", server.handleGetRun)
+			r.Post("/runs/{runID}/cancel", server.handleCancelRun)
 			r.Get("/stats", server.handleStats)
 			r.Get("/dashboard/home", server.handleHomeDashboard)
 			r.Get("/system/info", server.handleSystemInfo)
@@ -577,6 +578,21 @@ func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, run)
 }
 
+func (s *Server) handleCancelRun(w http.ResponseWriter, r *http.Request) {
+	runID, err := parseInt64Param(r, "runID")
+	if err != nil {
+		s.writeBadRequest(w, err)
+		return
+	}
+
+	run, err := s.executor.CancelRun(r.Context(), runID)
+	if err != nil {
+		s.writeBadRequest(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, run)
+}
+
 func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	token := chi.URLParam(r, "token")
 	if strings.TrimSpace(token) == "" {
@@ -767,6 +783,9 @@ func validateDeployConfigInput(input model.DeployConfigUpsert) error {
 	}
 	if strings.TrimSpace(input.RemoteDeployDir) == "" {
 		return errors.New("remote_deploy_dir is required")
+	}
+	if input.VersionCount < 0 {
+		return errors.New("version_count cannot be negative")
 	}
 	return nil
 }

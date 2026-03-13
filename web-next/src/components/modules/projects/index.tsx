@@ -63,6 +63,7 @@ type DeployConfigFormState = {
   remote_deploy_dir: string;
   pre_deploy_commands: string;
   post_deploy_commands: string;
+  version_count: number;
   timeout_minutes: number;
   notification_channel_id: string;
 };
@@ -100,6 +101,7 @@ const defaultDeployConfig: DeployConfigFormState = {
   remote_deploy_dir: "",
   pre_deploy_commands: "",
   post_deploy_commands: "",
+  version_count: 5,
   timeout_minutes: 30,
   notification_channel_id: DEFAULT_NOTIFICATION_CHANNEL,
 };
@@ -138,6 +140,7 @@ function mapDeployConfigToForm(config?: DeployConfig | null): DeployConfigFormSt
     remote_deploy_dir: config.remote_deploy_dir || "",
     pre_deploy_commands: formatMultilineValue(config.pre_deploy_commands),
     post_deploy_commands: formatMultilineValue(config.post_deploy_commands),
+    version_count: Math.max(1, config.version_count || defaultDeployConfig.version_count),
     timeout_minutes: Math.max(1, Math.floor((config.timeout_seconds || 1800) / 60)),
     notification_channel_id:
       config.notification_channel_id == null
@@ -243,6 +246,7 @@ function buildDeployConfigPayload(formData: DeployConfigFormState) {
     remote_deploy_dir: formData.remote_deploy_dir.trim(),
     pre_deploy_commands: parseMultilineInput(formData.pre_deploy_commands),
     post_deploy_commands: parseMultilineInput(formData.post_deploy_commands),
+    version_count: Math.max(1, formData.version_count),
     timeout_seconds: Math.max(1, formData.timeout_minutes) * 60,
     notification_channel_id:
       formData.notification_channel_id === DEFAULT_NOTIFICATION_CHANNEL
@@ -266,6 +270,9 @@ function getDeployConfigValidationError(formData: DeployConfigFormState): string
   }
   if (!formData.remote_deploy_dir.trim()) {
     return "远程部署目录不能为空";
+  }
+  if (formData.version_count <= 0) {
+    return "版本数量必须大于 0";
   }
   if (formData.timeout_minutes <= 0) {
     return "部署超时必须大于 0 分钟";
@@ -1041,6 +1048,26 @@ export function Projects() {
                       placeholder="/data/apps/portal"
                     />
                   </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label>保留版本数量</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={formData.deploy_config.version_count}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        deploy_config: {
+                          ...formData.deploy_config,
+                          version_count: Number(e.target.value) || 0,
+                        },
+                      })
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    远程保存目录默认保留最近 5 个历史版本，超出后会自动清理旧版本。
+                  </p>
                 </div>
                 <div className="grid gap-2">
                   <Label>部署超时(分钟)</Label>

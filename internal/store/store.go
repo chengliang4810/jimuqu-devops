@@ -384,8 +384,8 @@ func (s *Store) CloneProject(ctx context.Context, sourceID int64, input model.Pr
 			`INSERT INTO deploy_configs (
 				project_id, host_id, build_image, build_commands_json, artifact_filter_mode,
 				artifact_rules_json, remote_save_dir, remote_deploy_dir, pre_deploy_commands_json,
-				post_deploy_commands_json, timeout_seconds, notify_webhook_url, notify_token_cipher, notification_channel_id, created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				post_deploy_commands_json, version_count, timeout_seconds, notify_webhook_url, notify_token_cipher, notification_channel_id, created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			projectID,
 			config.HostID,
 			config.BuildImage,
@@ -396,6 +396,7 @@ func (s *Store) CloneProject(ctx context.Context, sourceID int64, input model.Pr
 			config.RemoteDeployDir,
 			mustMarshal(config.PreDeployCommands),
 			mustMarshal(config.PostDeployCommands),
+			config.VersionCount,
 			config.TimeoutSeconds,
 			config.NotifyWebhookURL,
 			mustEncryptString(s.cipher, config.NotifyBearerToken),
@@ -429,6 +430,12 @@ func (s *Store) UpsertDeployConfig(ctx context.Context, projectID int64, input m
 func (s *Store) upsertDeployConfigWithExecutor(ctx context.Context, executor execQueryRowContext, projectID int64, input model.DeployConfigUpsert) error {
 	if err := s.ensureHostExistsWithExecutor(ctx, executor, input.HostID); err != nil {
 		return err
+	}
+	if input.VersionCount <= 0 {
+		input.VersionCount = 5
+	}
+	if input.TimeoutSeconds <= 0 {
+		input.TimeoutSeconds = 1800
 	}
 
 	tokenCipher := ""
@@ -466,6 +473,7 @@ func (s *Store) upsertDeployConfigWithExecutor(ctx context.Context, executor exe
 		input.RemoteDeployDir,
 		mustMarshal(input.PreDeployCommands),
 		mustMarshal(input.PostDeployCommands),
+		input.VersionCount,
 		input.TimeoutSeconds,
 		input.NotifyWebhookURL,
 		tokenCipher,
@@ -496,8 +504,8 @@ func deployConfigUpsertQuery(isMySQL bool) string {
 	query := `INSERT INTO deploy_configs (
 		project_id, host_id, build_image, build_commands_json, artifact_filter_mode,
 		artifact_rules_json, remote_save_dir, remote_deploy_dir, pre_deploy_commands_json,
-		post_deploy_commands_json, timeout_seconds, notify_webhook_url, notify_token_cipher, notification_channel_id, created_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		post_deploy_commands_json, version_count, timeout_seconds, notify_webhook_url, notify_token_cipher, notification_channel_id, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(project_id) DO UPDATE SET
 		host_id = excluded.host_id,
 		build_image = excluded.build_image,
@@ -508,6 +516,7 @@ func deployConfigUpsertQuery(isMySQL bool) string {
 		remote_deploy_dir = excluded.remote_deploy_dir,
 		pre_deploy_commands_json = excluded.pre_deploy_commands_json,
 		post_deploy_commands_json = excluded.post_deploy_commands_json,
+		version_count = excluded.version_count,
 		timeout_seconds = excluded.timeout_seconds,
 		notify_webhook_url = excluded.notify_webhook_url,
 		notify_token_cipher = excluded.notify_token_cipher,
@@ -517,8 +526,8 @@ func deployConfigUpsertQuery(isMySQL bool) string {
 		query = `INSERT INTO deploy_configs (
 			project_id, host_id, build_image, build_commands_json, artifact_filter_mode,
 			artifact_rules_json, remote_save_dir, remote_deploy_dir, pre_deploy_commands_json,
-			post_deploy_commands_json, timeout_seconds, notify_webhook_url, notify_token_cipher, notification_channel_id, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			post_deploy_commands_json, version_count, timeout_seconds, notify_webhook_url, notify_token_cipher, notification_channel_id, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
 			host_id = VALUES(host_id),
 			build_image = VALUES(build_image),
@@ -529,6 +538,7 @@ func deployConfigUpsertQuery(isMySQL bool) string {
 			remote_deploy_dir = VALUES(remote_deploy_dir),
 			pre_deploy_commands_json = VALUES(pre_deploy_commands_json),
 			post_deploy_commands_json = VALUES(post_deploy_commands_json),
+			version_count = VALUES(version_count),
 			timeout_seconds = VALUES(timeout_seconds),
 			notify_webhook_url = VALUES(notify_webhook_url),
 			notify_token_cipher = VALUES(notify_token_cipher),
@@ -547,7 +557,7 @@ func (s *Store) getDeployConfigWithExecutor(ctx context.Context, queryer queryRo
 		ctx,
 		`SELECT id, project_id, host_id, build_image, build_commands_json, artifact_filter_mode,
 		        artifact_rules_json, remote_save_dir, remote_deploy_dir, pre_deploy_commands_json,
-		        post_deploy_commands_json, timeout_seconds, notify_webhook_url, notify_token_cipher, notification_channel_id, created_at, updated_at
+		        post_deploy_commands_json, version_count, timeout_seconds, notify_webhook_url, notify_token_cipher, notification_channel_id, created_at, updated_at
 		 FROM deploy_configs
 		 WHERE project_id = ?`,
 		projectID,
@@ -1221,6 +1231,7 @@ func (s *Store) scanDeployConfig(scan scanner) (model.DeployConfig, error) {
 		artifactRulesJSON     string
 		preDeployCommands     string
 		postDeployCommands    string
+		versionCount          sql.NullInt64
 		timeoutSeconds        sql.NullInt64
 		notifyTokenCipher     string
 		notificationChannelID sql.NullInt64
@@ -1240,6 +1251,7 @@ func (s *Store) scanDeployConfig(scan scanner) (model.DeployConfig, error) {
 		&config.RemoteDeployDir,
 		&preDeployCommands,
 		&postDeployCommands,
+		&versionCount,
 		&timeoutSeconds,
 		&config.NotifyWebhookURL,
 		&notifyTokenCipher,
@@ -1254,6 +1266,11 @@ func (s *Store) scanDeployConfig(scan scanner) (model.DeployConfig, error) {
 		return model.DeployConfig{}, fmt.Errorf("scan deploy config: %w", err)
 	}
 
+	if versionCount.Valid {
+		config.VersionCount = int(versionCount.Int64)
+	} else {
+		config.VersionCount = 5
+	}
 	if timeoutSeconds.Valid {
 		config.TimeoutSeconds = int(timeoutSeconds.Int64)
 	} else {

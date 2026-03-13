@@ -136,6 +136,7 @@ type DeployConfigUpsert struct {
 	RemoteDeployDir       string   `json:"remote_deploy_dir"`
 	PreDeployCommands     []string `json:"pre_deploy_commands"`
 	PostDeployCommands    []string `json:"post_deploy_commands"`
+	VersionCount          int      `json:"version_count"`
 	TimeoutSeconds        int      `json:"timeout_seconds"`
 	NotifyWebhookURL      string   `json:"notify_webhook_url"`
 	NotifyBearerToken     *string  `json:"notify_bearer_token"`

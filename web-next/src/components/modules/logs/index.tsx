@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, type MouseEvent } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,9 +8,10 @@ import { runApi } from "@/api/client";
 import type { PipelineRun } from "@/types";
 import { getApiOrigin } from "@/lib/api-base";
 import { formatDate, getStatusVariant, getStatusText, calculateDuration, formatDuration, formatShortDateTime } from "@/lib/utils";
-import { X, Loader2 } from "lucide-react";
+import { X, Loader2, Square } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavStore } from "@/stores";
+import { toast } from "sonner";
 
 // 全局缓存
 let runsCache: PipelineRun[] | null = null;
@@ -18,9 +19,13 @@ let runsCache: PipelineRun[] | null = null;
 function LogDialog({
   run,
   onClose,
+  onCancel,
+  cancelling,
 }: {
   run: PipelineRun;
   onClose: () => void;
+  onCancel: (run: PipelineRun) => void;
+  cancelling: boolean;
 }) {
   const [currentRun, setCurrentRun] = useState(run);
   const [logContent, setLogContent] = useState(run.log_text || "");
@@ -144,6 +149,18 @@ function LogDialog({
             <span className="text-sm text-muted-foreground">
               {currentRun.branch} • {formatDate(currentRun.started_at)}
             </span>
+            {(currentRun.status === "running" || currentRun.status === "queued") ? (
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() => onCancel(currentRun)}
+                disabled={cancelling}
+              >
+                <Square className="mr-2 h-4 w-4" />
+                {cancelling ? "取消中" : "取消部署"}
+              </Button>
+            ) : null}
             <Button variant="ghost" size="icon" onClick={onClose}>
               <X className="h-5 w-5" />
             </Button>
@@ -173,6 +190,7 @@ export function Logs() {
   const { pendingRunId, clearPendingRunId } = useNavStore();
   const [runs, setRuns] = useState<PipelineRun[]>(runsCache || []);
   const [selectedRun, setSelectedRun] = useState<PipelineRun | null>(null);
+  const [cancellingRunId, setCancellingRunId] = useState<number | null>(null);
   const loadingRef = useRef(false);
   const openingRunIdRef = useRef<number | null>(null);
 
@@ -239,6 +257,28 @@ export function Logs() {
     setSelectedRun(run);
   };
 
+  const handleCancelRun = async (run: PipelineRun, event?: MouseEvent<HTMLButtonElement>) => {
+    event?.stopPropagation();
+    if (cancellingRunId === run.id) {
+      return;
+    }
+
+    setCancellingRunId(run.id);
+    try {
+      const nextRun = await runApi.cancel(run.id);
+      toast.success("部署任务已取消");
+      runsCache = null;
+      await loadRuns(true);
+      if (selectedRun?.id === run.id) {
+        setSelectedRun(nextRun);
+      }
+    } catch (error: any) {
+      toast.error(error.message || "取消部署失败");
+    } finally {
+      setCancellingRunId(null);
+    }
+  };
+
   const handleCloseDialog = () => {
     setSelectedRun(null);
     runsCache = null;
@@ -273,6 +313,18 @@ export function Logs() {
                     <span className="text-sm text-muted-foreground truncate">{run.commit_message}</span>
                   </div>
                   <div className="flex items-center gap-4 text-sm text-muted-foreground shrink-0 ml-4">
+                    {(run.status === "running" || run.status === "queued") ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        onClick={(event) => void handleCancelRun(run, event)}
+                        disabled={cancellingRunId === run.id}
+                      >
+                        <Square className="mr-2 h-4 w-4" />
+                        {cancellingRunId === run.id ? "取消中" : "取消部署"}
+                      </Button>
+                    ) : null}
                     <span>{formatShortDateTime(run.started_at)} · {formatDuration(calculateDuration(run.started_at, run.finished_at))}</span>
                   </div>
                 </div>
@@ -285,7 +337,12 @@ export function Logs() {
       {/* 日志详情对话框 */}
       <AnimatePresence>
         {selectedRun && (
-          <LogDialog run={selectedRun} onClose={handleCloseDialog} />
+          <LogDialog
+            run={selectedRun}
+            onClose={handleCloseDialog}
+            onCancel={(run) => void handleCancelRun(run)}
+            cancelling={cancellingRunId === selectedRun.id}
+          />
         )}
       </AnimatePresence>
     </div>
