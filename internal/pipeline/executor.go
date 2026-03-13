@@ -1,8 +1,10 @@
 package pipeline
 
 import (
+	"archive/tar"
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -570,15 +572,36 @@ func (e *Executor) deployToRemote(bundle model.ExecutionBundle, artifactDir stri
 		sanitizeName(bundle.Project.Name),
 		fmt.Sprintf("run-%d", runID),
 	)
+	localArchivePath := filepath.Join(e.artifactRoot, fmt.Sprintf("run-%d.tgz", runID))
+	defer os.Remove(localArchivePath)
 
 	logf("deploy preparing remote save dir: %s", saveRunDir)
-	if err = uploadDir(sftpClient, artifactDir, saveRunDir, logf); err != nil {
-		return fmt.Errorf("upload artifacts: %w", err)
+	archiveEntries, archiveSize, err := createArtifactArchive(artifactDir, localArchivePath)
+	if err != nil {
+		return fmt.Errorf("package artifacts: %w", err)
+	}
+	logf("artifact archive created: entries=%d size=%d bytes", archiveEntries, archiveSize)
+
+	remoteArchivePath := path.Join(saveRunDir, "artifacts.tgz")
+	if err = uploadFile(sftpClient, localArchivePath, remoteArchivePath, logf); err != nil {
+		return fmt.Errorf("upload artifact archive: %w", err)
+	}
+
+	extractCommand := fmt.Sprintf(
+		"mkdir -p %s && tar -xzf %s -C %s && rm -f %s",
+		shellQuote(saveRunDir),
+		shellQuote(remoteArchivePath),
+		shellQuote(saveRunDir),
+		shellQuote(remoteArchivePath),
+	)
+	logf("deploy extracting artifact archive in remote save dir")
+	if err := runRemoteCommandWithLogging(client, extractCommand, logf); err != nil {
+		return fmt.Errorf("extract artifact archive failed: %w", err)
 	}
 
 	for _, command := range bundle.DeployConfig.PreDeployCommands {
 		logf("deploy pre-command: %s", command)
-		if err := runRemoteCommandWithLogging(client, command, logf); err != nil {
+		if err := runRemoteCommandInDirWithLogging(client, saveRunDir, command, logf); err != nil {
 			return fmt.Errorf("pre-deploy command failed: %w", err)
 		}
 	}
@@ -597,11 +620,142 @@ func (e *Executor) deployToRemote(bundle model.ExecutionBundle, artifactDir stri
 
 	for _, command := range bundle.DeployConfig.PostDeployCommands {
 		logf("deploy post-command: %s", command)
-		if err := runRemoteCommandWithLogging(client, command, logf); err != nil {
+		if err := runRemoteCommandInDirWithLogging(client, bundle.DeployConfig.RemoteDeployDir, command, logf); err != nil {
 			return fmt.Errorf("post-deploy command failed: %w", err)
 		}
 	}
 
+	return nil
+}
+
+func createArtifactArchive(localDir, archivePath string) (int, int64, error) {
+	if err := os.RemoveAll(archivePath); err != nil {
+		return 0, 0, fmt.Errorf("cleanup artifact archive: %w", err)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(archivePath), 0o755); err != nil {
+		return 0, 0, fmt.Errorf("create artifact archive dir: %w", err)
+	}
+
+	archiveFile, err := os.Create(archivePath)
+	if err != nil {
+		return 0, 0, fmt.Errorf("create artifact archive: %w", err)
+	}
+
+	gzipWriter := gzip.NewWriter(archiveFile)
+	tarWriter := tar.NewWriter(gzipWriter)
+
+	entryCount := 0
+	if err := filepath.WalkDir(localDir, func(current string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+
+		rel, err := filepath.Rel(localDir, current)
+		if err != nil {
+			return fmt.Errorf("build artifact archive path: %w", err)
+		}
+		if rel == "." {
+			return nil
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			return fmt.Errorf("read artifact info: %w", err)
+		}
+
+		header, err := tar.FileInfoHeader(info, "")
+		if err != nil {
+			return fmt.Errorf("build tar header for %s: %w", rel, err)
+		}
+		header.Name = filepath.ToSlash(rel)
+		if entry.IsDir() && !strings.HasSuffix(header.Name, "/") {
+			header.Name += "/"
+		}
+
+		if err := tarWriter.WriteHeader(header); err != nil {
+			return fmt.Errorf("write tar header for %s: %w", rel, err)
+		}
+		entryCount++
+
+		if entry.IsDir() {
+			return nil
+		}
+
+		sourceFile, err := os.Open(current)
+		if err != nil {
+			return fmt.Errorf("open artifact file %s: %w", current, err)
+		}
+
+		if _, err = io.Copy(tarWriter, sourceFile); err != nil {
+			sourceFile.Close()
+			return fmt.Errorf("write tar content for %s: %w", rel, err)
+		}
+		if err = sourceFile.Close(); err != nil {
+			return fmt.Errorf("close artifact file %s: %w", rel, err)
+		}
+		return nil
+	}); err != nil {
+		tarWriter.Close()
+		gzipWriter.Close()
+		archiveFile.Close()
+		return 0, 0, err
+	}
+
+	if entryCount == 0 {
+		return 0, 0, fmt.Errorf("no artifacts matched the configured filter rules")
+	}
+
+	if err := tarWriter.Close(); err != nil {
+		return 0, 0, fmt.Errorf("close tar writer: %w", err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		return 0, 0, fmt.Errorf("close gzip writer: %w", err)
+	}
+	if err := archiveFile.Close(); err != nil {
+		return 0, 0, fmt.Errorf("close artifact archive: %w", err)
+	}
+
+	info, err := os.Stat(archivePath)
+	if err != nil {
+		return 0, 0, fmt.Errorf("stat artifact archive: %w", err)
+	}
+	return entryCount, info.Size(), nil
+}
+
+func uploadFile(client *sftp.Client, localPath, remotePath string, logf func(string, ...any)) error {
+	info, err := os.Stat(localPath)
+	if err != nil {
+		return fmt.Errorf("stat local file %s: %w", localPath, err)
+	}
+
+	if err := client.MkdirAll(path.Dir(remotePath)); err != nil {
+		return fmt.Errorf("mkdir remote parent %s: %w", path.Dir(remotePath), err)
+	}
+
+	sourceFile, err := os.Open(localPath)
+	if err != nil {
+		return fmt.Errorf("open local file %s: %w", localPath, err)
+	}
+	defer sourceFile.Close()
+
+	targetFile, err := client.Create(remotePath)
+	if err != nil {
+		return fmt.Errorf("create remote file %s: %w", remotePath, err)
+	}
+
+	logf("uploading artifact archive: %s (%d bytes)", filepath.Base(localPath), info.Size())
+	if _, err = io.Copy(targetFile, sourceFile); err != nil {
+		targetFile.Close()
+		return fmt.Errorf("copy to remote file %s: %w", remotePath, err)
+	}
+	if err = targetFile.Close(); err != nil {
+		return fmt.Errorf("close remote file %s: %w", remotePath, err)
+	}
+	if err = client.Chmod(remotePath, info.Mode().Perm()); err != nil {
+		return fmt.Errorf("chmod remote file %s: %w", remotePath, err)
+	}
+	logf("uploaded artifact archive: %s (completed)", filepath.Base(localPath))
 	return nil
 }
 
@@ -709,6 +863,14 @@ func runRemoteCommandWithLogging(client *ssh.Client, command string, logf func(s
 	}
 
 	return nil
+}
+
+func runRemoteCommandInDirWithLogging(client *ssh.Client, dir, command string, logf func(string, ...any)) error {
+	return runRemoteCommandWithLogging(
+		client,
+		fmt.Sprintf("cd %s && %s", shellQuote(dir), command),
+		logf,
+	)
 }
 
 func (e *Executor) sendNotification(
