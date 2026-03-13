@@ -15,6 +15,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Release context
+        run: |
+          echo "event=${GITHUB_EVENT_NAME}"
+          echo "ref=${GITHUB_REF}"
+          echo "ref_name=${GITHUB_REF_NAME}"
+          echo "sha=${GITHUB_SHA}"
+
       - name: Checkout
         uses: actions/checkout@v5
         with:
@@ -48,11 +55,30 @@ jobs:
         with:
           files: build/archives/*
 
+      - name: Release summary
+        run: |
+          {
+            echo "## Release"
+            echo ""
+            echo "- Event: \`${GITHUB_EVENT_NAME}\`"
+            echo "- Ref: \`${GITHUB_REF}\`"
+            echo "- Version: \`${GITHUB_REF_NAME}\`"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Assets path: \`build/archives/*\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   publish-ghcr:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
 
     steps:
+      - name: Image context
+        run: |
+          echo "event=${GITHUB_EVENT_NAME}"
+          echo "ref=${GITHUB_REF}"
+          echo "ref_name=${GITHUB_REF_NAME}"
+          echo "sha=${GITHUB_SHA}"
+
       - name: Checkout
         uses: actions/checkout@v5
 
@@ -91,3 +117,18 @@ jobs:
             APP_BUILD_TIME=${{ steps.buildmeta.outputs.build_time }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: GHCR summary
+        run: |
+          {
+            echo "## GHCR Publish"
+            echo ""
+            echo "- Event: \`${GITHUB_EVENT_NAME}\`"
+            echo "- Ref: \`${GITHUB_REF}\`"
+            echo "- Version: \`${GITHUB_REF_NAME}\`"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Images:"
+            echo '```text'
+            printf '%s\n' "${{ steps.meta.outputs.tags }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
