@@ -107,8 +107,8 @@ pnpm start
 | `APP_ADDR` | `:18080` | 服务监听地址 |
 | `APP_DATA_DIR` | `./data` | 数据目录 |
 | `APP_DB_DRIVER` | `sqlite` | 数据库驱动，支持 `sqlite` / `mysql` |
-| `APP_DB_SOURCE` | `./data/pipeline.db` | 数据源；SQLite 填文件路径，MySQL 填 DSN |
-| `APP_WORKSPACE_DIR` | `./data/workspaces` | Git 工作区目录 |
+| `APP_DB_SOURCE` | `APP_DATA_DIR/pipeline.db` | 数据源；SQLite 默认跟随 `APP_DATA_DIR`，MySQL 填 DSN |
+| `APP_WORKSPACE_DIR` | `APP_DATA_DIR/workspaces` | Git 工作区目录；通常不需要单独配置 |
 | `APP_SECRET` | `change-me-in-production` | 统一密钥，同时用于 AES-GCM 加密和 JWT 签名 |
 | `ADMIN_USERNAME` | `admin` | 初始管理员用户名 |
 | `ADMIN_PASSWORD` | `admin123` | 初始管理员密码 |

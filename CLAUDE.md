@@ -67,8 +67,8 @@ web-next/               - 独立前端工程
 | `APP_ADDR` | `:18080` |
 | `APP_DATA_DIR` | `./data` |
 | `APP_DB_DRIVER` | `sqlite` |
-| `APP_DB_SOURCE` | `./data/pipeline.db` |
-| `APP_WORKSPACE_DIR` | `./data/workspaces` |
+| `APP_DB_SOURCE` | `APP_DATA_DIR/pipeline.db` |
+| `APP_WORKSPACE_DIR` | `APP_DATA_DIR/workspaces` |
 | `APP_SECRET` | `change-me-in-production` |
 
 ## Webhook 触发

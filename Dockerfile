@@ -39,8 +39,6 @@ COPY README.md ./README.md
 ENV APP_ADDR=:18080
 ENV APP_DATA_DIR=/app/data
 ENV APP_DB_DRIVER=sqlite
-ENV APP_DB_SOURCE=/app/data/pipeline.db
-ENV APP_WORKSPACE_DIR=/app/data/workspaces
 
 VOLUME ["/app/data"]
 EXPOSE 18080

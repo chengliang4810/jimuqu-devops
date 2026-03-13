@@ -190,8 +190,8 @@ export ADMIN_PASSWORD="admin123"
 | `APP_ADDR` | `:18080` | 后端监听地址，不是对外访问 URL |
 | `APP_DATA_DIR` | `./data` | 数据目录 |
 | `APP_DB_DRIVER` | `sqlite` | 数据库驱动，支持 `sqlite` / `mysql` |
-| `APP_DB_SOURCE` | `./data/pipeline.db` | SQLite 文件路径或 MySQL DSN |
-| `APP_WORKSPACE_DIR` | `./data/workspaces` | 构建工作目录 |
+| `APP_DB_SOURCE` | `APP_DATA_DIR/pipeline.db` | SQLite 文件路径或 MySQL DSN；SQLite 默认跟随 `APP_DATA_DIR` |
+| `APP_WORKSPACE_DIR` | `APP_DATA_DIR/workspaces` | 构建工作目录；通常不需要单独配置 |
 | `APP_SECRET` | `change-me-in-production` | 统一密钥，同时用于 AES-GCM 加密和 JWT 签名 |
 | `ADMIN_USERNAME` | `admin` | 初始管理员用户名 |
 | `ADMIN_PASSWORD` | `admin123` | 初始管理员密码 |
@@ -201,7 +201,9 @@ export ADMIN_PASSWORD="admin123"
 
 - `APP_ADDR` 只决定程序监听在哪个地址，例如 `:18080` 或 `127.0.0.1:18080`
 - 用户最终访问哪个地址，取决于你是否放在 Nginx、反向代理或域名后面
+- `APP_WORKSPACE_DIR` 未设置时会自动落到 `APP_DATA_DIR/workspaces`
 - 制品临时目录固定在 `APP_DATA_DIR/artifacts`，不需要单独配置
+- Docker 部署且挂载 `/var/run/docker.sock` 时，建议让宿主机和容器使用同一个 `APP_DATA_DIR` 绝对路径
 - 发布包和 Docker 镜像会在构建时把前端资源嵌入到后端程序
 
 ## 使用步骤
