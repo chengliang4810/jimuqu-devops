@@ -13,6 +13,7 @@ import { SettingBackup } from "./Backup";
 
 const defaultSettings: Record<SettingKey, string> = {
   docker_mirror_url: "",
+  git_docker_image: "alpine/git:latest",
   proxy_url: "",
   run_retention_days: "30",
 };

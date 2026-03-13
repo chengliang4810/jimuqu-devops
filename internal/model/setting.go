@@ -3,14 +3,16 @@ package model
 import "time"
 
 const (
-	SettingDockerMirrorURL = "docker_mirror_url"
-	SettingProxyURL        = "proxy_url"
+	SettingDockerMirrorURL  = "docker_mirror_url"
+	SettingGitDockerImage   = "git_docker_image"
+	SettingProxyURL         = "proxy_url"
 	SettingRunRetentionDays = "run_retention_days"
 )
 
 var DefaultSettings = map[string]string{
-	SettingDockerMirrorURL: "",
-	SettingProxyURL:        "",
+	SettingDockerMirrorURL:  "",
+	SettingGitDockerImage:   "alpine/git:latest",
+	SettingProxyURL:         "",
 	SettingRunRetentionDays: "30",
 }
 

@@ -16,9 +16,12 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"devops-pipeline/internal/model"
 	"devops-pipeline/internal/notification"
@@ -38,6 +41,10 @@ type Executor struct {
 	cancelMutex   sync.Mutex
 	notifySender  *notification.Sender
 }
+
+const maxCommandLogTokenSize = 1024 * 1024
+
+var ansiEscapePattern = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
 
 func NewExecutor(store *store.Store, logger *slog.Logger, workspaceRoot, artifactRoot string) *Executor {
 	return &Executor{
@@ -182,12 +189,7 @@ func (e *Executor) execute(ctx context.Context, runID, projectID int64, triggerT
 	notifyErr := e.sendNotification(ctx, bundle, runID, notifyStatus, finalError, triggerType, triggerRef, logf)
 	if notifyErr != nil {
 		logf("notification failed: %v", notifyErr)
-		if finalError == "" {
-			finalError = notifyErr.Error()
-		} else {
-			finalError = finalError + "; notification: " + notifyErr.Error()
-		}
-		finalStatus = model.RunStatusFailed
+		logf("notification failure ignored, keeping deployment status=%s", finalStatus)
 	} else {
 		logf("notification stage completed")
 	}
@@ -274,27 +276,8 @@ func (e *Executor) runLocalCommandWithLogging(ctx context.Context, logf func(str
 		return fmt.Errorf("start command: %w", err)
 	}
 
-	// 实时读取stdout并记录到日志
-	go func() {
-		scanner := bufio.NewScanner(stdoutPipe)
-		for scanner.Scan() {
-			line := strings.TrimSpace(scanner.Text())
-			if line != "" {
-				logf("%s", line)
-			}
-		}
-	}()
-
-	// 实时读取stderr并记录到日志
-	go func() {
-		scanner := bufio.NewScanner(stderrPipe)
-		for scanner.Scan() {
-			line := strings.TrimSpace(scanner.Text())
-			if line != "" {
-				logf("%s", line)
-			}
-		}
-	}()
+	go e.streamCommandOutput(stdoutPipe, logf)
+	go e.streamCommandOutput(stderrPipe, logf)
 
 	if err := cmd.Wait(); err != nil {
 		return fmt.Errorf("command failed: %w", err)
@@ -691,27 +674,8 @@ func runRemoteCommandWithLogging(client *ssh.Client, command string, logf func(s
 		return fmt.Errorf("start command: %w", err)
 	}
 
-	// 实时读取stdout并记录到日志
-	go func() {
-		scanner := bufio.NewScanner(stdoutPipe)
-		for scanner.Scan() {
-			line := strings.TrimSpace(scanner.Text())
-			if line != "" {
-				logf("%s", line)
-			}
-		}
-	}()
-
-	// 实时读取stderr并记录到日志
-	go func() {
-		scanner := bufio.NewScanner(stderrPipe)
-		for scanner.Scan() {
-			line := strings.TrimSpace(scanner.Text())
-			if line != "" {
-				logf("%s", line)
-			}
-		}
-	}()
+	go streamCommandOutput(stdoutPipe, logf)
+	go streamCommandOutput(stderrPipe, logf)
 
 	if err := session.Wait(); err != nil {
 		return fmt.Errorf("command failed: %w", err)
@@ -1010,44 +974,81 @@ func sanitizeName(value string) string {
 }
 
 func (e *Executor) runGitCloneWithAuth(ctx context.Context, project model.Project, sourceDir string, logf func(string, ...any)) error {
-	// 根据Git认证类型选择克隆方式
+	absWorkspaceDir, err := filepath.Abs(filepath.Dir(sourceDir))
+	if err != nil {
+		return fmt.Errorf("resolve git workspace dir: %w", err)
+	}
+
+	containerSourceDir := path.Join("/workspace", filepath.Base(sourceDir))
+	gitImage, err := e.store.GetSettingValue(ctx, model.SettingGitDockerImage)
+	if err != nil {
+		return fmt.Errorf("load git docker image setting: %w", err)
+	}
+
+	candidateImages, err := e.resolveBuildImages(ctx, gitImage)
+	if err != nil {
+		return err
+	}
+	envArgs, err := e.dockerEnvArgs(ctx)
+	if err != nil {
+		return err
+	}
+
+	gitArgs := []string{
+		"clone",
+		"--depth", "1",
+		"--single-branch",
+		"--branch", project.Branch,
+		"--progress",
+		project.RepoURL,
+		containerSourceDir,
+	}
+	extraArgs := []string{}
+
 	switch project.GitAuthType {
-	case model.GitAuthTypeNone:
-		// 无需认证，直接克隆
-		return e.runLocalCommandWithLogging(
-			ctx,
-			logf,
-			"git",
-			[]string{"clone", "--depth", "1", "--single-branch", "--branch", project.Branch, "--progress", project.RepoURL, sourceDir},
-		)
-		
+	case "", model.GitAuthTypeNone:
 	case model.GitAuthTypeUsername, model.GitAuthTypeToken:
-		// 使用用户名密码或Token认证
 		if project.GitUsername == "" || project.GitPassword == "" {
 			return fmt.Errorf("git username/password is required for %s authentication", project.GitAuthType)
 		}
-
-		// 构造带认证的URL（注意：这个方式会在URL中暴露密码，仅作为示例）
-		// 生产环境中更安全的做法是使用Git凭证管理器或SSH
 		authURL := e.constructAuthenticatedURL(project.RepoURL, project.GitUsername, project.GitPassword)
-		return e.runLocalCommandWithLogging(
-			ctx,
-			logf,
-			"git",
-			[]string{"clone", "--depth", "1", "--single-branch", "--branch", project.Branch, "--progress", authURL, sourceDir},
-		)
-		
+		gitArgs[len(gitArgs)-2] = authURL
 	case model.GitAuthTypeSSH:
-		// 使用SSH密钥认证
 		if project.GitSSHKey == "" {
 			return fmt.Errorf("ssh key is required for ssh authentication")
 		}
 
-		return e.runGitCloneWithSSH(ctx, project, sourceDir, logf)
-		
+		sshKeyFile, err := e.createTempSSHKeyFile(project.GitSSHKey)
+		if err != nil {
+			return fmt.Errorf("create temporary ssh key file: %w", err)
+		}
+		defer os.Remove(sshKeyFile)
+
+		containerKeyPath := "/tmp/git_ssh_key"
+		extraArgs = append(extraArgs, "-v", fmt.Sprintf("%s:%s:ro", filepath.ToSlash(sshKeyFile), containerKeyPath))
+		gitArgs = append([]string{
+			"-c",
+			fmt.Sprintf("core.sshCommand=ssh -i %s -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null", containerKeyPath),
+		}, gitArgs...)
 	default:
 		return fmt.Errorf("unsupported git authentication type: %s", project.GitAuthType)
 	}
+
+	var lastErr error
+	for _, candidateImage := range candidateImages {
+		logf("stage git-clone: trying image source=%s", candidateImage)
+		runErr := e.runDockerGitCommandWithLogging(ctx, absWorkspaceDir, candidateImage, gitArgs, envArgs, extraArgs, logf)
+		if runErr == nil {
+			return nil
+		}
+		lastErr = runErr
+		logf("stage git-clone: image source failed=%s error=%v", candidateImage, runErr)
+	}
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("all docker mirror candidates failed")
+	}
+	return lastErr
 }
 
 func (e *Executor) constructAuthenticatedURL(repoURL, username, password string) string {
@@ -1067,30 +1068,6 @@ func (e *Executor) constructAuthenticatedURL(repoURL, username, password string)
 	return parsedURL.String()
 }
 
-func (e *Executor) runGitCloneWithSSH(ctx context.Context, project model.Project, sourceDir string, logf func(string, ...any)) error {
-	// 创建临时SSH密钥文件
-	sshKeyFile, err := e.createTempSSHKeyFile(project.GitSSHKey)
-	if err != nil {
-		return fmt.Errorf("create temporary ssh key file: %w", err)
-	}
-	defer os.Remove(sshKeyFile) // 清理临时文件
-
-	// 构造SSH命令
-	sshCmd := []string{
-		"git",
-		"-c", fmt.Sprintf("core.sshCommand=ssh -i %s -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null", sshKeyFile),
-		"clone",
-		"--depth", "1",
-		"--single-branch",
-		"--branch", project.Branch,
-		"--progress",
-		project.RepoURL,
-		sourceDir,
-	}
-
-	return e.runLocalCommandWithLogging(ctx, logf, "git", sshCmd[1:])
-}
-
 func (e *Executor) createTempSSHKeyFile(privateKey string) (string, error) {
 	// 创建临时目录
 	tempDir := os.TempDir()
@@ -1102,4 +1079,81 @@ func (e *Executor) createTempSSHKeyFile(privateKey string) (string, error) {
 	}
 
 	return keyFile, nil
+}
+
+func (e *Executor) runDockerGitCommandWithLogging(ctx context.Context, absWorkspaceDir, image string, gitArgs, envArgs, extraArgs []string, logf func(string, ...any)) error {
+	mountDir := filepath.ToSlash(absWorkspaceDir)
+	args := []string{
+		"run", "--rm",
+		"-v", fmt.Sprintf("%s:/workspace", mountDir),
+		"-w", "/workspace",
+		"--entrypoint", "git",
+	}
+	args = append(args, extraArgs...)
+	args = append(args, envArgs...)
+	args = append(args, image)
+	args = append(args, gitArgs...)
+	return e.runLocalCommandWithLogging(ctx, logf, "docker", args)
+}
+
+func (e *Executor) streamCommandOutput(reader io.Reader, logf func(string, ...any)) {
+	streamCommandOutput(reader, logf)
+}
+
+func streamCommandOutput(reader io.Reader, logf func(string, ...any)) {
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxCommandLogTokenSize)
+	scanner.Split(scanCommandLines)
+	for scanner.Scan() {
+		line := sanitizeCommandLogLine(scanner.Text())
+		if line != "" {
+			logf("%s", line)
+		}
+	}
+}
+
+func scanCommandLines(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+
+	for index, value := range data {
+		if value == '\n' || value == '\r' {
+			return index + 1, data[:index], nil
+		}
+	}
+
+	if atEOF {
+		return len(data), data, nil
+	}
+
+	return 0, nil, nil
+}
+
+func sanitizeCommandLogLine(line string) string {
+	line = strings.TrimSpace(strings.ReplaceAll(line, "\x00", ""))
+	if line == "" {
+		return ""
+	}
+
+	line = ansiEscapePattern.ReplaceAllString(line, "")
+	line = strings.Map(func(r rune) rune {
+		switch {
+		case r == '\t':
+			return r
+		case r == utf8.RuneError:
+			return -1
+		case unicode.IsControl(r):
+			return -1
+		default:
+			return r
+		}
+	}, line)
+
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return ""
+	}
+
+	return line
 }

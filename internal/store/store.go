@@ -427,7 +427,7 @@ func (s *Store) UpsertDeployConfig(ctx context.Context, projectID int64, input m
 }
 
 func (s *Store) upsertDeployConfigWithExecutor(ctx context.Context, executor execQueryRowContext, projectID int64, input model.DeployConfigUpsert) error {
-	if _, err := s.GetHost(ctx, input.HostID); err != nil {
+	if err := s.ensureHostExistsWithExecutor(ctx, executor, input.HostID); err != nil {
 		return err
 	}
 
@@ -477,6 +477,18 @@ func (s *Store) upsertDeployConfigWithExecutor(ctx context.Context, executor exe
 		return fmt.Errorf("upsert deploy config: %w", err)
 	}
 
+	return nil
+}
+
+func (s *Store) ensureHostExistsWithExecutor(ctx context.Context, queryer queryRowContext, hostID int64) error {
+	var id int64
+	err := queryer.QueryRowContext(ctx, `SELECT id FROM hosts WHERE id = ?`, hostID).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("query host: %w", err)
+	}
 	return nil
 }
 

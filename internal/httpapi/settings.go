@@ -197,7 +197,7 @@ func (s *Server) handleApplyUpdate(w http.ResponseWriter, r *http.Request) {
 
 func validateSettingKey(key string) error {
 	switch key {
-	case model.SettingDockerMirrorURL, model.SettingProxyURL, model.SettingRunRetentionDays:
+	case model.SettingDockerMirrorURL, model.SettingGitDockerImage, model.SettingProxyURL, model.SettingRunRetentionDays:
 		return nil
 	default:
 		return errors.New("unsupported setting key")
@@ -216,6 +216,11 @@ func validateSettingValue(key, value string) error {
 	value = strings.TrimSpace(value)
 	switch key {
 	case model.SettingDockerMirrorURL, model.SettingProxyURL:
+		return nil
+	case model.SettingGitDockerImage:
+		if value == "" {
+			return errors.New("git_docker_image is required")
+		}
 		return nil
 	case model.SettingRunRetentionDays:
 		if value == "" {
