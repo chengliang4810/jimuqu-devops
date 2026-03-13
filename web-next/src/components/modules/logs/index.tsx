@@ -8,7 +8,7 @@ import { runApi } from "@/api/client";
 import type { PipelineRun } from "@/types";
 import { getApiOrigin } from "@/lib/api-base";
 import { formatDate, getStatusVariant, getStatusText, calculateDuration, formatDuration, formatShortDateTime } from "@/lib/utils";
-import { X, Loader2, Square } from "lucide-react";
+import { X, Square } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavStore } from "@/stores";
 import { toast } from "sonner";
@@ -19,17 +19,22 @@ let runsCache: PipelineRun[] | null = null;
 function LogDialog({
   run,
   onClose,
-  onCancel,
+  onCancelRequest,
+  onCancelConfirm,
+  onCancelDismiss,
   cancelling,
+  confirmingCancel,
 }: {
   run: PipelineRun;
   onClose: () => void;
-  onCancel: (run: PipelineRun) => void;
+  onCancelRequest: (run: PipelineRun) => void;
+  onCancelConfirm: (run: PipelineRun) => void;
+  onCancelDismiss: () => void;
   cancelling: boolean;
+  confirmingCancel: boolean;
 }) {
   const [currentRun, setCurrentRun] = useState(run);
   const [logContent, setLogContent] = useState(run.log_text || "");
-  const [loading, setLoading] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const logContentRef = useRef<HTMLPreElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -55,7 +60,6 @@ function LogDialog({
 
     // 如果是运行中的任务，开启流式日志
     if (run.status === "running") {
-      setLoading(true);
       const token = typeof window !== "undefined" ? localStorage.getItem("jwt_token") : null;
       const query = token ? `?token=${encodeURIComponent(token)}` : "";
       const es = new EventSource(`${getApiOrigin()}/api/v1/runs/${run.id}/stream${query}`);
@@ -64,17 +68,13 @@ function LogDialog({
         setCurrentRun(nextRun);
         setLogContent(nextRun.log_text || "");
         if (nextRun.status !== "running") {
-          setLoading(false);
           es.close();
         }
       });
       es.onerror = () => {
         es.close();
-        setLoading(false);
       };
       eventSourceRef.current = es;
-    } else {
-      setLoading(false);
     }
 
     return () => {
@@ -143,24 +143,46 @@ function LogDialog({
             <Badge variant={getStatusVariant(currentRun.status)}>
               {getStatusText(currentRun.status)}
             </Badge>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
+            {(currentRun.status === "running" || currentRun.status === "queued") ? (
+              confirmingCancel ? (
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => onCancelConfirm(currentRun)}
+                    disabled={cancelling}
+                  >
+                    {cancelling ? "取消中" : "确认取消"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={onCancelDismiss}
+                    disabled={cancelling}
+                  >
+                    再想想
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => onCancelRequest(currentRun)}
+                  disabled={cancelling}
+                >
+                  <Square className="mr-2 h-4 w-4" />
+                  取消部署
+                </Button>
+              )
+            ) : null}
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-muted-foreground">
               {currentRun.branch} • {formatDate(currentRun.started_at)}
             </span>
-            {(currentRun.status === "running" || currentRun.status === "queued") ? (
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                onClick={() => onCancel(currentRun)}
-                disabled={cancelling}
-              >
-                <Square className="mr-2 h-4 w-4" />
-                {cancelling ? "取消中" : "取消部署"}
-              </Button>
-            ) : null}
             <Button variant="ghost" size="icon" onClick={onClose}>
               <X className="h-5 w-5" />
             </Button>
@@ -191,6 +213,7 @@ export function Logs() {
   const [runs, setRuns] = useState<PipelineRun[]>(runsCache || []);
   const [selectedRun, setSelectedRun] = useState<PipelineRun | null>(null);
   const [cancellingRunId, setCancellingRunId] = useState<number | null>(null);
+  const [confirmingCancelRunId, setConfirmingCancelRunId] = useState<number | null>(null);
   const loadingRef = useRef(false);
   const openingRunIdRef = useRef<number | null>(null);
 
@@ -254,7 +277,18 @@ export function Logs() {
   }, [runs, pendingRunId, clearPendingRunId]);
 
   const handleSelectRun = (run: PipelineRun) => {
+    setConfirmingCancelRunId(null);
     setSelectedRun(run);
+  };
+
+  const handleCancelRequest = (run: PipelineRun, event?: MouseEvent<HTMLButtonElement>) => {
+    event?.stopPropagation();
+    setConfirmingCancelRunId(run.id);
+  };
+
+  const handleCancelDismiss = (event?: MouseEvent<HTMLButtonElement>) => {
+    event?.stopPropagation();
+    setConfirmingCancelRunId(null);
   };
 
   const handleCancelRun = async (run: PipelineRun, event?: MouseEvent<HTMLButtonElement>) => {
@@ -267,6 +301,7 @@ export function Logs() {
     try {
       const nextRun = await runApi.cancel(run.id);
       toast.success("部署任务已取消");
+      setConfirmingCancelRunId(null);
       runsCache = null;
       await loadRuns(true);
       if (selectedRun?.id === run.id) {
@@ -281,6 +316,7 @@ export function Logs() {
 
   const handleCloseDialog = () => {
     setSelectedRun(null);
+    setConfirmingCancelRunId(null);
     runsCache = null;
     void loadRuns(true);
   };
@@ -313,19 +349,42 @@ export function Logs() {
                     <span className="text-sm text-muted-foreground truncate">{run.commit_message}</span>
                   </div>
                   <div className="flex items-center gap-4 text-sm text-muted-foreground shrink-0 ml-4">
-                    {(run.status === "running" || run.status === "queued") ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="destructive"
-                        onClick={(event) => void handleCancelRun(run, event)}
-                        disabled={cancellingRunId === run.id}
-                      >
-                        <Square className="mr-2 h-4 w-4" />
-                        {cancellingRunId === run.id ? "取消中" : "取消部署"}
-                      </Button>
-                    ) : null}
                     <span>{formatShortDateTime(run.started_at)} · {formatDuration(calculateDuration(run.started_at, run.finished_at))}</span>
+                    {(run.status === "running" || run.status === "queued") ? (
+                      confirmingCancelRunId === run.id ? (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            onClick={(event) => void handleCancelRun(run, event)}
+                            disabled={cancellingRunId === run.id}
+                          >
+                            {cancellingRunId === run.id ? "取消中" : "确认取消"}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={handleCancelDismiss}
+                            disabled={cancellingRunId === run.id}
+                          >
+                            再想想
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          onClick={(event) => handleCancelRequest(run, event)}
+                          disabled={cancellingRunId === run.id}
+                        >
+                          <Square className="mr-2 h-4 w-4" />
+                          取消部署
+                        </Button>
+                      )
+                    ) : null}
                   </div>
                 </div>
               </CardContent>
@@ -340,8 +399,11 @@ export function Logs() {
           <LogDialog
             run={selectedRun}
             onClose={handleCloseDialog}
-            onCancel={(run) => void handleCancelRun(run)}
+            onCancelRequest={(run) => handleCancelRequest(run)}
+            onCancelConfirm={(run) => void handleCancelRun(run)}
+            onCancelDismiss={handleCancelDismiss}
             cancelling={cancellingRunId === selectedRun.id}
+            confirmingCancel={confirmingCancelRunId === selectedRun.id}
           />
         )}
       </AnimatePresence>
