@@ -16,17 +16,21 @@ type SettingSystemProps = {
 export function SettingSystem({ settings, onSave }: SettingSystemProps) {
   const [mirrorURL, setMirrorURL] = useState(settings.docker_mirror_url);
   const [gitDockerImage, setGitDockerImage] = useState(settings.git_docker_image);
+  const [publicBaseURL, setPublicBaseURL] = useState(settings.public_base_url);
   const [proxyURL, setProxyURL] = useState(settings.proxy_url);
   const initialMirrorURL = useRef(settings.docker_mirror_url);
   const initialGitDockerImage = useRef(settings.git_docker_image);
+  const initialPublicBaseURL = useRef(settings.public_base_url);
   const initialProxyURL = useRef(settings.proxy_url);
 
   useEffect(() => {
     setMirrorURL(settings.docker_mirror_url);
     setGitDockerImage(settings.git_docker_image);
+    setPublicBaseURL(settings.public_base_url);
     setProxyURL(settings.proxy_url);
     initialMirrorURL.current = settings.docker_mirror_url;
     initialGitDockerImage.current = settings.git_docker_image;
+    initialPublicBaseURL.current = settings.public_base_url;
     initialProxyURL.current = settings.proxy_url;
   }, [settings]);
 
@@ -56,6 +60,27 @@ export function SettingSystem({ settings, onSave }: SettingSystemProps) {
         />
         <p className="text-xs text-muted-foreground">
           用于构建阶段的 Docker 镜像地址前缀，每行一个，系统会按顺序依次尝试。
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center gap-3">
+          <Globe className="h-5 w-5 text-muted-foreground" />
+          <span className="text-sm font-medium">对外访问地址</span>
+        </div>
+        <Input
+          value={publicBaseURL}
+          onChange={(event) => setPublicBaseURL(event.target.value)}
+          onBlur={() => {
+            if (publicBaseURL !== initialPublicBaseURL.current) {
+              void onSave("public_base_url", publicBaseURL);
+            }
+          }}
+          placeholder="https://devops.jimuqu.com"
+          className="rounded-xl"
+        />
+        <p className="text-xs text-muted-foreground">
+          用于通知中生成运行详情链接，例如 `https://your-domain.com/?view=logs&run_id=123`。
         </p>
       </div>
 

@@ -118,19 +118,11 @@ func (s *Sender) sendWeChat(channel model.NotificationChannel, payload model.Not
 	}
 
 	// 构造企业微信消息格式
-	commitInfo := ""
-	if payload.CommitID != "" {
-		commitInfo += fmt.Sprintf("**提交ID**: `%s`\n", payload.CommitID[:min(12, len(payload.CommitID))])
-	}
-	if payload.CommitMessage != "" {
-		commitInfo += fmt.Sprintf("**提交信息**: %s\n", payload.CommitMessage)
-	}
-	if payload.Author != "" {
-		commitInfo += fmt.Sprintf("**提交者**: %s\n", payload.Author)
-	}
+	commitInfo := buildCommitInfoMarkdown(payload)
+	executionInfo := buildExecutionInfoMarkdown(payload)
 
 	if payload.TriggerType == "manual" {
-		commitInfo = "**手动触发部署**\n"
+		commitInfo = "**手动触发部署**\n" + commitInfo
 	}
 
 	// 如果没有提交信息且是webhook触发，使用默认信息
@@ -139,12 +131,13 @@ func (s *Sender) sendWeChat(channel model.NotificationChannel, payload model.Not
 	}
 
 	content := fmt.Sprintf(
-		"## 🚀 部署通知\n\n**项目**: %s\n**分支**: %s\n**状态**: %s\n\n%s**错误信息**: %s\n\n**时间**: %s",
+		"## 🚀 部署通知\n\n**项目**: %s\n**分支**: %s\n**状态**: %s\n%s\n%s**错误信息**: %s\n\n**时间**: %s",
 		payload.ProjectName,
 		payload.Branch,
 		getStatusText(payload.Status),
+		executionInfo,
 		commitInfo,
-		payload.ErrorMessage,
+		notificationErrorText(payload.ErrorMessage),
 		time.Now().Format("2006-01-02 15:04:05"),
 	)
 
@@ -196,19 +189,11 @@ func (s *Sender) sendDingTalk(channel model.NotificationChannel, payload model.N
 	}
 
 	// 构造钉钉消息格式
-	commitInfo := ""
-	if payload.CommitID != "" {
-		commitInfo = fmt.Sprintf("提交ID: %s\n", payload.CommitID[:min(12, len(payload.CommitID))])
-	}
-	if payload.CommitMessage != "" {
-		commitInfo += fmt.Sprintf("提交信息: %s\n", payload.CommitMessage)
-	}
-	if payload.Author != "" {
-		commitInfo += fmt.Sprintf("提交者: %s\n", payload.Author)
-	}
+	commitInfo := buildCommitInfoPlain(payload)
+	executionInfo := buildExecutionInfoPlain(payload)
 
 	if payload.TriggerType == "manual" {
-		commitInfo = "手动触发部署\n"
+		commitInfo = "手动触发部署\n" + commitInfo
 	}
 
 	// 如果没有提交信息且是webhook触发，使用默认信息
@@ -217,12 +202,13 @@ func (s *Sender) sendDingTalk(channel model.NotificationChannel, payload model.N
 	}
 
 	text := fmt.Sprintf(
-		"【部署通知】\n项目: %s\n分支: %s\n状态: %s\n%s\n错误信息: %s\n时间: %s",
+		"【部署通知】\n项目: %s\n分支: %s\n状态: %s\n%s%s\n错误信息: %s\n时间: %s",
 		payload.ProjectName,
 		payload.Branch,
 		getStatusText(payload.Status),
+		executionInfo,
 		commitInfo,
-		payload.ErrorMessage,
+		notificationErrorText(payload.ErrorMessage),
 		time.Now().Format("2006-01-02 15:04:05"),
 	)
 
@@ -323,12 +309,22 @@ func (s *Sender) sendFeishu(channel model.NotificationChannel, payload model.Not
 	content := map[string]any{
 		"tag": "div",
 		"text": fmt.Sprintf(
-			"项目: %s\n分支: %s\n状态: %s\n触发方式: %s\n错误信息: %s\n时间: %s",
+			"项目: %s\n分支: %s\n状态: %s\n运行记录: %s\n触发方式: %s\n触发引用: %s\n失败阶段: %s\n目标主机: %s (%s)\n部署目录: %s\n运行耗时: %s\n提交ID: %s\n提交者: %s\n提交信息: %s\n错误信息: %s\n时间: %s",
 			payload.ProjectName,
 			payload.Branch,
-			payload.Status,
-			payload.TriggerType,
-			payload.ErrorMessage,
+			getStatusText(payload.Status),
+			buildRunLinkPlain(payload),
+			getTriggerText(payload.TriggerType),
+			emptyFallback(payload.TriggerRef, "-"),
+			emptyFallback(displayStageText(payload.Stage), "-"),
+			emptyFallback(payload.HostName, "-"),
+			emptyFallback(payload.HostAddress, "-"),
+			emptyFallback(payload.RemoteDeployDir, "-"),
+			formatDuration(payload.DurationSeconds),
+			emptyFallback(shortCommit(payload.CommitID), "-"),
+			emptyFallback(payload.Author, "-"),
+			emptyFallback(payload.CommitMessage, "-"),
+			notificationErrorText(payload.ErrorMessage),
 			time.Now().Format("2006-01-02 15:04:05"),
 		),
 	}
@@ -406,14 +402,33 @@ func (s *Sender) sendEmail(channel model.NotificationChannel, payload model.Noti
 			"项目: %s\n"+
 			"分支: %s\n"+
 			"状态: %s\n"+
+			"运行记录: %s\n"+
 			"触发方式: %s\n"+
+			"触发引用: %s\n"+
+			"失败阶段: %s\n"+
+			"目标主机: %s (%s)\n"+
+			"部署目录: %s\n"+
+			"运行耗时: %s\n"+
+			"提交ID: %s\n"+
+			"提交者: %s\n"+
+			"提交信息: %s\n"+
 			"错误信息: %s\n"+
 			"时间: %s\n",
 		payload.ProjectName,
 		payload.Branch,
-		payload.Status,
-		payload.TriggerType,
-		payload.ErrorMessage,
+		getStatusText(payload.Status),
+		buildRunLinkPlain(payload),
+		getTriggerText(payload.TriggerType),
+		emptyFallback(payload.TriggerRef, "-"),
+		emptyFallback(displayStageText(payload.Stage), "-"),
+		emptyFallback(payload.HostName, "-"),
+		emptyFallback(payload.HostAddress, "-"),
+		emptyFallback(payload.RemoteDeployDir, "-"),
+		formatDuration(payload.DurationSeconds),
+		emptyFallback(shortCommit(payload.CommitID), "-"),
+		emptyFallback(payload.Author, "-"),
+		emptyFallback(payload.CommitMessage, "-"),
+		notificationErrorText(payload.ErrorMessage),
 		time.Now().Format("2006-01-02 15:04:05"),
 	)
 
@@ -494,6 +509,138 @@ func (s *Sender) TestChannel(channel model.NotificationChannel, input model.Test
 	default:
 		return fmt.Errorf("unsupported channel type: %s", channel.Type)
 	}
+}
+
+func buildCommitInfoMarkdown(payload model.NotificationPayload) string {
+	var builder strings.Builder
+	if payload.CommitID != "" {
+		builder.WriteString(fmt.Sprintf("**提交ID**: `%s`\n", shortCommit(payload.CommitID)))
+	}
+	if payload.Author != "" {
+		builder.WriteString(fmt.Sprintf("**提交者**: %s\n", payload.Author))
+	}
+	if payload.CommitMessage != "" {
+		builder.WriteString(fmt.Sprintf("**提交信息**: %s\n", payload.CommitMessage))
+	}
+	return builder.String()
+}
+
+func buildExecutionInfoMarkdown(payload model.NotificationPayload) string {
+	return fmt.Sprintf(
+		"**运行记录**: %s\n**触发方式**: %s\n**触发引用**: %s\n**失败阶段**: %s\n**目标主机**: %s (%s)\n**部署目录**: %s\n**运行耗时**: %s\n\n",
+		buildRunLinkMarkdown(payload),
+		getTriggerText(payload.TriggerType),
+		emptyFallback(payload.TriggerRef, "-"),
+		emptyFallback(displayStageText(payload.Stage), "-"),
+		emptyFallback(payload.HostName, "-"),
+		emptyFallback(payload.HostAddress, "-"),
+		emptyFallback(payload.RemoteDeployDir, "-"),
+		formatDuration(payload.DurationSeconds),
+	)
+}
+
+func buildCommitInfoPlain(payload model.NotificationPayload) string {
+	var builder strings.Builder
+	if payload.CommitID != "" {
+		builder.WriteString(fmt.Sprintf("提交ID: %s\n", shortCommit(payload.CommitID)))
+	}
+	if payload.Author != "" {
+		builder.WriteString(fmt.Sprintf("提交者: %s\n", payload.Author))
+	}
+	if payload.CommitMessage != "" {
+		builder.WriteString(fmt.Sprintf("提交信息: %s\n", payload.CommitMessage))
+	}
+	return builder.String()
+}
+
+func buildExecutionInfoPlain(payload model.NotificationPayload) string {
+	return fmt.Sprintf(
+		"运行记录: %s\n触发方式: %s\n触发引用: %s\n失败阶段: %s\n目标主机: %s (%s)\n部署目录: %s\n运行耗时: %s\n",
+		buildRunLinkPlain(payload),
+		getTriggerText(payload.TriggerType),
+		emptyFallback(payload.TriggerRef, "-"),
+		emptyFallback(displayStageText(payload.Stage), "-"),
+		emptyFallback(payload.HostName, "-"),
+		emptyFallback(payload.HostAddress, "-"),
+		emptyFallback(payload.RemoteDeployDir, "-"),
+		formatDuration(payload.DurationSeconds),
+	)
+}
+
+func notificationErrorText(message string) string {
+	return emptyFallback(strings.TrimSpace(message), "-")
+}
+
+func displayStageText(stage string) string {
+	switch strings.TrimSpace(stage) {
+	case "", "completed":
+		return "无"
+	case "git-clone":
+		return "拉取代码"
+	case "build":
+		return "构建"
+	case "artifact-filter":
+		return "制品过滤"
+	case "deploy":
+		return "远程部署"
+	case "notification":
+		return "发送通知"
+	default:
+		return stage
+	}
+}
+
+func getTriggerText(triggerType string) string {
+	switch strings.TrimSpace(triggerType) {
+	case "manual":
+		return "手动触发"
+	case "webhook":
+		return "Webhook"
+	default:
+		return triggerType
+	}
+}
+
+func emptyFallback(value, fallback string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
+func formatDuration(seconds int64) string {
+	if seconds <= 0 {
+		return "-"
+	}
+	if seconds < 60 {
+		return fmt.Sprintf("%d 秒", seconds)
+	}
+	if seconds < 3600 {
+		return fmt.Sprintf("%d 分 %d 秒", seconds/60, seconds%60)
+	}
+	return fmt.Sprintf("%d 小时 %d 分 %d 秒", seconds/3600, (seconds%3600)/60, seconds%60)
+}
+
+func shortCommit(commitID string) string {
+	if len(commitID) <= 12 {
+		return commitID
+	}
+	return commitID[:12]
+}
+
+func buildRunLinkMarkdown(payload model.NotificationPayload) string {
+	if strings.TrimSpace(payload.RunURL) == "" {
+		return fmt.Sprintf("%d", payload.RunID)
+	}
+	return fmt.Sprintf("[%d](%s)", payload.RunID, payload.RunURL)
+}
+
+func buildRunLinkPlain(payload model.NotificationPayload) string {
+	if strings.TrimSpace(payload.RunURL) == "" {
+		return fmt.Sprintf("%d", payload.RunID)
+	}
+	return fmt.Sprintf("%d (%s)", payload.RunID, payload.RunURL)
 }
 
 func generateHMACSignature(secret string, data []byte) string {

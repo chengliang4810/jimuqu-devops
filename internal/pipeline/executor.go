@@ -46,6 +46,14 @@ const maxCommandLogTokenSize = 1024 * 1024
 
 var ansiEscapePattern = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
 
+type pipelineResult struct {
+	Stage           string
+	CommitID        string
+	CommitMessage   string
+	Author          string
+	DurationSeconds int64
+}
+
 func NewExecutor(store *store.Store, logger *slog.Logger, workspaceRoot, artifactRoot string) *Executor {
 	return &Executor{
 		store:         store,
@@ -153,6 +161,7 @@ func (e *Executor) execute(ctx context.Context, runID, projectID int64, triggerT
 	}
 
 	logf("pipeline start: project=%s branch=%s trigger=%s", bundle.Project.Name, bundle.Project.Branch, triggerType)
+	startedAt := time.Now()
 
 	// 设置超时context
 	timeout := time.Duration(bundle.DeployConfig.TimeoutSeconds) * time.Second
@@ -163,7 +172,8 @@ func (e *Executor) execute(ctx context.Context, runID, projectID int64, triggerT
 	defer cancelTimeout()
 
 	// 使用带超时的context执行pipeline
-	execErr := e.runPipeline(timeoutCtx, runID, bundle, logf)
+	result, execErr := e.runPipeline(timeoutCtx, runID, bundle, logf)
+	result.DurationSeconds = int64(time.Since(startedAt).Seconds())
 	finalStatus := model.RunStatusSuccess
 	finalError := ""
 
@@ -179,14 +189,14 @@ func (e *Executor) execute(ctx context.Context, runID, projectID int64, triggerT
 		} else {
 			finalStatus = model.RunStatusFailed
 			finalError = execErr.Error()
-			logf("pipeline failed: %v", execErr)
+			logf("pipeline failed at stage=%s: %v", displayStage(result.Stage), execErr)
 		}
 	} else {
 		logf("pipeline finished without stage error")
 	}
 
 	notifyStatus := finalStatus
-	notifyErr := e.sendNotification(ctx, bundle, runID, notifyStatus, finalError, triggerType, triggerRef, logf)
+	notifyErr := e.sendNotification(ctx, bundle, runID, notifyStatus, finalError, triggerType, triggerRef, result, logf)
 	if notifyErr != nil {
 		logf("notification failed: %v", notifyErr)
 		logf("notification failure ignored, keeping deployment status=%s", finalStatus)
@@ -202,45 +212,62 @@ func (e *Executor) execute(ctx context.Context, runID, projectID int64, triggerT
 	logf("pipeline finalized with status=%s", finalStatus)
 }
 
-func (e *Executor) runPipeline(ctx context.Context, runID int64, bundle model.ExecutionBundle, logf func(string, ...any)) error {
+func (e *Executor) runPipeline(ctx context.Context, runID int64, bundle model.ExecutionBundle, logf func(string, ...any)) (pipelineResult, error) {
+	result := pipelineResult{}
 	workspaceDir := filepath.Join(e.workspaceRoot, fmt.Sprintf("run-%d", runID))
 	sourceDir := filepath.Join(workspaceDir, "source")
 	artifactDir := filepath.Join(e.artifactRoot, fmt.Sprintf("run-%d", runID))
 
 	if err := os.RemoveAll(workspaceDir); err != nil {
-		return fmt.Errorf("cleanup workspace: %w", err)
+		return result, fmt.Errorf("cleanup workspace: %w", err)
 	}
 	if err := os.RemoveAll(artifactDir); err != nil {
-		return fmt.Errorf("cleanup artifact dir: %w", err)
+		return result, fmt.Errorf("cleanup artifact dir: %w", err)
 	}
 	if err := os.MkdirAll(sourceDir, 0o755); err != nil {
-		return fmt.Errorf("create source dir: %w", err)
+		return result, fmt.Errorf("create source dir: %w", err)
 	}
 	if err := os.MkdirAll(artifactDir, 0o755); err != nil {
-		return fmt.Errorf("create artifact dir: %w", err)
+		return result, fmt.Errorf("create artifact dir: %w", err)
 	}
 
+	result.Stage = "git-clone"
 	logf("stage git-clone: cloning %s#%s", bundle.Project.RepoURL, bundle.Project.Branch)
 	if err := e.runGitCloneWithAuth(ctx, bundle.Project, sourceDir, logf); err != nil {
-		return fmt.Errorf("git clone failed: %w", err)
+		return result, fmt.Errorf("git clone failed: %w", err)
 	}
 
+	if commitInfo, err := e.readGitMetadata(ctx, sourceDir); err == nil {
+		result.CommitID = commitInfo.CommitID
+		result.CommitMessage = commitInfo.CommitMessage
+		result.Author = commitInfo.Author
+		if result.CommitID != "" {
+			logf("git metadata: commit=%s author=%s", shortCommit(result.CommitID), result.Author)
+		}
+	} else {
+		logf("git metadata unavailable: %v", err)
+	}
+
+	result.Stage = "build"
 	logf("stage build: image=%s", bundle.DeployConfig.BuildImage)
 	if err := e.runDockerBuildWithLogging(ctx, sourceDir, bundle.DeployConfig.BuildImage, bundle.DeployConfig.BuildCommands, logf); err != nil {
-		return fmt.Errorf("docker build stage failed: %w", err)
+		return result, fmt.Errorf("docker build stage failed: %w", err)
 	}
 
+	result.Stage = "artifact-filter"
 	logf("stage artifact-filter: mode=%s rules=%d", bundle.DeployConfig.ArtifactFilterMode, len(bundle.DeployConfig.ArtifactRules))
 	if err := filterArtifacts(sourceDir, artifactDir, bundle.DeployConfig.ArtifactFilterMode, bundle.DeployConfig.ArtifactRules); err != nil {
-		return fmt.Errorf("filter artifacts: %w", err)
+		return result, fmt.Errorf("filter artifacts: %w", err)
 	}
 
+	result.Stage = "deploy"
 	logf("stage deploy: host=%s:%d", bundle.Host.Address, bundle.Host.Port)
 	if err := e.deployToRemote(bundle, artifactDir, runID, logf); err != nil {
-		return err
+		return result, err
 	}
 
-	return nil
+	result.Stage = "completed"
+	return result, nil
 }
 
 func (e *Executor) runLocalCommand(ctx context.Context, name string, args []string) (string, error) {
@@ -692,20 +719,30 @@ func (e *Executor) sendNotification(
 	errorMessage string,
 	triggerType string,
 	triggerRef string,
+	result pipelineResult,
 	logf func(string, ...any),
 ) error {
 	// 构造通知载荷
 	payload := model.NotificationPayload{
-		RunID:        runID,
-		Status:       status,
-		ProjectID:    bundle.Project.ID,
-		ProjectName:  bundle.Project.Name,
-		RepoURL:      bundle.Project.RepoURL,
-		Branch:       bundle.Project.Branch,
-		TriggerType:  triggerType,
-		TriggerRef:   triggerRef,
-		ErrorMessage: errorMessage,
-		SentAt:       time.Now().UTC().Format(time.RFC3339),
+		RunID:           runID,
+		Status:          status,
+		ProjectID:       bundle.Project.ID,
+		ProjectName:     bundle.Project.Name,
+		RepoURL:         bundle.Project.RepoURL,
+		Branch:          bundle.Project.Branch,
+		TriggerType:     triggerType,
+		TriggerRef:      triggerRef,
+		CommitID:        result.CommitID,
+		CommitMessage:   result.CommitMessage,
+		Author:          result.Author,
+		Stage:           result.Stage,
+		HostName:        bundle.Host.Name,
+		HostAddress:     bundle.Host.Address,
+		RemoteDeployDir: bundle.DeployConfig.RemoteDeployDir,
+		DurationSeconds: result.DurationSeconds,
+		RunURL:          e.buildRunURL(ctx, runID),
+		ErrorMessage:    errorMessage,
+		SentAt:          time.Now().UTC().Format(time.RFC3339),
 	}
 
 	e.logger.Info("sendNotification called", "run_id", runID, "project", bundle.Project.Name, "status", status,
@@ -1094,6 +1131,101 @@ func (e *Executor) runDockerGitCommandWithLogging(ctx context.Context, absWorksp
 	args = append(args, image)
 	args = append(args, gitArgs...)
 	return e.runLocalCommandWithLogging(ctx, logf, "docker", args)
+}
+
+type gitMetadata struct {
+	CommitID      string
+	CommitMessage string
+	Author        string
+}
+
+func (e *Executor) readGitMetadata(ctx context.Context, sourceDir string) (gitMetadata, error) {
+	absSourceDir, err := filepath.Abs(sourceDir)
+	if err != nil {
+		return gitMetadata{}, fmt.Errorf("resolve source dir: %w", err)
+	}
+
+	gitImage, err := e.store.GetSettingValue(ctx, model.SettingGitDockerImage)
+	if err != nil {
+		return gitMetadata{}, fmt.Errorf("load git docker image setting: %w", err)
+	}
+
+	candidateImages, err := e.resolveBuildImages(ctx, gitImage)
+	if err != nil {
+		return gitMetadata{}, err
+	}
+	envArgs, err := e.dockerEnvArgs(ctx)
+	if err != nil {
+		return gitMetadata{}, err
+	}
+
+	format := "%H%n%s%n%an"
+	var lastErr error
+	for _, candidateImage := range candidateImages {
+		output, runErr := e.runDockerGitReadOnly(ctx, absSourceDir, candidateImage, []string{"log", "-1", "--pretty=format:" + format}, envArgs)
+		if runErr == nil {
+			parts := strings.SplitN(strings.TrimSpace(output), "\n", 3)
+			if len(parts) < 3 {
+				return gitMetadata{}, fmt.Errorf("unexpected git log output")
+			}
+			return gitMetadata{
+				CommitID:      strings.TrimSpace(parts[0]),
+				CommitMessage: strings.TrimSpace(parts[1]),
+				Author:        strings.TrimSpace(parts[2]),
+			}, nil
+		}
+		lastErr = runErr
+	}
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("no docker image candidates resolved")
+	}
+	return gitMetadata{}, lastErr
+}
+
+func (e *Executor) runDockerGitReadOnly(ctx context.Context, absSourceDir, image string, gitArgs, envArgs []string) (string, error) {
+	mountDir := filepath.ToSlash(absSourceDir)
+	args := []string{
+		"run", "--rm",
+		"-v", fmt.Sprintf("%s:/workspace", mountDir),
+		"-w", "/workspace",
+		"--entrypoint", "git",
+	}
+	args = append(args, envArgs...)
+	args = append(args, image)
+	args = append(args, gitArgs...)
+	return e.runLocalCommand(ctx, "docker", args)
+}
+
+func shortCommit(commitID string) string {
+	if len(commitID) <= 12 {
+		return commitID
+	}
+	return commitID[:12]
+}
+
+func displayStage(stage string) string {
+	switch strings.TrimSpace(stage) {
+	case "", "completed":
+		return "completed"
+	default:
+		return stage
+	}
+}
+
+func (e *Executor) buildRunURL(ctx context.Context, runID int64) string {
+	baseURL, err := e.store.GetSettingValue(ctx, model.SettingPublicBaseURL)
+	if err != nil {
+		return ""
+	}
+
+	baseURL = strings.TrimSpace(baseURL)
+	if baseURL == "" {
+		return ""
+	}
+
+	baseURL = strings.TrimRight(baseURL, "/")
+	return fmt.Sprintf("%s/?view=logs&run_id=%d", baseURL, runID)
 }
 
 func (e *Executor) streamCommandOutput(reader io.Reader, logf func(string, ...any)) {

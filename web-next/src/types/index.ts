@@ -154,7 +154,7 @@ export interface HomeDashboard {
   projects: HomeProjectRank[];
 }
 
-export type SettingKey = "docker_mirror_url" | "git_docker_image" | "proxy_url" | "run_retention_days";
+export type SettingKey = "docker_mirror_url" | "git_docker_image" | "public_base_url" | "proxy_url" | "run_retention_days";
 
 export interface Setting {
   key: SettingKey;

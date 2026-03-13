@@ -5,6 +5,7 @@ import "time"
 const (
 	SettingDockerMirrorURL  = "docker_mirror_url"
 	SettingGitDockerImage   = "git_docker_image"
+	SettingPublicBaseURL    = "public_base_url"
 	SettingProxyURL         = "proxy_url"
 	SettingRunRetentionDays = "run_retention_days"
 )
@@ -12,6 +13,7 @@ const (
 var DefaultSettings = map[string]string{
 	SettingDockerMirrorURL:  "",
 	SettingGitDockerImage:   "alpine/git:latest",
+	SettingPublicBaseURL:    "",
 	SettingProxyURL:         "",
 	SettingRunRetentionDays: "30",
 }

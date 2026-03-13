@@ -68,19 +68,25 @@ type EmailConfig struct {
 
 // 通知载荷
 type NotificationPayload struct {
-	RunID        int64  `json:"run_id"`
-	Status       string `json:"status"`
-	ProjectID    int64  `json:"project_id"`
-	ProjectName  string `json:"project_name"`
-	RepoURL      string `json:"repo_url"`
-	Branch       string `json:"branch"`
-	TriggerType  string `json:"trigger_type"`
-	TriggerRef   string `json:"trigger_ref"`
-	CommitID     string `json:"commit_id"`
-	CommitMessage string `json:"commit_message"`
-	Author       string `json:"author"`
-	ErrorMessage string `json:"error_message"`
-	SentAt       string `json:"sent_at"`
+	RunID           int64  `json:"run_id"`
+	Status          string `json:"status"`
+	ProjectID       int64  `json:"project_id"`
+	ProjectName     string `json:"project_name"`
+	RepoURL         string `json:"repo_url"`
+	Branch          string `json:"branch"`
+	TriggerType     string `json:"trigger_type"`
+	TriggerRef      string `json:"trigger_ref"`
+	CommitID        string `json:"commit_id"`
+	CommitMessage   string `json:"commit_message"`
+	Author          string `json:"author"`
+	Stage           string `json:"stage"`
+	HostName        string `json:"host_name"`
+	HostAddress     string `json:"host_address"`
+	RemoteDeployDir string `json:"remote_deploy_dir"`
+	DurationSeconds int64  `json:"duration_seconds"`
+	RunURL          string `json:"run_url"`
+	ErrorMessage    string `json:"error_message"`
+	SentAt          string `json:"sent_at"`
 }
 
 type TestNotificationInput struct {

@@ -28,12 +28,29 @@ const viewTitles: Record<string, string> = {
 export function App() {
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
-  const { activeView } = useNavStore();
+  const { activeView, setActiveView, setPendingRunId } = useNavStore();
 
   useEffect(() => {
     setAuthenticated(isAuthenticated());
     setLoading(false);
   }, []);
+
+  useEffect(() => {
+    if (!authenticated || typeof window === "undefined") {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const view = params.get("view");
+    const runID = Number(params.get("run_id"));
+
+    if (view === "logs") {
+      setActiveView("logs");
+    }
+    if (Number.isInteger(runID) && runID > 0) {
+      setPendingRunId(runID);
+    }
+  }, [authenticated, setActiveView, setPendingRunId]);
 
   if (loading) {
     return (
