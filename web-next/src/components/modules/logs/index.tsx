@@ -26,6 +26,7 @@ function LogDialog({
   const [logContent, setLogContent] = useState(run.log_text || "");
   const [loading, setLoading] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
+  const logContentRef = useRef<HTMLPreElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
@@ -78,6 +79,40 @@ function LogDialog({
     };
   }, [run.id, run.status]);
 
+  useEffect(() => {
+    const handleSelectAllLogs = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) {
+        return;
+      }
+      if (event.key.toLowerCase() !== "a") {
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, [contenteditable='true']")) {
+        return;
+      }
+
+      if (!logContentRef.current) {
+        return;
+      }
+
+      event.preventDefault();
+      const selection = window.getSelection();
+      if (!selection) {
+        return;
+      }
+
+      const range = document.createRange();
+      range.selectNodeContents(logContentRef.current);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    };
+
+    document.addEventListener("keydown", handleSelectAllLogs);
+    return () => document.removeEventListener("keydown", handleSelectAllLogs);
+  }, []);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <motion.div
@@ -119,9 +154,12 @@ function LogDialog({
         <div className="flex-1 overflow-hidden bg-slate-900">
           <div
             ref={logRef}
-            className="h-full overflow-auto"
+            className="h-full overflow-y-scroll overflow-x-auto pr-1 [scrollbar-width:auto] [-ms-overflow-style:auto] [&::-webkit-scrollbar]:w-3 [&::-webkit-scrollbar]:h-3 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-track]:bg-slate-800/80"
           >
-            <pre className="min-h-full p-4 text-sm whitespace-pre-wrap font-mono text-green-200">
+            <pre
+              ref={logContentRef}
+              className="min-h-full p-4 text-sm whitespace-pre-wrap font-mono text-green-200 select-text"
+            >
               {logContent || "暂无日志内容"}
             </pre>
           </div>
