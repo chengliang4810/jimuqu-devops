@@ -203,7 +203,8 @@ export function Logs() {
 
   const handleCloseDialog = () => {
     setSelectedRun(null);
-    loadRuns(); // 刷新列表以获取最新状态
+    runsCache = null;
+    void loadRuns(true);
   };
 
   return (

@@ -185,6 +185,16 @@ func (s *Server) handleGetUpdateStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleApplyUpdate(w http.ResponseWriter, r *http.Request) {
+	activeRuns, err := s.store.CountActiveRuns(r.Context())
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	if activeRuns > 0 {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "存在正在部署中的任务，请等待部署完成后再更新"})
+		return
+	}
+
 	proxyURL := s.getProxyURL(r)
 	result, err := update.ApplyUpdate(r.Context(), proxyURL)
 	if err != nil {

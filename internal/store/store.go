@@ -753,6 +753,21 @@ func (s *Store) ListAllRuns(ctx context.Context, offset, limit int) ([]model.Pip
 	return runs, rows.Err()
 }
 
+func (s *Store) CountActiveRuns(ctx context.Context) (int64, error) {
+	row := s.db.QueryRowContext(
+		ctx,
+		`SELECT COUNT(1) FROM pipeline_runs WHERE status IN (?, ?)`,
+		model.RunStatusQueued,
+		model.RunStatusRunning,
+	)
+
+	var count int64
+	if err := row.Scan(&count); err != nil {
+		return 0, fmt.Errorf("count active runs: %w", err)
+	}
+	return count, nil
+}
+
 func (s *Store) GetHomeDashboard(ctx context.Context) (model.HomeDashboard, error) {
 	projects, err := s.ListProjects(ctx)
 	if err != nil {

@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { settingApi } from "@/api/client";
+import { runApi, settingApi } from "@/api/client";
+import { getApiOrigin } from "@/lib/api-base";
 import { toast } from "sonner";
 import { Download, Github, Info, Tag } from "lucide-react";
 import type { ReleaseInfo, SystemInfo, UpdateStatus } from "@/types";
@@ -15,6 +16,10 @@ type SettingInfoProps = {
 function normalizeVersion(value?: string) {
   if (!value) return "-";
   return value.startsWith("v") ? value.slice(1) : value;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 export function SettingInfo({ systemInfo }: SettingInfoProps) {
@@ -48,12 +53,50 @@ export function SettingInfo({ systemInfo }: SettingInfoProps) {
     return !!updateStatus?.has_update && !updating;
   }, [updateStatus?.has_update, updating]);
 
+  const waitForServiceRecovery = async () => {
+    await sleep(1500);
+    const deadline = Date.now() + 120000;
+
+    while (Date.now() < deadline) {
+      try {
+        const response = await fetch(`${getApiOrigin()}/healthz`, {
+          method: "GET",
+          cache: "no-store",
+        });
+        if (response.ok) {
+          window.location.reload();
+          return true;
+        }
+      } catch {
+        // 服务重启期间请求失败是预期行为，继续轮询即可。
+      }
+
+      await sleep(2000);
+    }
+
+    return false;
+  };
+
   const handleApplyUpdate = async () => {
     if (!canApplyUpdate) return;
     setUpdating(true);
     try {
+      const runs = await runApi.list();
+      const hasActiveRun = runs.some((run) => run.status === "queued" || run.status === "running");
+      if (hasActiveRun) {
+        toast.error("存在正在部署中的任务，请等待部署完成后再更新");
+        setUpdating(false);
+        return;
+      }
+
       const result = await settingApi.applyUpdate();
-      toast.success(result.message || "更新已开始，服务即将重启");
+      toast.success(result.message || "更新已应用，应用即将自动重启");
+
+      const recovered = await waitForServiceRecovery();
+      if (!recovered) {
+        toast.error("服务正在重启，请稍后手动刷新页面确认版本");
+        setUpdating(false);
+      }
     } catch (error: any) {
       toast.error(error.message || "在线更新失败");
       setUpdating(false);
@@ -114,7 +157,7 @@ export function SettingInfo({ systemInfo }: SettingInfoProps) {
             disabled={!canApplyUpdate}
           >
             <Download className="mr-2 h-4 w-4" />
-            {updating ? "更新中" : "立即更新"}
+            {updating ? "等待重启" : "立即更新"}
           </Button>
         ) : null}
       </div>
