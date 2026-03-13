@@ -309,17 +309,13 @@ func (s *Sender) sendFeishu(channel model.NotificationChannel, payload model.Not
 	content := map[string]any{
 		"tag": "div",
 		"text": fmt.Sprintf(
-			"项目: %s\n分支: %s\n状态: %s\n运行记录: %s\n触发方式: %s\n触发引用: %s\n失败阶段: %s\n目标主机: %s (%s)\n部署目录: %s\n运行耗时: %s\n提交ID: %s\n提交者: %s\n提交信息: %s\n错误信息: %s\n时间: %s",
+			"项目: %s\n分支: %s\n状态: %s\n运行记录: %s\n触发方式: %s\n失败阶段: %s\n运行耗时: %s\n提交ID: %s\n提交者: %s\n提交信息: %s\n错误信息: %s\n时间: %s",
 			payload.ProjectName,
 			payload.Branch,
 			getStatusText(payload.Status),
 			buildRunLinkPlain(payload),
 			getTriggerText(payload.TriggerType),
-			emptyFallback(payload.TriggerRef, "-"),
 			emptyFallback(displayStageText(payload.Stage), "-"),
-			emptyFallback(payload.HostName, "-"),
-			emptyFallback(payload.HostAddress, "-"),
-			emptyFallback(payload.RemoteDeployDir, "-"),
 			formatDuration(payload.DurationSeconds),
 			emptyFallback(shortCommit(payload.CommitID), "-"),
 			emptyFallback(payload.Author, "-"),
@@ -404,10 +400,7 @@ func (s *Sender) sendEmail(channel model.NotificationChannel, payload model.Noti
 			"状态: %s\n"+
 			"运行记录: %s\n"+
 			"触发方式: %s\n"+
-			"触发引用: %s\n"+
 			"失败阶段: %s\n"+
-			"目标主机: %s (%s)\n"+
-			"部署目录: %s\n"+
 			"运行耗时: %s\n"+
 			"提交ID: %s\n"+
 			"提交者: %s\n"+
@@ -419,11 +412,7 @@ func (s *Sender) sendEmail(channel model.NotificationChannel, payload model.Noti
 		getStatusText(payload.Status),
 		buildRunLinkPlain(payload),
 		getTriggerText(payload.TriggerType),
-		emptyFallback(payload.TriggerRef, "-"),
 		emptyFallback(displayStageText(payload.Stage), "-"),
-		emptyFallback(payload.HostName, "-"),
-		emptyFallback(payload.HostAddress, "-"),
-		emptyFallback(payload.RemoteDeployDir, "-"),
 		formatDuration(payload.DurationSeconds),
 		emptyFallback(shortCommit(payload.CommitID), "-"),
 		emptyFallback(payload.Author, "-"),
@@ -527,14 +516,10 @@ func buildCommitInfoMarkdown(payload model.NotificationPayload) string {
 
 func buildExecutionInfoMarkdown(payload model.NotificationPayload) string {
 	return fmt.Sprintf(
-		"**运行记录**: %s\n**触发方式**: %s\n**触发引用**: %s\n**失败阶段**: %s\n**目标主机**: %s (%s)\n**部署目录**: %s\n**运行耗时**: %s\n\n",
+		"**运行记录**: %s\n**触发方式**: %s\n**失败阶段**: %s\n**运行耗时**: %s\n\n",
 		buildRunLinkMarkdown(payload),
 		getTriggerText(payload.TriggerType),
-		emptyFallback(payload.TriggerRef, "-"),
 		emptyFallback(displayStageText(payload.Stage), "-"),
-		emptyFallback(payload.HostName, "-"),
-		emptyFallback(payload.HostAddress, "-"),
-		emptyFallback(payload.RemoteDeployDir, "-"),
 		formatDuration(payload.DurationSeconds),
 	)
 }
@@ -555,14 +540,10 @@ func buildCommitInfoPlain(payload model.NotificationPayload) string {
 
 func buildExecutionInfoPlain(payload model.NotificationPayload) string {
 	return fmt.Sprintf(
-		"运行记录: %s\n触发方式: %s\n触发引用: %s\n失败阶段: %s\n目标主机: %s (%s)\n部署目录: %s\n运行耗时: %s\n",
+		"运行记录: %s\n触发方式: %s\n失败阶段: %s\n运行耗时: %s\n",
 		buildRunLinkPlain(payload),
 		getTriggerText(payload.TriggerType),
-		emptyFallback(payload.TriggerRef, "-"),
 		emptyFallback(displayStageText(payload.Stage), "-"),
-		emptyFallback(payload.HostName, "-"),
-		emptyFallback(payload.HostAddress, "-"),
-		emptyFallback(payload.RemoteDeployDir, "-"),
 		formatDuration(payload.DurationSeconds),
 	)
 }
