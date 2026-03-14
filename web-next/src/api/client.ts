@@ -114,6 +114,11 @@ export const projectApi = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
+  clone: (id: number, data: { name: string; branch: string; description?: string }) =>
+    request<import("@/types").ProjectDetail>(`/projects/${id}/clone`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   reorder: (ids: number[]) =>
     request<void>("/projects/reorder", {
       method: "PUT",

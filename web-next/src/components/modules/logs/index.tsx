@@ -150,6 +150,7 @@ function LogDialog({
                     type="button"
                     variant="destructive"
                     size="sm"
+                    className="h-8 px-2.5 text-xs"
                     onClick={() => onCancelConfirm(currentRun)}
                     disabled={cancelling}
                   >
@@ -159,6 +160,7 @@ function LogDialog({
                     type="button"
                     variant="outline"
                     size="sm"
+                    className="h-8 px-2.5 text-xs"
                     onClick={onCancelDismiss}
                     disabled={cancelling}
                   >
@@ -170,10 +172,11 @@ function LogDialog({
                   type="button"
                   variant="destructive"
                   size="sm"
+                  className="h-8 px-2.5 text-xs"
                   onClick={() => onCancelRequest(currentRun)}
                   disabled={cancelling}
                 >
-                  <Square className="mr-2 h-4 w-4" />
+                  <Square className="mr-1.5 h-3.5 w-3.5" />
                   取消部署
                 </Button>
               )
@@ -357,6 +360,7 @@ export function Logs() {
                             type="button"
                             size="sm"
                             variant="destructive"
+                            className="h-8 px-2.5 text-xs"
                             onClick={(event) => void handleCancelRun(run, event)}
                             disabled={cancellingRunId === run.id}
                           >
@@ -366,6 +370,7 @@ export function Logs() {
                             type="button"
                             size="sm"
                             variant="outline"
+                            className="h-8 px-2.5 text-xs"
                             onClick={handleCancelDismiss}
                             disabled={cancellingRunId === run.id}
                           >
@@ -377,10 +382,11 @@ export function Logs() {
                           type="button"
                           size="sm"
                           variant="destructive"
+                          className="h-8 px-2.5 text-xs"
                           onClick={(event) => handleCancelRequest(run, event)}
                           disabled={cancellingRunId === run.id}
                         >
-                          <Square className="mr-2 h-4 w-4" />
+                          <Square className="mr-1.5 h-3.5 w-3.5" />
                           取消部署
                         </Button>
                       )

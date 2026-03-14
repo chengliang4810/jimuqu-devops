@@ -46,7 +46,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { projectApi, hostApi, notifyApi } from "@/api/client";
 import type { Project, Host, NotifyChannel, DeployConfig, ProjectDetail } from "@/types";
 import { toast } from "sonner";
-import { Copy, GripVertical, Pencil, Play, Trash2, X } from "lucide-react";
+import { Copy, CopyPlus, GripVertical, Pencil, Play, Trash2, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn, formatMultilineValue, parseMultilineInput } from "@/lib/utils";
 import { useNavStore } from "@/stores";
@@ -288,6 +288,7 @@ type ProjectCardViewProps = {
   isOverlay?: boolean;
   onTrigger: () => void;
   onCopyWebhook: () => void;
+  onClone: () => void;
   onEdit: () => void;
   onDeleteRequest: () => void;
   onDeleteCancel: () => void;
@@ -302,6 +303,7 @@ function ProjectCardView({
   isOverlay = false,
   onTrigger,
   onCopyWebhook,
+  onClone,
   onEdit,
   onDeleteRequest,
   onDeleteCancel,
@@ -355,6 +357,20 @@ function ProjectCardView({
                 </Button>
               </TooltipTrigger>
               <TooltipContent>复制 Webhook</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label="复制项目"
+                  onClick={onClone}
+                >
+                  <CopyPlus className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>复制项目</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -427,6 +443,7 @@ type SortableProjectCardProps = {
   isDeleting: boolean;
   onTrigger: () => void;
   onCopyWebhook: () => void;
+  onClone: () => void;
   onEdit: () => void;
   onDeleteRequest: () => void;
   onDeleteCancel: () => void;
@@ -548,6 +565,27 @@ export function Projects() {
     setActiveTab("basic");
   };
 
+  const applyProjectDetailToForm = (detail: ProjectDetail) => {
+    setEditingProject(detail.project);
+    setFormData({
+      name: detail.project.name,
+      branch: detail.project.branch,
+      repo_url: detail.project.repo_url,
+      description: detail.project.description || "",
+      git_auth_type: detail.project.git_auth_type || "none",
+      git_username: detail.project.git_username || "",
+      git_password: "",
+      git_ssh_key: "",
+      has_existing_git_auth: detail.project.has_git_auth,
+      has_existing_git_password: detail.project.has_git_password,
+      has_existing_git_ssh_key: detail.project.has_git_ssh_key,
+      original_git_auth_type: detail.project.git_auth_type || "none",
+      deploy_config: mapDeployConfigToForm(detail.deploy_config),
+    });
+    setActiveTab("basic");
+    setDialogOpen(true);
+  };
+
   const openCreateDialog = () => {
     setEditingProject(null);
     resetForm();
@@ -560,27 +598,30 @@ export function Projects() {
       const deployConfig =
         detail.deploy_config ??
         (await projectApi.getDeployConfig(project.id).catch(() => null));
-
-      setEditingProject(detail.project);
-      setFormData({
-        name: detail.project.name,
-        branch: detail.project.branch,
-        repo_url: detail.project.repo_url,
-        description: detail.project.description || "",
-        git_auth_type: detail.project.git_auth_type || "none",
-        git_username: detail.project.git_username || "",
-        git_password: "",
-        git_ssh_key: "",
-        has_existing_git_auth: detail.project.has_git_auth,
-        has_existing_git_password: detail.project.has_git_password,
-        has_existing_git_ssh_key: detail.project.has_git_ssh_key,
-        original_git_auth_type: detail.project.git_auth_type || "none",
-        deploy_config: mapDeployConfigToForm(deployConfig),
+      applyProjectDetailToForm({
+        ...detail,
+        deploy_config: deployConfig,
       });
-      setActiveTab("basic");
-      setDialogOpen(true);
     } catch (error: any) {
       toast.error(error.message || "加载项目详情失败");
+    }
+  };
+
+  const handleClone = async (project: Project) => {
+    const cloneName = `${project.name}-副本`;
+    const cloneBranch = `${project.branch}-copy`;
+
+    try {
+      const detail = await projectApi.clone(project.id, {
+        name: cloneName,
+        branch: cloneBranch,
+      });
+      projectsCache = null;
+      await loadData(true);
+      applyProjectDetailToForm(detail);
+      toast.success("项目已复制，请按需调整分支或仓库");
+    } catch (error: any) {
+      toast.error(error.message || "复制项目失败");
     }
   };
 
@@ -718,6 +759,7 @@ export function Projects() {
                   isDeleting={deletingProject?.id === project.id}
                   onTrigger={() => void handleTrigger(project.id)}
                   onCopyWebhook={() => copyWebhook(project.webhook_token)}
+                  onClone={() => void handleClone(project)}
                   onEdit={() => void openEditDialog(project)}
                   onDeleteRequest={() => setDeletingProject(project)}
                   onDeleteCancel={() => setDeletingProject(null)}
@@ -736,6 +778,7 @@ export function Projects() {
                   isOverlay
                   onTrigger={() => {}}
                   onCopyWebhook={() => {}}
+                  onClone={() => {}}
                   onEdit={() => {}}
                   onDeleteRequest={() => {}}
                   onDeleteCancel={() => {}}
@@ -1049,42 +1092,44 @@ export function Projects() {
                     />
                   </div>
                 </div>
-                <div className="grid gap-2">
-                  <Label>保留版本数量</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={formData.deploy_config.version_count}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        deploy_config: {
-                          ...formData.deploy_config,
-                          version_count: Number(e.target.value) || 0,
-                        },
-                      })
-                    }
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    远程保存目录默认保留最近 5 个历史版本，超出后会自动清理旧版本。
-                  </p>
-                </div>
-                <div className="grid gap-2">
-                  <Label>部署超时(分钟)</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={formData.deploy_config.timeout_minutes}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        deploy_config: {
-                          ...formData.deploy_config,
-                          timeout_minutes: Number(e.target.value) || 0,
-                        },
-                      })
-                    }
-                  />
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label>保留版本数量</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={formData.deploy_config.version_count}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          deploy_config: {
+                            ...formData.deploy_config,
+                            version_count: Number(e.target.value) || 0,
+                          },
+                        })
+                      }
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      远程保存目录默认保留最近 5 个历史版本，超出后会自动清理旧版本。
+                    </p>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>部署超时(分钟)</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={formData.deploy_config.timeout_minutes}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          deploy_config: {
+                            ...formData.deploy_config,
+                            timeout_minutes: Number(e.target.value) || 0,
+                          },
+                        })
+                      }
+                    />
+                  </div>
                 </div>
                 <div className="grid gap-2">
                   <Label>部署前命令</Label>
