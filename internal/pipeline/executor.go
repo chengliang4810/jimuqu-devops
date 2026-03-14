@@ -40,6 +40,7 @@ type Executor struct {
 	logger        *slog.Logger
 	workspaceRoot string
 	artifactRoot  string
+	cacheRoot     string
 	httpClient    *http.Client
 	cancelFuncs   map[int64]context.CancelFunc
 	cancelMutex   sync.Mutex
@@ -58,12 +59,13 @@ type pipelineResult struct {
 	DurationSeconds int64
 }
 
-func NewExecutor(store *store.Store, logger *slog.Logger, workspaceRoot, artifactRoot string) *Executor {
+func NewExecutor(store *store.Store, logger *slog.Logger, workspaceRoot, artifactRoot, cacheRoot string) *Executor {
 	return &Executor{
 		store:         store,
 		logger:        logger,
 		workspaceRoot: workspaceRoot,
 		artifactRoot:  artifactRoot,
+		cacheRoot:     cacheRoot,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -302,7 +304,11 @@ func (e *Executor) runPipeline(ctx context.Context, runID int64, bundle model.Ex
 
 	result.Stage = "build"
 	logf("stage build: image=%s", bundle.DeployConfig.BuildImage)
-	if err := e.runDockerBuildWithLogging(ctx, sourceDir, bundle.DeployConfig.BuildImage, bundle.DeployConfig.BuildCommands, logf); err != nil {
+	cacheDirs, err := e.loadBuildCacheDirs(ctx)
+	if err != nil {
+		return result, fmt.Errorf("load build cache dirs: %w", err)
+	}
+	if err := e.runDockerBuildWithLogging(ctx, sourceDir, bundle.DeployConfig.BuildImage, bundle.DeployConfig.BuildCommands, cacheDirs, logf); err != nil {
 		return result, fmt.Errorf("docker build stage failed: %w", err)
 	}
 
@@ -365,7 +371,7 @@ func (e *Executor) runLocalCommandWithLogging(ctx context.Context, logf func(str
 	return nil
 }
 
-func (e *Executor) runDockerBuild(ctx context.Context, sourceDir, image string, commands []string) (string, error) {
+func (e *Executor) runDockerBuild(ctx context.Context, sourceDir, image string, commands, cacheDirs []string) (string, error) {
 	script := "set -eu\n" + strings.Join(commands, "\n")
 	absSourceDir, err := filepath.Abs(sourceDir)
 	if err != nil {
@@ -379,10 +385,14 @@ func (e *Executor) runDockerBuild(ctx context.Context, sourceDir, image string, 
 	if err != nil {
 		return "", err
 	}
+	cacheArgs, err := e.dockerCacheArgs(cacheDirs)
+	if err != nil {
+		return "", err
+	}
 
 	var combinedOutput strings.Builder
 	for _, candidateImage := range candidateImages {
-		output, runErr := e.runDockerCommand(ctx, absSourceDir, candidateImage, script, envArgs)
+		output, runErr := e.runDockerCommand(ctx, absSourceDir, candidateImage, script, envArgs, cacheArgs)
 		if runErr == nil {
 			return output, nil
 		}
@@ -399,7 +409,7 @@ func (e *Executor) runDockerBuild(ctx context.Context, sourceDir, image string, 
 	return combinedOutput.String(), fmt.Errorf("all docker mirror candidates failed")
 }
 
-func (e *Executor) runDockerBuildWithLogging(ctx context.Context, sourceDir, image string, commands []string, logf func(string, ...any)) error {
+func (e *Executor) runDockerBuildWithLogging(ctx context.Context, sourceDir, image string, commands, cacheDirs []string, logf func(string, ...any)) error {
 	script := "set -eu\n" + strings.Join(commands, "\n")
 	absSourceDir, err := filepath.Abs(sourceDir)
 	if err != nil {
@@ -413,11 +423,15 @@ func (e *Executor) runDockerBuildWithLogging(ctx context.Context, sourceDir, ima
 	if err != nil {
 		return err
 	}
+	cacheArgs, err := e.dockerCacheArgs(cacheDirs)
+	if err != nil {
+		return err
+	}
 
 	var lastErr error
 	for _, candidateImage := range candidateImages {
 		logf("stage build: trying image source=%s", candidateImage)
-		runErr := e.runDockerCommandWithLogging(ctx, absSourceDir, candidateImage, script, envArgs, logf)
+		runErr := e.runDockerCommandWithLogging(ctx, absSourceDir, candidateImage, script, envArgs, cacheArgs, logf)
 		if runErr == nil {
 			return nil
 		}
@@ -431,28 +445,70 @@ func (e *Executor) runDockerBuildWithLogging(ctx context.Context, sourceDir, ima
 	return lastErr
 }
 
-func (e *Executor) runDockerCommand(ctx context.Context, absSourceDir, image, script string, envArgs []string) (string, error) {
+func (e *Executor) runDockerCommand(ctx context.Context, absSourceDir, image, script string, envArgs, cacheArgs []string) (string, error) {
 	mountDir := filepath.ToSlash(absSourceDir)
 	args := []string{
 		"run", "--rm",
 		"-v", fmt.Sprintf("%s:/workspace", mountDir),
 		"-w", "/workspace",
 	}
+	args = append(args, cacheArgs...)
 	args = append(args, envArgs...)
 	args = append(args, image, "sh", "-lc", script)
 	return e.runLocalCommand(ctx, "docker", args)
 }
 
-func (e *Executor) runDockerCommandWithLogging(ctx context.Context, absSourceDir, image, script string, envArgs []string, logf func(string, ...any)) error {
+func (e *Executor) runDockerCommandWithLogging(ctx context.Context, absSourceDir, image, script string, envArgs, cacheArgs []string, logf func(string, ...any)) error {
 	mountDir := filepath.ToSlash(absSourceDir)
 	args := []string{
 		"run", "--rm",
 		"-v", fmt.Sprintf("%s:/workspace", mountDir),
 		"-w", "/workspace",
 	}
+	args = append(args, cacheArgs...)
 	args = append(args, envArgs...)
 	args = append(args, image, "sh", "-lc", script)
 	return e.runLocalCommandWithLogging(ctx, logf, "docker", args)
+}
+
+func (e *Executor) dockerCacheArgs(cacheDirs []string) ([]string, error) {
+	if strings.TrimSpace(e.cacheRoot) == "" {
+		return nil, nil
+	}
+
+	var args []string
+	for _, containerDir := range model.NormalizeCacheDirs(cacheDirs) {
+		hostDir, err := e.ensureCacheDir(containerDir)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, "-v", fmt.Sprintf("%s:%s", filepath.ToSlash(hostDir), containerDir))
+	}
+
+	return args, nil
+}
+
+func (e *Executor) loadBuildCacheDirs(ctx context.Context) ([]string, error) {
+	value, err := e.store.GetSettingValue(ctx, model.SettingBuildCacheDirs)
+	if err != nil {
+		return nil, err
+	}
+	return model.ParseBuildCacheDirsSetting(value), nil
+}
+
+func (e *Executor) ensureCacheDir(containerDir string) (string, error) {
+	normalized := model.NormalizeCacheDir(containerDir)
+	if normalized == "" {
+		return "", fmt.Errorf("invalid cache dir %q", containerDir)
+	}
+
+	relativeDir := strings.TrimPrefix(normalized, "/")
+	hostDir := filepath.Join(e.cacheRoot, filepath.FromSlash(relativeDir))
+	if err := os.MkdirAll(hostDir, 0o755); err != nil {
+		return "", fmt.Errorf("create cache dir %s: %w", hostDir, err)
+	}
+
+	return hostDir, nil
 }
 
 func (e *Executor) buildCommandEnv(ctx context.Context) ([]string, error) {

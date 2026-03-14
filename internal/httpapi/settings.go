@@ -207,7 +207,7 @@ func (s *Server) handleApplyUpdate(w http.ResponseWriter, r *http.Request) {
 
 func validateSettingKey(key string) error {
 	switch key {
-	case model.SettingDockerMirrorURL, model.SettingGitDockerImage, model.SettingPublicBaseURL, model.SettingProxyURL, model.SettingRunRetentionDays:
+	case model.SettingDockerMirrorURL, model.SettingGitDockerImage, model.SettingBuildCacheDirs, model.SettingPublicBaseURL, model.SettingProxyURL, model.SettingRunRetentionDays:
 		return nil
 	default:
 		return errors.New("unsupported setting key")
@@ -230,6 +230,17 @@ func validateSettingValue(key, value string) error {
 	case model.SettingGitDockerImage:
 		if value == "" {
 			return errors.New("git_docker_image is required")
+		}
+		return nil
+	case model.SettingBuildCacheDirs:
+		for _, cacheDir := range strings.Split(strings.ReplaceAll(value, "\r\n", "\n"), "\n") {
+			trimmed := strings.TrimSpace(cacheDir)
+			if trimmed == "" {
+				continue
+			}
+			if model.NormalizeCacheDir(trimmed) == "" {
+				return errors.New("build_cache_dirs must contain absolute container paths such as /root/.m2")
+			}
 		}
 		return nil
 	case model.SettingRunRetentionDays:

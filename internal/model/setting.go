@@ -1,10 +1,14 @@
 package model
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 const (
 	SettingDockerMirrorURL  = "docker_mirror_url"
 	SettingGitDockerImage   = "git_docker_image"
+	SettingBuildCacheDirs   = "build_cache_dirs"
 	SettingPublicBaseURL    = "public_base_url"
 	SettingProxyURL         = "proxy_url"
 	SettingRunRetentionDays = "run_retention_days"
@@ -13,9 +17,15 @@ const (
 var DefaultSettings = map[string]string{
 	SettingDockerMirrorURL:  "",
 	SettingGitDockerImage:   "alpine/git:latest",
+	SettingBuildCacheDirs:   strings.Join(DefaultDeployCacheDirs(), "\n"),
 	SettingPublicBaseURL:    "",
 	SettingProxyURL:         "",
 	SettingRunRetentionDays: "30",
+}
+
+func ParseBuildCacheDirsSetting(value string) []string {
+	normalizedValue := strings.ReplaceAll(value, "\r\n", "\n")
+	return NormalizeCacheDirs(strings.Split(normalizedValue, "\n"))
 }
 
 type Setting struct {

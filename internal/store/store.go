@@ -31,6 +31,10 @@ func (s *Store) Migrate(ctx context.Context) error {
 		}
 	}
 
+	if err := s.ensureDeployConfigCacheDirsColumn(ctx); err != nil {
+		return err
+	}
+
 	if err := s.ensureSortOrderColumn(ctx, "hosts"); err != nil {
 		return err
 	}
@@ -382,14 +386,15 @@ func (s *Store) CloneProject(ctx context.Context, sourceID int64, input model.Pr
 		_, err = tx.ExecContext(
 			ctx,
 			`INSERT INTO deploy_configs (
-				project_id, host_id, build_image, build_commands_json, artifact_filter_mode,
+				project_id, host_id, build_image, build_commands_json, cache_dirs_json, artifact_filter_mode,
 				artifact_rules_json, remote_save_dir, remote_deploy_dir, pre_deploy_commands_json,
 				post_deploy_commands_json, version_count, timeout_seconds, notify_webhook_url, notify_token_cipher, notification_channel_id, created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			projectID,
 			config.HostID,
 			config.BuildImage,
 			mustMarshal(config.BuildCommands),
+			mustMarshal(model.NormalizeCacheDirs(config.CacheDirs)),
 			config.ArtifactFilterMode,
 			mustMarshal(config.ArtifactRules),
 			config.RemoteSaveDir,
@@ -437,6 +442,7 @@ func (s *Store) upsertDeployConfigWithExecutor(ctx context.Context, executor exe
 	if input.TimeoutSeconds <= 0 {
 		input.TimeoutSeconds = 1800
 	}
+	input.CacheDirs = model.NormalizeCacheDirs(input.CacheDirs)
 
 	tokenCipher := ""
 	if input.NotifyBearerToken != nil {
@@ -467,6 +473,7 @@ func (s *Store) upsertDeployConfigWithExecutor(ctx context.Context, executor exe
 		input.HostID,
 		input.BuildImage,
 		mustMarshal(input.BuildCommands),
+		mustMarshal(input.CacheDirs),
 		input.ArtifactFilterMode,
 		mustMarshal(input.ArtifactRules),
 		input.RemoteSaveDir,
@@ -502,14 +509,15 @@ func (s *Store) ensureHostExistsWithExecutor(ctx context.Context, queryer queryR
 
 func deployConfigUpsertQuery(isMySQL bool) string {
 	query := `INSERT INTO deploy_configs (
-		project_id, host_id, build_image, build_commands_json, artifact_filter_mode,
+		project_id, host_id, build_image, build_commands_json, cache_dirs_json, artifact_filter_mode,
 		artifact_rules_json, remote_save_dir, remote_deploy_dir, pre_deploy_commands_json,
 		post_deploy_commands_json, version_count, timeout_seconds, notify_webhook_url, notify_token_cipher, notification_channel_id, created_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(project_id) DO UPDATE SET
 		host_id = excluded.host_id,
 		build_image = excluded.build_image,
 		build_commands_json = excluded.build_commands_json,
+		cache_dirs_json = excluded.cache_dirs_json,
 		artifact_filter_mode = excluded.artifact_filter_mode,
 		artifact_rules_json = excluded.artifact_rules_json,
 		remote_save_dir = excluded.remote_save_dir,
@@ -524,14 +532,15 @@ func deployConfigUpsertQuery(isMySQL bool) string {
 		updated_at = excluded.updated_at`
 	if isMySQL {
 		query = `INSERT INTO deploy_configs (
-			project_id, host_id, build_image, build_commands_json, artifact_filter_mode,
+			project_id, host_id, build_image, build_commands_json, cache_dirs_json, artifact_filter_mode,
 			artifact_rules_json, remote_save_dir, remote_deploy_dir, pre_deploy_commands_json,
 			post_deploy_commands_json, version_count, timeout_seconds, notify_webhook_url, notify_token_cipher, notification_channel_id, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
 			host_id = VALUES(host_id),
 			build_image = VALUES(build_image),
 			build_commands_json = VALUES(build_commands_json),
+			cache_dirs_json = VALUES(cache_dirs_json),
 			artifact_filter_mode = VALUES(artifact_filter_mode),
 			artifact_rules_json = VALUES(artifact_rules_json),
 			remote_save_dir = VALUES(remote_save_dir),
@@ -555,7 +564,7 @@ func (s *Store) GetDeployConfigByProjectID(ctx context.Context, projectID int64)
 func (s *Store) getDeployConfigWithExecutor(ctx context.Context, queryer queryRowContext, projectID int64) (model.DeployConfig, error) {
 	row := queryer.QueryRowContext(
 		ctx,
-		`SELECT id, project_id, host_id, build_image, build_commands_json, artifact_filter_mode,
+		`SELECT id, project_id, host_id, build_image, build_commands_json, COALESCE(cache_dirs_json, '[]'), artifact_filter_mode,
 		        artifact_rules_json, remote_save_dir, remote_deploy_dir, pre_deploy_commands_json,
 		        post_deploy_commands_json, version_count, timeout_seconds, notify_webhook_url, notify_token_cipher, notification_channel_id, created_at, updated_at
 		 FROM deploy_configs
@@ -1228,6 +1237,7 @@ func (s *Store) scanDeployConfig(scan scanner) (model.DeployConfig, error) {
 	var (
 		config                model.DeployConfig
 		buildCommandsJSON     string
+		cacheDirsJSON         string
 		artifactRulesJSON     string
 		preDeployCommands     string
 		postDeployCommands    string
@@ -1245,6 +1255,7 @@ func (s *Store) scanDeployConfig(scan scanner) (model.DeployConfig, error) {
 		&config.HostID,
 		&config.BuildImage,
 		&buildCommandsJSON,
+		&cacheDirsJSON,
 		&config.ArtifactFilterMode,
 		&artifactRulesJSON,
 		&config.RemoteSaveDir,
@@ -1285,6 +1296,10 @@ func (s *Store) scanDeployConfig(scan scanner) (model.DeployConfig, error) {
 	if err = json.Unmarshal([]byte(buildCommandsJSON), &config.BuildCommands); err != nil {
 		return model.DeployConfig{}, fmt.Errorf("unmarshal build commands: %w", err)
 	}
+	if err = json.Unmarshal([]byte(cacheDirsJSON), &config.CacheDirs); err != nil {
+		return model.DeployConfig{}, fmt.Errorf("unmarshal cache dirs: %w", err)
+	}
+	config.CacheDirs = model.NormalizeCacheDirs(config.CacheDirs)
 	if err = json.Unmarshal([]byte(artifactRulesJSON), &config.ArtifactRules); err != nil {
 		return model.DeployConfig{}, fmt.Errorf("unmarshal artifact rules: %w", err)
 	}
@@ -1831,6 +1846,59 @@ func (s *Store) ensureSortOrderColumn(ctx context.Context, table string) error {
 		return fmt.Errorf("add sort_order to %s: %w", table, err)
 	}
 
+	return nil
+}
+
+func (s *Store) ensureDeployConfigCacheDirsColumn(ctx context.Context) error {
+	if s.isMySQL() {
+		var count int
+		if err := s.db.QueryRowContext(
+			ctx,
+			`SELECT COUNT(*) FROM information_schema.COLUMNS
+			 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'deploy_configs' AND COLUMN_NAME = 'cache_dirs_json'`,
+		).Scan(&count); err != nil {
+			return fmt.Errorf("read deploy_configs columns: %w", err)
+		}
+		if count == 0 {
+			if _, err := s.db.ExecContext(ctx, `ALTER TABLE deploy_configs ADD COLUMN cache_dirs_json LONGTEXT NULL`); err != nil {
+				return fmt.Errorf("add cache_dirs_json to deploy_configs: %w", err)
+			}
+		}
+	} else {
+		rows, err := s.db.QueryContext(ctx, `PRAGMA table_info(deploy_configs)`)
+		if err != nil {
+			return fmt.Errorf("read deploy_configs columns: %w", err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var (
+				cid          int
+				name         string
+				columnType   string
+				notNull      int
+				defaultValue sql.NullString
+				primaryKey   int
+			)
+			if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+				return fmt.Errorf("scan deploy_configs columns: %w", err)
+			}
+			if name == "cache_dirs_json" {
+				goto backfill
+			}
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("iterate deploy_configs columns: %w", err)
+		}
+		if _, err := s.db.ExecContext(ctx, `ALTER TABLE deploy_configs ADD COLUMN cache_dirs_json TEXT NOT NULL DEFAULT '[]'`); err != nil {
+			return fmt.Errorf("add cache_dirs_json to deploy_configs: %w", err)
+		}
+	}
+
+backfill:
+	if _, err := s.db.ExecContext(ctx, `UPDATE deploy_configs SET cache_dirs_json = '[]' WHERE cache_dirs_json IS NULL OR cache_dirs_json = ''`); err != nil {
+		return fmt.Errorf("backfill cache_dirs_json: %w", err)
+	}
 	return nil
 }
 

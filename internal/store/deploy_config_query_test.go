@@ -14,6 +14,9 @@ func TestDeployConfigUpsertQuerySQLite(t *testing.T) {
 	if strings.Contains(query, "ON DUPLICATE KEY UPDATE") {
 		t.Fatalf("did not expect mysql upsert clause, got %q", query)
 	}
+	if !strings.Contains(query, "cache_dirs_json = excluded.cache_dirs_json") {
+		t.Fatalf("expected cache dirs to be updated, got %q", query)
+	}
 }
 
 func TestDeployConfigUpsertQueryMySQL(t *testing.T) {
@@ -27,5 +30,8 @@ func TestDeployConfigUpsertQueryMySQL(t *testing.T) {
 	}
 	if !strings.Contains(query, "notification_channel_id = VALUES(notification_channel_id)") {
 		t.Fatalf("expected notification channel to be updated, got %q", query)
+	}
+	if !strings.Contains(query, "cache_dirs_json = VALUES(cache_dirs_json)") {
+		t.Fatalf("expected cache dirs to be updated, got %q", query)
 	}
 }

@@ -6,6 +6,8 @@ import { settingApi } from "@/api/client";
 import { PageWrapper } from "@/components/common/PageWrapper";
 import type { Setting as SettingItem, SettingKey, SystemInfo } from "@/types";
 import { SettingInfo } from "./Info";
+import { SettingImage } from "./Image";
+import { SettingCache } from "./Cache";
 import { SettingSystem } from "./System";
 import { SettingAccount } from "./Account";
 import { SettingLog } from "./Log";
@@ -14,6 +16,7 @@ import { SettingBackup } from "./Backup";
 const defaultSettings: Record<SettingKey, string> = {
   docker_mirror_url: "",
   git_docker_image: "alpine/git:latest",
+  build_cache_dirs: "/root/.m2\n/root/.gradle/caches\n/root/.npm\n/root/.yarn\n/go/pkg/mod\n/root/.cache",
   public_base_url: "",
   proxy_url: "",
   run_retention_days: "30",
@@ -69,6 +72,8 @@ export function Setting() {
       <PageWrapper className="columns-1 gap-4 pb-24 md:columns-2 md:pb-4 *:mb-4 *:break-inside-avoid">
         <SettingInfo key="setting-info" systemInfo={systemInfo} />
         <SettingAccount key="setting-account" />
+        <SettingImage key="setting-image" settings={settingMap} onSave={handleSaveSetting} />
+        <SettingCache key="setting-cache" settings={settingMap} onSave={handleSaveSetting} />
         <SettingSystem key="setting-system" settings={settingMap} onSave={handleSaveSetting} />
         <SettingLog key="setting-log" settings={settingMap} onSave={handleSaveSetting} />
         <SettingBackup key="setting-backup" />

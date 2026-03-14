@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"path"
+	"strings"
+	"time"
+)
 
 const (
 	ArtifactFilterNone    = "none"
@@ -110,6 +114,7 @@ type DeployConfig struct {
 	HostID                int64     `json:"host_id"`
 	BuildImage            string    `json:"build_image"`
 	BuildCommands         []string  `json:"build_commands"`
+	CacheDirs             []string  `json:"cache_dirs"`
 	ArtifactFilterMode    string    `json:"artifact_filter_mode"`
 	ArtifactRules         []string  `json:"artifact_rules"`
 	RemoteSaveDir         string    `json:"remote_save_dir"`
@@ -130,6 +135,7 @@ type DeployConfigUpsert struct {
 	HostID                int64    `json:"host_id"`
 	BuildImage            string   `json:"build_image"`
 	BuildCommands         []string `json:"build_commands"`
+	CacheDirs             []string `json:"cache_dirs"`
 	ArtifactFilterMode    string   `json:"artifact_filter_mode"`
 	ArtifactRules         []string `json:"artifact_rules"`
 	RemoteSaveDir         string   `json:"remote_save_dir"`
@@ -183,4 +189,57 @@ type RunCreateInput struct {
 
 type ReorderInput struct {
 	IDs []int64 `json:"ids"`
+}
+
+var defaultDeployCacheDirs = []string{
+	"/root/.m2",
+	"/root/.gradle/caches",
+	"/root/.npm",
+	"/root/.yarn",
+	"/go/pkg/mod",
+	"/root/.cache",
+}
+
+func DefaultDeployCacheDirs() []string {
+	return append([]string(nil), defaultDeployCacheDirs...)
+}
+
+func NormalizeCacheDirs(cacheDirs []string) []string {
+	if len(cacheDirs) == 0 {
+		return DefaultDeployCacheDirs()
+	}
+
+	normalized := make([]string, 0, len(cacheDirs))
+	seen := make(map[string]struct{}, len(cacheDirs))
+	for _, dir := range cacheDirs {
+		cleaned := NormalizeCacheDir(dir)
+		if cleaned == "" {
+			continue
+		}
+		if _, exists := seen[cleaned]; exists {
+			continue
+		}
+		seen[cleaned] = struct{}{}
+		normalized = append(normalized, cleaned)
+	}
+
+	if len(normalized) == 0 {
+		return DefaultDeployCacheDirs()
+	}
+
+	return normalized
+}
+
+func NormalizeCacheDir(cacheDir string) string {
+	cleaned := strings.TrimSpace(strings.ReplaceAll(cacheDir, "\\", "/"))
+	if cleaned == "" {
+		return ""
+	}
+
+	cleaned = path.Clean(cleaned)
+	if cleaned == "." || cleaned == "/" || !strings.HasPrefix(cleaned, "/") {
+		return ""
+	}
+
+	return cleaned
 }
