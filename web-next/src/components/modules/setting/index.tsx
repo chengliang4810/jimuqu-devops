@@ -72,11 +72,11 @@ export function Setting() {
       <PageWrapper className="columns-1 gap-4 pb-24 md:columns-2 md:pb-4 *:mb-4 *:break-inside-avoid">
         <SettingInfo key="setting-info" systemInfo={systemInfo} />
         <SettingAccount key="setting-account" />
+        <SettingBackup key="setting-backup" />
+        <SettingSystem key="setting-system" settings={settingMap} onSave={handleSaveSetting} />
         <SettingImage key="setting-image" settings={settingMap} onSave={handleSaveSetting} />
         <SettingCache key="setting-cache" settings={settingMap} onSave={handleSaveSetting} />
-        <SettingSystem key="setting-system" settings={settingMap} onSave={handleSaveSetting} />
         <SettingLog key="setting-log" settings={settingMap} onSave={handleSaveSetting} />
-        <SettingBackup key="setting-backup" />
       </PageWrapper>
     </div>
   );
