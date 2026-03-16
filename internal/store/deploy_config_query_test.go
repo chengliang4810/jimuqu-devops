@@ -35,3 +35,14 @@ func TestDeployConfigUpsertQueryMySQL(t *testing.T) {
 		t.Fatalf("expected cache dirs to be updated, got %q", query)
 	}
 }
+
+func TestCloneDeployConfigInsertQuery(t *testing.T) {
+	query := cloneDeployConfigInsertQuery()
+
+	if got, want := strings.Count(query, "?"), 18; got != want {
+		t.Fatalf("unexpected placeholder count: got %d want %d; query=%q", got, want, query)
+	}
+	if !strings.Contains(query, "cache_dirs_json") {
+		t.Fatalf("expected cache dirs column in clone insert query, got %q", query)
+	}
+}

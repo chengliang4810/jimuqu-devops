@@ -385,11 +385,7 @@ func (s *Store) CloneProject(ctx context.Context, sourceID int64, input model.Pr
 	if err == nil {
 		_, err = tx.ExecContext(
 			ctx,
-			`INSERT INTO deploy_configs (
-				project_id, host_id, build_image, build_commands_json, cache_dirs_json, artifact_filter_mode,
-				artifact_rules_json, remote_save_dir, remote_deploy_dir, pre_deploy_commands_json,
-				post_deploy_commands_json, version_count, timeout_seconds, notify_webhook_url, notify_token_cipher, notification_channel_id, created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			cloneDeployConfigInsertQuery(),
 			projectID,
 			config.HostID,
 			config.BuildImage,
@@ -419,6 +415,14 @@ func (s *Store) CloneProject(ctx context.Context, sourceID int64, input model.Pr
 	}
 
 	return s.GetProjectDetail(ctx, projectID)
+}
+
+func cloneDeployConfigInsertQuery() string {
+	return `INSERT INTO deploy_configs (
+		project_id, host_id, build_image, build_commands_json, cache_dirs_json, artifact_filter_mode,
+		artifact_rules_json, remote_save_dir, remote_deploy_dir, pre_deploy_commands_json,
+		post_deploy_commands_json, version_count, timeout_seconds, notify_webhook_url, notify_token_cipher, notification_channel_id, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 }
 
 func (s *Store) UpsertDeployConfig(ctx context.Context, projectID int64, input model.DeployConfigUpsert) (model.DeployConfig, error) {
