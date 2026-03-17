@@ -138,9 +138,24 @@ export const projectApi = {
 };
 
 // ==================== 部署记录 API ====================
+function buildRunListPath(limit?: number, offset?: number): string {
+  const params = new URLSearchParams();
+  if (typeof limit === "number" && limit > 0) {
+    params.set("limit", String(limit));
+  }
+  if (typeof offset === "number" && offset >= 0) {
+    params.set("offset", String(offset));
+  }
+
+  const query = params.toString();
+  return query ? `/runs?${query}` : "/runs";
+}
+
 export const runApi = {
-  list: () => request<import("@/types").PipelineRun[]>("/runs"),
+  list: (params?: { limit?: number; offset?: number }) =>
+    request<import("@/types").PipelineRun[]>(buildRunListPath(params?.limit, params?.offset)),
   get: (id: number) => request<import("@/types").PipelineRun>(`/runs/${id}`),
+  getLog: (id: number) => request<import("@/types").PipelineRunLog>(`/runs/${id}/log`),
   cancel: (id: number) => request<import("@/types").PipelineRun>(`/runs/${id}/cancel`, { method: "POST" }),
   clear: () => request<{ cleared: number }>("/runs", { method: "DELETE" }),
 };

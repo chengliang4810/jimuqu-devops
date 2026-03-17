@@ -703,33 +703,76 @@ func (s *Store) FinalizeRun(ctx context.Context, runID int64, status string, err
 	return nil
 }
 
+func runSelectQuery(includeLog bool) string {
+	logField := "''"
+	if includeLog {
+		logField = "pipeline_runs.log_text"
+	}
+
+	return fmt.Sprintf(`SELECT pipeline_runs.id, pipeline_runs.project_id, projects.name, projects.branch,
+		        pipeline_runs.status, pipeline_runs.trigger_type, pipeline_runs.trigger_ref,
+		        %s AS log_text, pipeline_runs.error_message,
+		        pipeline_runs.started_at, pipeline_runs.finished_at, pipeline_runs.created_at, pipeline_runs.updated_at
+		 FROM pipeline_runs
+		 JOIN projects ON projects.id = pipeline_runs.project_id`, logField)
+}
+
 func (s *Store) GetRun(ctx context.Context, runID int64) (model.PipelineRun, error) {
 	row := s.db.QueryRowContext(
 		ctx,
-		`SELECT pipeline_runs.id, pipeline_runs.project_id, projects.name, projects.branch,
-		        pipeline_runs.status, pipeline_runs.trigger_type, pipeline_runs.trigger_ref,
-		        pipeline_runs.log_text, pipeline_runs.error_message,
-		        pipeline_runs.started_at, pipeline_runs.finished_at, pipeline_runs.created_at, pipeline_runs.updated_at
-		 FROM pipeline_runs
-		 JOIN projects ON projects.id = pipeline_runs.project_id
+		runSelectQuery(true)+`
 		 WHERE pipeline_runs.id = ?`,
 		runID,
 	)
 	return scanRun(row)
 }
 
-func (s *Store) ListRunsByProject(ctx context.Context, projectID int64) ([]model.PipelineRun, error) {
+func (s *Store) GetRunSummary(ctx context.Context, runID int64) (model.PipelineRun, error) {
+	row := s.db.QueryRowContext(
+		ctx,
+		runSelectQuery(false)+`
+		 WHERE pipeline_runs.id = ?`,
+		runID,
+	)
+	return scanRun(row)
+}
+
+func (s *Store) GetRunLog(ctx context.Context, runID int64) (model.PipelineRunLog, error) {
+	row := s.db.QueryRowContext(
+		ctx,
+		`SELECT id, log_text, updated_at
+		 FROM pipeline_runs
+		 WHERE id = ?`,
+		runID,
+	)
+
+	var (
+		logEntry        model.PipelineRunLog
+		updatedAtString string
+	)
+	if err := row.Scan(&logEntry.RunID, &logEntry.LogText, &updatedAtString); errors.Is(err, sql.ErrNoRows) {
+		return model.PipelineRunLog{}, ErrNotFound
+	} else if err != nil {
+		return model.PipelineRunLog{}, fmt.Errorf("scan run log: %w", err)
+	}
+
+	updatedAt, err := parseTime(updatedAtString)
+	if err != nil {
+		return model.PipelineRunLog{}, err
+	}
+	logEntry.UpdatedAt = updatedAt
+
+	return logEntry, nil
+}
+
+func (s *Store) ListRunsByProject(ctx context.Context, projectID int64, limit int) ([]model.PipelineRun, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT pipeline_runs.id, pipeline_runs.project_id, projects.name, projects.branch,
-		        pipeline_runs.status, pipeline_runs.trigger_type, pipeline_runs.trigger_ref,
-		        pipeline_runs.log_text, pipeline_runs.error_message,
-		        pipeline_runs.started_at, pipeline_runs.finished_at, pipeline_runs.created_at, pipeline_runs.updated_at
-		 FROM pipeline_runs
-		 JOIN projects ON projects.id = pipeline_runs.project_id
+		runSelectQuery(false)+`
 		 WHERE pipeline_runs.project_id = ?
-		 ORDER BY pipeline_runs.id DESC`,
-		projectID,
+		 ORDER BY pipeline_runs.id DESC
+		 LIMIT ?`,
+		projectID, limit,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query runs: %w", err)
@@ -749,12 +792,7 @@ func (s *Store) ListRunsByProject(ctx context.Context, projectID int64) ([]model
 }
 
 func (s *Store) ListAllRuns(ctx context.Context, offset, limit int) ([]model.PipelineRun, error) {
-	query := `SELECT pipeline_runs.id, pipeline_runs.project_id, projects.name, projects.branch,
-		        pipeline_runs.status, pipeline_runs.trigger_type, pipeline_runs.trigger_ref,
-		        pipeline_runs.log_text, pipeline_runs.error_message,
-		        pipeline_runs.started_at, pipeline_runs.finished_at, pipeline_runs.created_at, pipeline_runs.updated_at
-		 FROM pipeline_runs
-		 JOIN projects ON projects.id = pipeline_runs.project_id
+	query := runSelectQuery(false) + `
 		 ORDER BY pipeline_runs.id DESC
 		 LIMIT ? OFFSET ?`
 
@@ -921,12 +959,7 @@ func (s *Store) GetHomeDashboard(ctx context.Context) (model.HomeDashboard, erro
 func (s *Store) listRunsForDashboard(ctx context.Context) ([]model.PipelineRun, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT pipeline_runs.id, pipeline_runs.project_id, projects.name, projects.branch,
-		        pipeline_runs.status, pipeline_runs.trigger_type, pipeline_runs.trigger_ref,
-		        pipeline_runs.log_text, pipeline_runs.error_message,
-		        pipeline_runs.started_at, pipeline_runs.finished_at, pipeline_runs.created_at, pipeline_runs.updated_at
-		 FROM pipeline_runs
-		 JOIN projects ON projects.id = pipeline_runs.project_id
+		runSelectQuery(false)+`
 		 ORDER BY pipeline_runs.id DESC`,
 	)
 	if err != nil {
@@ -1824,7 +1857,8 @@ func (s *Store) ensureSortOrderColumn(ctx context.Context, table string) error {
 	if err != nil {
 		return fmt.Errorf("read %s columns: %w", table, err)
 	}
-	defer rows.Close()
+
+	hasSortOrder := false
 
 	for rows.Next() {
 		var (
@@ -1836,14 +1870,23 @@ func (s *Store) ensureSortOrderColumn(ctx context.Context, table string) error {
 			primaryKey   int
 		)
 		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			rows.Close()
 			return fmt.Errorf("scan %s columns: %w", table, err)
 		}
 		if name == "sort_order" {
-			return nil
+			hasSortOrder = true
+			break
 		}
 	}
 	if err := rows.Err(); err != nil {
+		rows.Close()
 		return fmt.Errorf("iterate %s columns: %w", table, err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close %s columns rows: %w", table, err)
+	}
+	if hasSortOrder {
+		return nil
 	}
 
 	if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE %s ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`, table)); err != nil {
@@ -1873,7 +1916,8 @@ func (s *Store) ensureDeployConfigCacheDirsColumn(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("read deploy_configs columns: %w", err)
 		}
-		defer rows.Close()
+
+		hasCacheDirs := false
 
 		for rows.Next() {
 			var (
@@ -1885,21 +1929,28 @@ func (s *Store) ensureDeployConfigCacheDirsColumn(ctx context.Context) error {
 				primaryKey   int
 			)
 			if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+				rows.Close()
 				return fmt.Errorf("scan deploy_configs columns: %w", err)
 			}
 			if name == "cache_dirs_json" {
-				goto backfill
+				hasCacheDirs = true
+				break
 			}
 		}
 		if err := rows.Err(); err != nil {
+			rows.Close()
 			return fmt.Errorf("iterate deploy_configs columns: %w", err)
 		}
-		if _, err := s.db.ExecContext(ctx, `ALTER TABLE deploy_configs ADD COLUMN cache_dirs_json TEXT NOT NULL DEFAULT '[]'`); err != nil {
-			return fmt.Errorf("add cache_dirs_json to deploy_configs: %w", err)
+		if err := rows.Close(); err != nil {
+			return fmt.Errorf("close deploy_configs columns rows: %w", err)
+		}
+		if !hasCacheDirs {
+			if _, err := s.db.ExecContext(ctx, `ALTER TABLE deploy_configs ADD COLUMN cache_dirs_json TEXT NOT NULL DEFAULT '[]'`); err != nil {
+				return fmt.Errorf("add cache_dirs_json to deploy_configs: %w", err)
+			}
 		}
 	}
 
-backfill:
 	if _, err := s.db.ExecContext(ctx, `UPDATE deploy_configs SET cache_dirs_json = '[]' WHERE cache_dirs_json IS NULL OR cache_dirs_json = ''`); err != nil {
 		return fmt.Errorf("backfill cache_dirs_json: %w", err)
 	}

@@ -124,6 +124,7 @@ func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, c
 			r.Get("/runs", server.handleListAllRuns)
 			r.Delete("/runs", server.handleClearRuns)
 			r.Get("/runs/{runID}", server.handleGetRun)
+			r.Get("/runs/{runID}/log", server.handleGetRunLog)
 			r.Post("/runs/{runID}/cancel", server.handleCancelRun)
 			r.Get("/stats", server.handleStats)
 			r.Get("/dashboard/home", server.handleHomeDashboard)
@@ -507,7 +508,9 @@ func (s *Server) handleListProjectRuns(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	runs, err := s.store.ListRunsByProject(r.Context(), projectID)
+	limit := parseRunListLimit(r, 50)
+
+	runs, err := s.store.ListRunsByProject(r.Context(), projectID, limit)
 	if err != nil {
 		s.writeError(w, err)
 		return
@@ -520,19 +523,13 @@ func (s *Server) handleListAllRuns(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, err)
 		return
 	}
-	// 解析分页参数，默认显示前100条记录
+	// 解析分页参数，默认显示前50条记录
 	offset := 0
-	limit := 100
+	limit := parseRunListLimit(r, 50)
 
 	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
 		if parsed, err := strconv.Atoi(offsetStr); err == nil && parsed >= 0 {
 			offset = parsed
-		}
-	}
-
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 && parsed <= 1000 {
-			limit = parsed
 		}
 	}
 
@@ -570,12 +567,31 @@ func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	run, err := s.store.GetRun(r.Context(), runID)
+	run, err := s.store.GetRunSummary(r.Context(), runID)
 	if err != nil {
 		s.writeError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, run)
+}
+
+func (s *Server) handleGetRunLog(w http.ResponseWriter, r *http.Request) {
+	if err := s.store.ApplyRunRetention(r.Context()); err != nil {
+		s.writeError(w, err)
+		return
+	}
+	runID, err := parseInt64Param(r, "runID")
+	if err != nil {
+		s.writeBadRequest(w, err)
+		return
+	}
+
+	runLog, err := s.store.GetRunLog(r.Context(), runID)
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, runLog)
 }
 
 func (s *Server) handleCancelRun(w http.ResponseWriter, r *http.Request) {
@@ -672,6 +688,16 @@ func parseInt64Param(r *http.Request, key string) (int64, error) {
 		return 0, fmt.Errorf("invalid %s", key)
 	}
 	return value, nil
+}
+
+func parseRunListLimit(r *http.Request, defaultLimit int) int {
+	limit := defaultLimit
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 && parsed <= 1000 {
+			limit = parsed
+		}
+	}
+	return limit
 }
 
 func validateHostInput(input model.HostUpsert, requirePassword bool) error {

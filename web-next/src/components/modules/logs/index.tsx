@@ -13,6 +13,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { useNavStore } from "@/stores";
 import { toast } from "sonner";
 
+const RUN_LIMIT = 50;
+
 // 全局缓存
 let runsCache: PipelineRun[] | null = null;
 
@@ -35,6 +37,7 @@ function LogDialog({
 }) {
   const [currentRun, setCurrentRun] = useState(run);
   const [logContent, setLogContent] = useState(run.log_text || "");
+  const [loadingLog, setLoadingLog] = useState(!run.log_text);
   const logRef = useRef<HTMLDivElement>(null);
   const logContentRef = useRef<HTMLPreElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -52,11 +55,33 @@ function LogDialog({
   useEffect(() => {
     setCurrentRun(run);
     setLogContent(run.log_text || "");
+    setLoadingLog(!run.log_text);
 
     // 关闭之前的 EventSource
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
     }
+
+    let cancelled = false;
+    let streamUpdated = false;
+
+    void (async () => {
+      try {
+        const runLog = await runApi.getLog(run.id);
+        if (cancelled || streamUpdated) {
+          return;
+        }
+        setLogContent(runLog.log_text || "");
+      } catch (error) {
+        if (!cancelled) {
+          console.error(error);
+        }
+      } finally {
+        if (!cancelled && !streamUpdated) {
+          setLoadingLog(false);
+        }
+      }
+    })();
 
     // 如果是运行中的任务，开启流式日志
     if (run.status === "running") {
@@ -64,9 +89,11 @@ function LogDialog({
       const query = token ? `?token=${encodeURIComponent(token)}` : "";
       const es = new EventSource(`${getApiOrigin()}/api/v1/runs/${run.id}/stream${query}`);
       es.addEventListener("run", (event) => {
+        streamUpdated = true;
         const nextRun = JSON.parse((event as MessageEvent<string>).data) as PipelineRun;
         setCurrentRun(nextRun);
         setLogContent(nextRun.log_text || "");
+        setLoadingLog(false);
         if (nextRun.status !== "running") {
           es.close();
         }
@@ -78,6 +105,7 @@ function LogDialog({
     }
 
     return () => {
+      cancelled = true;
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
       }
@@ -202,7 +230,7 @@ function LogDialog({
               ref={logContentRef}
               className="min-h-full p-4 text-sm whitespace-pre-wrap font-mono text-green-200 select-text"
             >
-              {logContent || "暂无日志内容"}
+              {loadingLog ? "日志加载中..." : (logContent || "暂无日志内容")}
             </pre>
           </div>
         </div>
@@ -213,29 +241,31 @@ function LogDialog({
 
 export function Logs() {
   const { pendingRunId, clearPendingRunId } = useNavStore();
-  const [runs, setRuns] = useState<PipelineRun[]>(runsCache || []);
+  const [runs, setRuns] = useState<PipelineRun[]>(() => runsCache || []);
   const [selectedRun, setSelectedRun] = useState<PipelineRun | null>(null);
   const [cancellingRunId, setCancellingRunId] = useState<number | null>(null);
   const [confirmingCancelRunId, setConfirmingCancelRunId] = useState<number | null>(null);
-  const loadingRef = useRef(false);
   const openingRunIdRef = useRef<number | null>(null);
+  const requestSequenceRef = useRef(0);
 
   const loadRuns = async (forceRefresh = false) => {
+    const requestId = ++requestSequenceRef.current;
     if (!forceRefresh && runsCache) {
       setRuns(runsCache);
       return;
     }
-    if (loadingRef.current) return;
-    loadingRef.current = true;
     try {
-      const data = await runApi.list();
+      const data = await runApi.list({ limit: RUN_LIMIT });
+      if (requestId !== requestSequenceRef.current) {
+        return;
+      }
       const runs = Array.isArray(data) ? data : [];
       runsCache = runs;
       setRuns(runs);
     } catch (error) {
-      console.error(error);
-    } finally {
-      loadingRef.current = false;
+      if (requestId === requestSequenceRef.current) {
+        console.error(error);
+      }
     }
   };
 
@@ -243,7 +273,7 @@ export function Logs() {
     void loadRuns(Boolean(pendingRunId));
 
     const handleRefresh = () => {
-      runsCache = null; // 清除缓存以强制刷新
+      runsCache = null;
       void loadRuns(true);
     };
     window.addEventListener("refresh-logs", handleRefresh);
@@ -267,8 +297,11 @@ export function Logs() {
     void (async () => {
       try {
         const run = await runApi.get(pendingRunId);
-        runsCache = [run, ...(runsCache ?? []).filter((item) => item.id !== run.id)];
-        setRuns((prevRuns) => [run, ...prevRuns.filter((item) => item.id !== run.id)]);
+        setRuns((prevRuns) => {
+          const nextRuns = [run, ...prevRuns.filter((item) => item.id !== run.id)].slice(0, RUN_LIMIT);
+          runsCache = nextRuns;
+          return nextRuns;
+        });
         setSelectedRun(run);
       } catch (error) {
         console.error(error);

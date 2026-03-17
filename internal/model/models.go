@@ -180,6 +180,12 @@ type PipelineRun struct {
 	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
+type PipelineRunLog struct {
+	RunID     int64     `json:"run_id"`
+	LogText   string    `json:"log_text"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type RunCreateInput struct {
 	ProjectID   int64
 	Status      string

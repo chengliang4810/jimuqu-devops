@@ -81,7 +81,7 @@ export function SettingInfo({ systemInfo }: SettingInfoProps) {
     if (!canApplyUpdate) return;
     setUpdating(true);
     try {
-      const runs = await runApi.list();
+      const runs = await runApi.list({ limit: 200 });
       const hasActiveRun = runs.some((run) => run.status === "queued" || run.status === "running");
       if (hasActiveRun) {
         toast.error("存在正在部署中的任务，请等待部署完成后再更新");

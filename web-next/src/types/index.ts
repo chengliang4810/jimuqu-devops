@@ -69,9 +69,15 @@ export interface PipelineRun {
   branch: string;
   status: RunStatus;
   commit_message: string;
-  log_text: string;
-  started_at: string;
+  log_text?: string;
+  started_at: string | null;
   finished_at: string | null;
+}
+
+export interface PipelineRunLog {
+  run_id: number;
+  log_text: string;
+  updated_at: string;
 }
 
 // 通知渠道类型
