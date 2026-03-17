@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
 import {
   closestCenter,
   DndContext,
@@ -48,6 +48,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { GripVertical, Pencil, Send, Star, Trash2, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { useToolbarSearchStore } from "@/components/modules/toolbar/search-store";
+import { useToolbarViewOptionsStore } from "@/components/modules/toolbar/view-options-store";
 
 const channelTypes: { value: NotifyChannelType; label: string }[] = [
   { value: "webhook", label: "Webhook" },
@@ -328,6 +330,10 @@ export function Notifications() {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+  const searchTerm = useToolbarSearchStore((state) => state.searchTerms.notifications || "");
+  const notificationFilter = useToolbarViewOptionsStore((state) => state.notificationFilter);
+  const sortOrder = useToolbarViewOptionsStore((state) => state.getSortOrder("notifications"));
+  const deferredSearchTerm = useDeferredValue(searchTerm);
 
   const loadChannels = async (forceRefresh = false) => {
     if (!forceRefresh && channelsCache) {
@@ -449,6 +455,36 @@ export function Notifications() {
   const activeChannel =
     activeChannelId == null ? null : channels.find((item) => item.id === activeChannelId) ?? null;
 
+  const normalizedSearchTerm = deferredSearchTerm.trim().toLowerCase();
+  const visibleChannels = channels
+    .filter((channel) => {
+      if (notificationFilter === "default") {
+        return channel.is_default === true;
+      }
+      if (notificationFilter !== "all") {
+        return channel.type === notificationFilter;
+      }
+      return true;
+    })
+    .filter((channel) => {
+      if (!normalizedSearchTerm) {
+        return true;
+      }
+
+      return channel.name.toLowerCase().includes(normalizedSearchTerm);
+    });
+
+  if (sortOrder === "name-asc") {
+    visibleChannels.sort((left, right) => left.name.localeCompare(right.name, "zh-CN"));
+  } else if (sortOrder === "name-desc") {
+    visibleChannels.sort((left, right) => right.name.localeCompare(left.name, "zh-CN"));
+  }
+
+  const reorderEnabled =
+    sortOrder === "manual" &&
+    notificationFilter === "all" &&
+    normalizedSearchTerm.length === 0;
+
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveChannelId(null);
@@ -489,7 +525,13 @@ export function Notifications() {
             暂无通知渠道，点击上方按钮新增渠道。
           </CardContent>
         </Card>
-      ) : (
+      ) : visibleChannels.length === 0 ? (
+        <Card>
+          <CardContent className="p-12 text-center text-muted-foreground">
+            没有找到符合当前查询条件的通知渠道。
+          </CardContent>
+        </Card>
+      ) : reorderEnabled ? (
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -499,11 +541,11 @@ export function Notifications() {
           onDragEnd={(event) => void handleDragEnd(event)}
         >
           <SortableContext
-            items={channels.map((channel) => channel.id)}
+            items={visibleChannels.map((channel) => channel.id)}
             strategy={rectSortingStrategy}
           >
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {channels.map((channel) => (
+              {visibleChannels.map((channel) => (
                 <SortableNotificationCard
                   key={channel.id}
                   channel={channel}
@@ -539,6 +581,23 @@ export function Notifications() {
             ) : null}
           </DragOverlay>
         </DndContext>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {visibleChannels.map((channel) => (
+            <NotificationCardView
+              key={channel.id}
+              channel={channel}
+              typeLabel={getTypeLabel(channel.type)}
+              isDeleting={deletingChannel?.id === channel.id}
+              onSetDefault={() => void handleSetDefault(channel)}
+              onTest={() => void handleTest(channel)}
+              onEdit={() => void openEditDialog(channel)}
+              onDeleteRequest={() => setDeletingChannel(channel)}
+              onDeleteCancel={() => setDeletingChannel(null)}
+              onDeleteConfirm={() => void handleDelete(channel)}
+            />
+          ))}
+        </div>
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

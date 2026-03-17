@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
 import {
   closestCenter,
   DndContext,
@@ -50,6 +50,8 @@ import { Copy, CopyPlus, GripVertical, Pencil, Play, Trash2, X } from "lucide-re
 import { motion, AnimatePresence } from "motion/react";
 import { cn, formatMultilineValue, parseMultilineInput } from "@/lib/utils";
 import { useNavStore } from "@/stores";
+import { useToolbarSearchStore } from "@/components/modules/toolbar/search-store";
+import { useToolbarViewOptionsStore } from "@/components/modules/toolbar/view-options-store";
 
 type GitAuthType = Project["git_auth_type"];
 
@@ -514,6 +516,10 @@ export function Projects() {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+  const searchTerm = useToolbarSearchStore((state) => state.searchTerms.projects || "");
+  const projectFilter = useToolbarViewOptionsStore((state) => state.projectFilter);
+  const sortOrder = useToolbarViewOptionsStore((state) => state.getSortOrder("projects"));
+  const deferredSearchTerm = useDeferredValue(searchTerm);
 
   const loadData = async (forceRefresh = false) => {
     if (!forceRefresh && projectsCache && hostsCache && channelsCache) {
@@ -702,6 +708,36 @@ export function Projects() {
   const activeProject =
     activeProjectId == null ? null : projects.find((item) => item.id === activeProjectId) ?? null;
 
+  const normalizedSearchTerm = deferredSearchTerm.trim().toLowerCase();
+  const visibleProjects = projects
+    .filter((project) => {
+      if (projectFilter === "all") {
+        return true;
+      }
+      return project.git_auth_type === projectFilter;
+    })
+    .filter((project) => {
+      if (!normalizedSearchTerm) {
+        return true;
+      }
+
+      return [project.name, project.branch, project.repo_url, project.description]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedSearchTerm);
+    });
+
+  if (sortOrder === "name-asc") {
+    visibleProjects.sort((left, right) => left.name.localeCompare(right.name, "zh-CN"));
+  } else if (sortOrder === "name-desc") {
+    visibleProjects.sort((left, right) => right.name.localeCompare(left.name, "zh-CN"));
+  }
+
+  const reorderEnabled =
+    sortOrder === "manual" &&
+    projectFilter === "all" &&
+    normalizedSearchTerm.length === 0;
+
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveProjectId(null);
@@ -738,7 +774,13 @@ export function Projects() {
             暂无项目，点击上方按钮新增项目。
           </CardContent>
         </Card>
-      ) : (
+      ) : visibleProjects.length === 0 ? (
+        <Card>
+          <CardContent className="p-12 text-center text-muted-foreground">
+            没有找到符合当前查询条件的项目。
+          </CardContent>
+        </Card>
+      ) : reorderEnabled ? (
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -748,11 +790,11 @@ export function Projects() {
           onDragEnd={(event) => void handleDragEnd(event)}
         >
           <SortableContext
-            items={projects.map((project) => project.id)}
+            items={visibleProjects.map((project) => project.id)}
             strategy={rectSortingStrategy}
           >
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              {projects.map((project) => (
+              {visibleProjects.map((project) => (
                 <SortableProjectCard
                   key={project.id}
                   project={project}
@@ -788,6 +830,23 @@ export function Projects() {
             ) : null}
           </DragOverlay>
         </DndContext>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {visibleProjects.map((project) => (
+            <ProjectCardView
+              key={project.id}
+              project={project}
+              isDeleting={deletingProject?.id === project.id}
+              onTrigger={() => void handleTrigger(project.id)}
+              onCopyWebhook={() => copyWebhook(project.webhook_token)}
+              onClone={() => void handleClone(project)}
+              onEdit={() => void openEditDialog(project)}
+              onDeleteRequest={() => setDeletingProject(project)}
+              onDeleteCancel={() => setDeletingProject(null)}
+              onDeleteConfirm={() => void handleDelete(project)}
+            />
+          ))}
+        </div>
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

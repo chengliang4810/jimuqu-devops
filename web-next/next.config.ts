@@ -5,7 +5,7 @@ const createNextConfig = (phase: string): NextConfig => {
   const isDev = phase === PHASE_DEVELOPMENT_SERVER;
 
   return {
-    output: "export",
+    ...(isDev ? { distDir: ".next-dev" } : { output: "export" }),
     images: { unoptimized: true },
     trailingSlash: false,
     // 开发阶段 API 代理到后端

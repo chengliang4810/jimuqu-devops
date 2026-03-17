@@ -12,6 +12,7 @@ build/
 tmp/
 temp/
 *.tmp
+.codex-runtime/
 .DS_Store
 Thumbs.db
 .playwright-cli/

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, type MouseEvent } from "react";
+import { useDeferredValue, useEffect, useRef, useState, type MouseEvent } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { X, Square } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavStore } from "@/stores";
 import { toast } from "sonner";
+import { useToolbarSearchStore } from "@/components/modules/toolbar/search-store";
 
 const RUN_LIMIT = 50;
 
@@ -247,6 +248,8 @@ export function Logs() {
   const [confirmingCancelRunId, setConfirmingCancelRunId] = useState<number | null>(null);
   const openingRunIdRef = useRef<number | null>(null);
   const requestSequenceRef = useRef(0);
+  const searchTerm = useToolbarSearchStore((state) => state.searchTerms.logs || "");
+  const deferredSearchTerm = useDeferredValue(searchTerm);
 
   const loadRuns = async (forceRefresh = false) => {
     const requestId = ++requestSequenceRef.current;
@@ -357,6 +360,18 @@ export function Logs() {
     void loadRuns(true);
   };
 
+  const normalizedSearchTerm = deferredSearchTerm.trim().toLowerCase();
+  const visibleRuns = runs.filter((run) => {
+    if (!normalizedSearchTerm) {
+      return true;
+    }
+
+    return [run.project_name, run.branch]
+      .join(" ")
+      .toLowerCase()
+      .includes(normalizedSearchTerm);
+  });
+
   return (
     <div className="space-y-2">
       {runs.length === 0 ? (
@@ -365,9 +380,15 @@ export function Logs() {
             暂无部署记录
           </CardContent>
         </Card>
+      ) : visibleRuns.length === 0 ? (
+        <Card>
+          <CardContent className="p-12 text-center text-muted-foreground">
+            没有找到符合当前搜索条件的部署记录
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-2">
-          {runs.map((run) => (
+          {visibleRuns.map((run) => (
             <Card
               key={run.id}
               className="cursor-pointer hover:border-primary transition-colors"

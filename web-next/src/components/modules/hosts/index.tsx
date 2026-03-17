@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
 import {
   closestCenter,
   DndContext,
@@ -40,6 +40,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { GripVertical, Pencil, Trash2, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { useToolbarSearchStore } from "@/components/modules/toolbar/search-store";
+import { useToolbarViewOptionsStore } from "@/components/modules/toolbar/view-options-store";
 
 // 全局请求缓存
 let hostsCache: Host[] | null = null;
@@ -233,6 +235,10 @@ export function Hosts() {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+  const searchTerm = useToolbarSearchStore((state) => state.searchTerms.hosts || "");
+  const hostFilter = useToolbarViewOptionsStore((state) => state.hostFilter);
+  const sortOrder = useToolbarViewOptionsStore((state) => state.getSortOrder("hosts"));
+  const deferredSearchTerm = useDeferredValue(searchTerm);
 
   const loadHosts = async (forceRefresh = false) => {
     if (loadingRef.current) return;
@@ -325,6 +331,37 @@ export function Hosts() {
 
   const activeHost = activeHostId == null ? null : hosts.find((item) => item.id === activeHostId) ?? null;
 
+  const normalizedSearchTerm = deferredSearchTerm.trim().toLowerCase();
+  const visibleHosts = hosts
+    .filter((host) => {
+      if (hostFilter === "port-22") {
+        return host.port === 22;
+      }
+      if (hostFilter === "custom-port") {
+        return host.port !== 22;
+      }
+      return true;
+    })
+    .filter((host) => {
+      if (!normalizedSearchTerm) {
+        return true;
+      }
+
+      return [host.name, host.address]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedSearchTerm);
+    });
+
+  if (sortOrder === "name-asc") {
+    visibleHosts.sort((left, right) => left.name.localeCompare(right.name, "zh-CN"));
+  } else if (sortOrder === "name-desc") {
+    visibleHosts.sort((left, right) => right.name.localeCompare(left.name, "zh-CN"));
+  }
+
+  const reorderEnabled =
+    sortOrder === "manual" && hostFilter === "all" && normalizedSearchTerm.length === 0;
+
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveHostId(null);
@@ -361,7 +398,13 @@ export function Hosts() {
             暂无主机，点击上方按钮新增部署目标。
           </CardContent>
         </Card>
-      ) : (
+      ) : visibleHosts.length === 0 ? (
+        <Card>
+          <CardContent className="p-12 text-center text-muted-foreground">
+            没有找到符合当前查询条件的主机。
+          </CardContent>
+        </Card>
+      ) : reorderEnabled ? (
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -370,9 +413,9 @@ export function Hosts() {
           onDragCancel={handleDragCancel}
           onDragEnd={(event) => void handleDragEnd(event)}
         >
-          <SortableContext items={hosts.map((host) => host.id)} strategy={rectSortingStrategy}>
+          <SortableContext items={visibleHosts.map((host) => host.id)} strategy={rectSortingStrategy}>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {hosts.map((host) => (
+              {visibleHosts.map((host) => (
                 <SortableHostCard
                   key={host.id}
                   host={host}
@@ -402,6 +445,20 @@ export function Hosts() {
             ) : null}
           </DragOverlay>
         </DndContext>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {visibleHosts.map((host) => (
+            <HostCardView
+              key={host.id}
+              host={host}
+              isDeleting={deletingHost?.id === host.id}
+              onEdit={() => openEditDialog(host)}
+              onDeleteRequest={() => setDeletingHost(host)}
+              onDeleteCancel={() => setDeletingHost(null)}
+              onDeleteConfirm={() => void handleDelete(host)}
+            />
+          ))}
+        </div>
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
