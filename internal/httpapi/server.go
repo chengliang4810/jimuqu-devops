@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"devops-pipeline/internal/auth"
@@ -28,11 +29,14 @@ import (
 )
 
 type Server struct {
-	store      *store.Store
-	executor   *pipeline.Executor
-	logger     *slog.Logger
-	config     config.Config
-	jwtManager *auth.JWTManager
+	store               *store.Store
+	executor            *pipeline.Executor
+	logger              *slog.Logger
+	config              config.Config
+	jwtManager          *auth.JWTManager
+	imageSearchClientMu sync.Mutex
+	imageSearchClient   *http.Client
+	imageSearchProxyURL string
 }
 
 func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, cfg config.Config) http.Handler {
@@ -129,6 +133,7 @@ func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, c
 			r.Get("/stats", server.handleStats)
 			r.Get("/dashboard/home", server.handleHomeDashboard)
 			r.Get("/system/info", server.handleSystemInfo)
+			r.Get("/images/search", server.handleImageSearch)
 		})
 
 		// 流式接口移到认证组外面，支持查询参数传递token
@@ -609,6 +614,29 @@ func (s *Server) handleCancelRun(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, run)
 }
 
+func (s *Server) handleImageSearch(w http.ResponseWriter, r *http.Request) {
+	query, err := normalizeImageSearchQuery(r.URL.Query().Get("q"))
+	if err != nil {
+		s.writeBadRequest(w, err)
+		return
+	}
+
+	limit := parseImageSearchLimit(r)
+	ctx, cancel := context.WithTimeout(r.Context(), dockerHubSearchTimeout)
+	defer cancel()
+
+	proxyURL := s.getProxyURL(r)
+	results, err := searchOfficialDockerHubImages(ctx, query, limit, s.getImageSearchClient(proxyURL))
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, imageSearchResponse{
+		Items: mapToImageSearchItems(results),
+	})
+}
+
 func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	token := chi.URLParam(r, "token")
 	if strings.TrimSpace(token) == "" {
@@ -654,6 +682,13 @@ func (s *Server) writeBadRequest(w http.ResponseWriter, err error) {
 }
 
 func (s *Server) writeError(w http.ResponseWriter, err error) {
+	var dhErr *dockerHubSearchError
+	if errors.As(err, &dhErr) {
+		s.logger.Warn("docker hub search failed", "error", err)
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "Docker Hub image search is temporarily unavailable"})
+		return
+	}
+
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
@@ -698,6 +733,22 @@ func parseRunListLimit(r *http.Request, defaultLimit int) int {
 		}
 	}
 	return limit
+}
+
+func (s *Server) getImageSearchClient(proxyURL string) *http.Client {
+	proxyURL = strings.TrimSpace(proxyURL)
+
+	s.imageSearchClientMu.Lock()
+	defer s.imageSearchClientMu.Unlock()
+
+	if s.imageSearchClient != nil && s.imageSearchProxyURL == proxyURL {
+		return s.imageSearchClient
+	}
+
+	client := newDockerHubHTTPClient(proxyURL)
+	s.imageSearchClient = client
+	s.imageSearchProxyURL = proxyURL
+	return client
 }
 
 func validateHostInput(input model.HostUpsert, requirePassword bool) error {
