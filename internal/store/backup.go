@@ -29,10 +29,14 @@ func (s *Store) ExportBackup(ctx context.Context, repoURL, version string) (mode
 	if err != nil {
 		return model.BackupData{}, err
 	}
+	aiSettings, err := s.GetAISettings(ctx)
+	if err != nil {
+		return model.BackupData{}, err
+	}
 
 	backup := model.BackupData{
 		Meta: model.BackupMeta{
-			SchemaVersion: 1,
+			SchemaVersion: 2,
 			ExportedAt:    nowString(),
 			RepoURL:       repoURL,
 			Version:       version,
@@ -41,6 +45,7 @@ func (s *Store) ExportBackup(ctx context.Context, repoURL, version string) (mode
 		Projects:             make([]model.BackupProjectBundle, 0, len(projects)),
 		NotificationChannels: make([]model.NotificationChannelWithConfig, 0, len(channels)),
 		Settings:             settings,
+		AISettings:           &aiSettings,
 	}
 
 	for _, host := range hosts {
@@ -124,6 +129,7 @@ func (s *Store) ImportBackup(ctx context.Context, backup model.BackupData) (mode
 		"deploy_configs":        0,
 		"notification_channels": 0,
 		"settings":              0,
+		"ai_settings":           0,
 	}
 
 	for _, statement := range []string{
@@ -133,6 +139,7 @@ func (s *Store) ImportBackup(ctx context.Context, backup model.BackupData) (mode
 		`DELETE FROM hosts`,
 		`DELETE FROM notification_channels`,
 		`DELETE FROM settings`,
+		`DELETE FROM ai_settings`,
 	} {
 		if _, err := tx.ExecContext(ctx, statement); err != nil {
 			return model.BackupRestoreResult{}, fmt.Errorf("clear data before restore: %w", err)
@@ -191,6 +198,29 @@ func (s *Store) ImportBackup(ctx context.Context, backup model.BackupData) (mode
 			return model.BackupRestoreResult{}, fmt.Errorf("restore setting %s: %w", setting.Key, err)
 		}
 		rowsAffected["settings"] += 1
+	}
+
+	if backup.AISettings != nil {
+		aiSettings := *backup.AISettings
+		if aiSettings.Protocol == "" {
+			aiSettings.Protocol = model.AIProtocolOpenAI
+		}
+		if _, err := tx.ExecContext(
+			ctx,
+			`INSERT INTO ai_settings (id, enabled, protocol, base_url, api_key, model, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			aiSettingsSingletonID,
+			boolToInt(aiSettings.Enabled),
+			aiSettings.Protocol,
+			aiSettings.BaseURL,
+			aiSettings.APIKey,
+			aiSettings.Model,
+			now,
+			now,
+		); err != nil {
+			return model.BackupRestoreResult{}, fmt.Errorf("restore ai settings: %w", err)
+		}
+		rowsAffected["ai_settings"] = 1
 	}
 
 	for _, bundle := range backup.Projects {

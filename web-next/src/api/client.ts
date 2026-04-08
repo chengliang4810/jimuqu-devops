@@ -160,6 +160,8 @@ export const runApi = {
     request<import("@/types").PipelineRun[]>(buildRunListPath(params?.limit, params?.offset)),
   get: (id: number) => request<import("@/types").PipelineRun>(`/runs/${id}`),
   getLog: (id: number) => request<import("@/types").PipelineRunLog>(`/runs/${id}/log`),
+  interpret: (id: number) =>
+    request<import("@/types").AIInterpretationResponse>(`/runs/${id}/interpret`, { method: "POST" }),
   cancel: (id: number) => request<import("@/types").PipelineRun>(`/runs/${id}/cancel`, { method: "POST" }),
   clear: () => request<{ cleared: number }>("/runs", { method: "DELETE" }),
 };
@@ -231,6 +233,13 @@ export const settingApi = {
     request<import("@/types").Setting>(`/settings/${key}`, {
       method: "PUT",
       body: JSON.stringify({ value }),
+    }),
+  getAI: () => request<import("@/types").AISettings>("/settings/ai"),
+  getAIStatus: () => request<import("@/types").AISettingsStatus>("/settings/ai/status"),
+  updateAI: (settings: import("@/types").AISettings) =>
+    request<import("@/types").AISettings>("/settings/ai", {
+      method: "PUT",
+      body: JSON.stringify(settings),
     }),
   exportBackup: () => request<any>("/settings/backup"),
   importBackup: (data: any) =>

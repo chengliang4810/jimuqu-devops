@@ -100,6 +100,16 @@ func sqliteMigrationStatements() []string {
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		);`,
+		`CREATE TABLE IF NOT EXISTS ai_settings (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			enabled INTEGER NOT NULL DEFAULT 0,
+			protocol TEXT NOT NULL DEFAULT 'openai',
+			base_url TEXT NOT NULL DEFAULT '',
+			api_key TEXT NOT NULL DEFAULT '',
+			model TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		);`,
 	}
 }
 
@@ -194,6 +204,16 @@ func mysqlMigrationStatements() []string {
 		`CREATE TABLE IF NOT EXISTS settings (
 			` + "`key`" + ` VARCHAR(191) NOT NULL PRIMARY KEY,
 			` + "`value`" + ` LONGTEXT NOT NULL,
+			created_at VARCHAR(64) NOT NULL,
+			updated_at VARCHAR(64) NOT NULL
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+		`CREATE TABLE IF NOT EXISTS ai_settings (
+			id BIGINT NOT NULL PRIMARY KEY,
+			enabled TINYINT(1) NOT NULL DEFAULT 0,
+			protocol VARCHAR(32) NOT NULL DEFAULT 'openai',
+			base_url TEXT NOT NULL,
+			api_key TEXT NOT NULL,
+			model VARCHAR(255) NOT NULL,
 			created_at VARCHAR(64) NOT NULL,
 			updated_at VARCHAR(64) NOT NULL
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,

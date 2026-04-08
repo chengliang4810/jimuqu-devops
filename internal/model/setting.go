@@ -112,6 +112,7 @@ type BackupData struct {
 	Projects             []BackupProjectBundle           `json:"projects"`
 	NotificationChannels []NotificationChannelWithConfig `json:"notification_channels"`
 	Settings             []Setting                       `json:"settings"`
+	AISettings           *AISettings                     `json:"ai_settings,omitempty"`
 }
 
 type BackupRestoreResult struct {

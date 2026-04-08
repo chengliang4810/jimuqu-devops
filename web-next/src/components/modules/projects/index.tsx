@@ -575,7 +575,10 @@ export function Projects() {
 
     const handleOpenDialog = (e: CustomEvent) => {
       if (e.detail.mode === "create") {
-        openCreateDialog();
+        setEditingProject(null);
+        setFormData(createDefaultFormData());
+        setActiveTab("basic");
+        setDialogOpen(true);
       }
     };
     window.addEventListener("open-project-dialog", handleOpenDialog as EventListener);
@@ -623,11 +626,6 @@ export function Projects() {
     };
   }, [activeTab, deferredBuildImage, dialogOpen]);
 
-  const resetForm = () => {
-    setFormData(createDefaultFormData());
-    setActiveTab("basic");
-  };
-
   const applyProjectDetailToForm = (detail: ProjectDetail) => {
     setEditingProject(detail.project);
     setFormData({
@@ -646,12 +644,6 @@ export function Projects() {
       deploy_config: mapDeployConfigToForm(detail.deploy_config),
     });
     setActiveTab("basic");
-    setDialogOpen(true);
-  };
-
-  const openCreateDialog = () => {
-    setEditingProject(null);
-    resetForm();
     setDialogOpen(true);
   };
 

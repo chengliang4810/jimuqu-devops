@@ -175,6 +175,30 @@ export interface Setting {
   updated_at?: string;
 }
 
+export type AIProtocol = "openai";
+
+export interface AISettings {
+  enabled: boolean;
+  protocol: AIProtocol;
+  base_url: string;
+  api_key: string;
+  model: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AISettingsStatus {
+  enabled: boolean;
+}
+
+export interface AIInterpretationResponse {
+  run_id: number;
+  protocol: AIProtocol;
+  model: string;
+  content: string;
+  log_truncated: boolean;
+}
+
 export interface AccountProfile {
   username: string;
 }

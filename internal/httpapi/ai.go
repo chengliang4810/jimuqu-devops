@@ -1,0 +1,314 @@
+package httpapi
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+	"devops-pipeline/internal/model"
+)
+
+const (
+	aiLogCharacterLimit = 12000
+	aiRequestTimeout    = 30 * time.Second
+)
+
+type aiInterpretationInput struct {
+	ProjectName    string
+	Branch         string
+	Status         string
+	CommitMessage  string
+	ErrorMessage   string
+	LogText        string
+	LogTruncated   bool
+}
+
+type openAIChatCompletionRequest struct {
+	Model       string                      `json:"model"`
+	Messages    []openAIChatCompletionMessage `json:"messages"`
+	Temperature float64                     `json:"temperature,omitempty"`
+}
+
+type openAIChatCompletionMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type openAIChatCompletionResponse struct {
+	Choices []struct {
+		Message openAIChatCompletionMessage `json:"message"`
+	} `json:"choices"`
+	Error *struct {
+		Message string `json:"message"`
+	} `json:"error,omitempty"`
+}
+
+func (s *Server) handleGetAISettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := s.store.GetAISettings(r.Context())
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, settings)
+}
+
+func (s *Server) handleGetAISettingsStatus(w http.ResponseWriter, r *http.Request) {
+	settings, err := s.store.GetAISettings(r.Context())
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, model.AISettingsStatus{Enabled: settings.Enabled})
+}
+
+func (s *Server) handleUpdateAISettings(w http.ResponseWriter, r *http.Request) {
+	var input model.AISettings
+	if err := decodeJSON(r.Body, &input); err != nil {
+		s.writeBadRequest(w, err)
+		return
+	}
+
+	normalized, err := normalizeAISettingsInput(input)
+	if err != nil {
+		s.writeBadRequest(w, err)
+		return
+	}
+
+	settings, err := s.store.SetAISettings(r.Context(), normalized)
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, settings)
+}
+
+func (s *Server) handleInterpretRun(w http.ResponseWriter, r *http.Request) {
+	runID, err := parseInt64Param(r, "runID")
+	if err != nil {
+		s.writeBadRequest(w, err)
+		return
+	}
+
+	run, err := s.store.GetRun(r.Context(), runID)
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	if run.Status != model.RunStatusFailed {
+		s.writeBadRequest(w, errors.New("only failed runs can be interpreted"))
+		return
+	}
+
+	settings, err := s.store.GetAISettings(r.Context())
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	if !settings.Enabled {
+		s.writeBadRequest(w, errors.New("ai interpretation is disabled"))
+		return
+	}
+	if _, err := normalizeAISettingsInput(settings); err != nil {
+		s.writeBadRequest(w, err)
+		return
+	}
+
+	logText := run.LogText
+	if strings.TrimSpace(logText) == "" {
+		runLog, err := s.store.GetRunLog(r.Context(), runID)
+		if err == nil {
+			logText = runLog.LogText
+		}
+	}
+	logText, logTruncated := truncateAILog(logText)
+
+	content, err := requestOpenAIInterpretation(
+		r.Context(),
+		newAIHTTPClient(s.getProxyURL(r)),
+		settings,
+		aiInterpretationInput{
+			ProjectName:   run.ProjectName,
+			Branch:        run.Branch,
+			Status:        run.Status,
+			CommitMessage: run.CommitMessage,
+			ErrorMessage:  run.ErrorMessage,
+			LogText:       logText,
+			LogTruncated:  logTruncated,
+		},
+	)
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, model.AIInterpretationResponse{
+		RunID:        run.ID,
+		Protocol:     settings.Protocol,
+		Model:        settings.Model,
+		Content:      content,
+		LogTruncated: logTruncated,
+	})
+}
+
+func normalizeAISettingsInput(input model.AISettings) (model.AISettings, error) {
+	input.Protocol = strings.TrimSpace(input.Protocol)
+	input.BaseURL = strings.TrimSpace(input.BaseURL)
+	input.APIKey = strings.TrimSpace(input.APIKey)
+	input.Model = strings.TrimSpace(input.Model)
+
+	if input.Protocol == "" {
+		input.Protocol = model.AIProtocolOpenAI
+	}
+	if input.Protocol != model.AIProtocolOpenAI {
+		return model.AISettings{}, errors.New("unsupported ai protocol")
+	}
+
+	if !input.Enabled {
+		return input, nil
+	}
+	if input.BaseURL == "" {
+		return model.AISettings{}, errors.New("base_url is required when ai interpretation is enabled")
+	}
+	if input.APIKey == "" {
+		return model.AISettings{}, errors.New("api_key is required when ai interpretation is enabled")
+	}
+	if input.Model == "" {
+		return model.AISettings{}, errors.New("model is required when ai interpretation is enabled")
+	}
+
+	return input, nil
+}
+
+func truncateAILog(logText string) (string, bool) {
+	runes := []rune(logText)
+	if len(runes) <= aiLogCharacterLimit {
+		return logText, false
+	}
+	return string(runes[len(runes)-aiLogCharacterLimit:]), true
+}
+
+func requestOpenAIInterpretation(ctx context.Context, client *http.Client, settings model.AISettings, input aiInterpretationInput) (string, error) {
+	if client == nil {
+		client = newAIHTTPClient("")
+	}
+
+	endpoint := strings.TrimRight(strings.TrimSpace(settings.BaseURL), "/") + "/chat/completions"
+	body, err := json.Marshal(openAIChatCompletionRequest{
+		Model: settings.Model,
+		Messages: []openAIChatCompletionMessage{
+			{
+				Role: "system",
+				Content: "你是一个 DevOps 部署故障分析助手。请始终使用中文回答，并严格输出以下三个小节：失败摘要、可能原因、建议操作。",
+			},
+			{
+				Role:    "user",
+				Content: buildAIInterpretationPrompt(input),
+			},
+		},
+		Temperature: 0.2,
+	})
+	if err != nil {
+		return "", fmt.Errorf("marshal openai request: %w", err)
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, aiRequestTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("create openai request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+settings.APIKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("request ai interpretation: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read ai response: %w", err)
+	}
+
+	var parsed openAIChatCompletionResponse
+	if err := json.Unmarshal(respBody, &parsed); err != nil {
+		return "", fmt.Errorf("decode ai response: %w", err)
+	}
+	if resp.StatusCode >= http.StatusBadRequest {
+		if parsed.Error != nil && strings.TrimSpace(parsed.Error.Message) != "" {
+			return "", fmt.Errorf("ai response failed: %s", parsed.Error.Message)
+		}
+		return "", fmt.Errorf("ai response failed with status %d", resp.StatusCode)
+	}
+	if len(parsed.Choices) == 0 || strings.TrimSpace(parsed.Choices[0].Message.Content) == "" {
+		return "", errors.New("ai response did not include interpretation content")
+	}
+
+	return parsed.Choices[0].Message.Content, nil
+}
+
+func buildAIInterpretationPrompt(input aiInterpretationInput) string {
+	var builder strings.Builder
+	builder.WriteString("请分析以下部署失败日志，并输出“失败摘要 / 可能原因 / 建议操作”三个部分。\n\n")
+	builder.WriteString(fmt.Sprintf("项目: %s\n", emptyFallback(input.ProjectName, "-")))
+	builder.WriteString(fmt.Sprintf("分支: %s\n", emptyFallback(input.Branch, "-")))
+	builder.WriteString(fmt.Sprintf("状态: %s\n", emptyFallback(input.Status, "-")))
+	builder.WriteString(fmt.Sprintf("提交信息: %s\n", emptyFallback(input.CommitMessage, "-")))
+	builder.WriteString(fmt.Sprintf("错误信息: %s\n", emptyFallback(input.ErrorMessage, "-")))
+	if input.LogTruncated {
+		builder.WriteString("日志说明: 已截取最近 12000 个字符\n")
+	}
+	builder.WriteString("\n日志内容:\n")
+	builder.WriteString(emptyFallback(input.LogText, "暂无日志"))
+	return builder.String()
+}
+
+func emptyFallback(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
+}
+
+func newAIHTTPClient(proxyURL string) *http.Client {
+	transport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		transport = &http.Transport{}
+	} else {
+		transport = transport.Clone()
+	}
+
+	transport.DialContext = (&net.Dialer{
+		Timeout:   10 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}).DialContext
+	transport.ForceAttemptHTTP2 = true
+	transport.MaxIdleConns = 20
+	transport.IdleConnTimeout = 90 * time.Second
+	transport.TLSHandshakeTimeout = 10 * time.Second
+	transport.ExpectContinueTimeout = 1 * time.Second
+
+	if strings.TrimSpace(proxyURL) != "" {
+		fixed := strings.TrimSpace(proxyURL)
+		transport.Proxy = func(*http.Request) (*url.URL, error) {
+			return url.Parse(fixed)
+		}
+	} else {
+		transport.Proxy = http.ProxyFromEnvironment
+	}
+
+	return &http.Client{
+		Timeout:   aiRequestTimeout,
+		Transport: transport,
+	}
+}

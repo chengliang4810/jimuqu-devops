@@ -13,6 +13,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { useNavStore } from "@/stores";
 import { toast } from "sonner";
 import { useToolbarSearchStore } from "@/components/modules/toolbar/search-store";
+import { settingApi } from "@/api/client";
+import { FailedRunAIInterpretation } from "./AIInterpretation";
 
 const RUN_LIMIT = 50;
 
@@ -39,6 +41,7 @@ function LogDialog({
   const [currentRun, setCurrentRun] = useState(run);
   const [logContent, setLogContent] = useState(run.log_text || "");
   const [loadingLog, setLoadingLog] = useState(!run.log_text);
+  const [aiEnabled, setAIEnabled] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const logContentRef = useRef<HTMLPreElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -57,6 +60,7 @@ function LogDialog({
     setCurrentRun(run);
     setLogContent(run.log_text || "");
     setLoadingLog(!run.log_text);
+    setAIEnabled(false);
 
     // 关闭之前的 EventSource
     if (eventSourceRef.current) {
@@ -110,6 +114,30 @@ function LogDialog({
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
       }
+    };
+  }, [run]);
+
+  useEffect(() => {
+    if (run.status !== "failed") {
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const status = await settingApi.getAIStatus();
+        if (!cancelled) {
+          setAIEnabled(status.enabled);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error(error);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
     };
   }, [run.id, run.status]);
 
@@ -221,19 +249,26 @@ function LogDialog({
           </div>
         </div>
 
-        {/* 日志内容 */}
-        <div className="flex-1 overflow-hidden bg-slate-900">
-          <div
-            ref={logRef}
-            className="h-full overflow-y-scroll overflow-x-auto pr-1 [scrollbar-width:auto] [-ms-overflow-style:auto] [&::-webkit-scrollbar]:w-3 [&::-webkit-scrollbar]:h-3 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-track]:bg-slate-800/80"
-          >
-            <pre
-              ref={logContentRef}
-              className="min-h-full p-4 text-sm whitespace-pre-wrap font-mono text-green-200 select-text"
+        <div className="relative flex min-h-0 flex-1 flex-col md:flex-row">
+          <div className="flex-1 overflow-hidden bg-slate-900">
+            <div
+              ref={logRef}
+              className="h-full overflow-y-scroll overflow-x-auto pr-1 [scrollbar-width:auto] [-ms-overflow-style:auto] [&::-webkit-scrollbar]:w-3 [&::-webkit-scrollbar]:h-3 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-track]:bg-slate-800/80"
             >
-              {loadingLog ? "日志加载中..." : (logContent || "暂无日志内容")}
-            </pre>
+              <pre
+                ref={logContentRef}
+                className="min-h-full p-4 text-sm whitespace-pre-wrap font-mono text-green-200 select-text"
+              >
+                {loadingLog ? "日志加载中..." : (logContent || "暂无日志内容")}
+              </pre>
+            </div>
           </div>
+          <FailedRunAIInterpretation
+            runId={currentRun.id}
+            runStatus={currentRun.status}
+            enabled={aiEnabled}
+            interpret={runApi.interpret}
+          />
         </div>
       </motion.div>
     </div>

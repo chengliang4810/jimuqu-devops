@@ -110,6 +110,9 @@ func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, c
 				r.Get("/", server.handleListSettings)
 				r.Get("/backup", server.handleExportBackup)
 				r.Post("/restore", server.handleImportBackup)
+				r.Get("/ai", server.handleGetAISettings)
+				r.Get("/ai/status", server.handleGetAISettingsStatus)
+				r.Put("/ai", server.handleUpdateAISettings)
 				r.Put("/{key}", server.handleUpdateSetting)
 			})
 
@@ -129,6 +132,7 @@ func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, c
 			r.Delete("/runs", server.handleClearRuns)
 			r.Get("/runs/{runID}", server.handleGetRun)
 			r.Get("/runs/{runID}/log", server.handleGetRunLog)
+			r.Post("/runs/{runID}/interpret", server.handleInterpretRun)
 			r.Post("/runs/{runID}/cancel", server.handleCancelRun)
 			r.Get("/stats", server.handleStats)
 			r.Get("/dashboard/home", server.handleHomeDashboard)
