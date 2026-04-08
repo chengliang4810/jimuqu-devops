@@ -44,10 +44,18 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { projectApi, hostApi, notifyApi } from "@/api/client";
-import type { Project, Host, NotifyChannel, DeployConfig, ProjectDetail } from "@/types";
+import type {
+  Project,
+  Host,
+  NotifyChannel,
+  DeployConfig,
+  ProjectDetail,
+  ImageSearchItem,
+} from "@/types";
 import { toast } from "sonner";
-import { Copy, CopyPlus, GripVertical, Pencil, Play, Trash2, X } from "lucide-react";
+import { Copy, CopyPlus, GripVertical, LoaderCircle, Pencil, Play, Search, Trash2, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { normalizeBuildImageInput } from "@/lib/image-input";
 import { cn, formatMultilineValue, parseMultilineInput } from "@/lib/utils";
 import { useNavStore } from "@/stores";
 import { useToolbarSearchStore } from "@/components/modules/toolbar/search-store";
@@ -240,7 +248,7 @@ function buildDeployConfigPayload(formData: DeployConfigFormState) {
 
   return {
     host_id: Number(formData.host_id),
-    build_image: formData.build_image.trim(),
+    build_image: normalizeBuildImageInput(formData.build_image),
     build_commands: parseMultilineInput(formData.build_commands),
     artifact_filter_mode: artifactRules.length ? formData.artifact_filter_mode : "none",
     artifact_rules: artifactRules,
@@ -261,7 +269,7 @@ function getDeployConfigValidationError(formData: DeployConfigFormState): string
   if (!formData.host_id) {
     return "请选择目标主机";
   }
-  if (!formData.build_image.trim()) {
+  if (!normalizeBuildImageInput(formData.build_image)) {
     return "编译镜像不能为空";
   }
   if (parseMultilineInput(formData.build_commands).length === 0) {
@@ -506,7 +514,12 @@ export function Projects() {
   const [deletingProject, setDeletingProject] = useState<Project | null>(null);
   const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState("basic");
+  const [imageSearchResults, setImageSearchResults] = useState<ImageSearchItem[]>([]);
+  const [imageSearchLoading, setImageSearchLoading] = useState(false);
+  const [imageSearchError, setImageSearchError] = useState<string | null>(null);
+  const [showImageSearchResults, setShowImageSearchResults] = useState(false);
   const loadingRef = useRef(false);
+  const imageSearchRequestRef = useRef(0);
   const [formData, setFormData] = useState<ProjectFormState>(createDefaultFormData());
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -520,6 +533,9 @@ export function Projects() {
   const projectFilter = useToolbarViewOptionsStore((state) => state.projectFilter);
   const sortOrder = useToolbarViewOptionsStore((state) => state.getSortOrder("projects"));
   const deferredSearchTerm = useDeferredValue(searchTerm);
+  const deferredBuildImage = useDeferredValue(
+    normalizeBuildImageInput(formData.deploy_config.build_image)
+  );
 
   const loadData = async (forceRefresh = false) => {
     if (!forceRefresh && projectsCache && hostsCache && channelsCache) {
@@ -565,6 +581,47 @@ export function Projects() {
     window.addEventListener("open-project-dialog", handleOpenDialog as EventListener);
     return () => window.removeEventListener("open-project-dialog", handleOpenDialog as EventListener);
   }, []);
+
+  useEffect(() => {
+    if (!dialogOpen || activeTab !== "build" || deferredBuildImage.length < 2) {
+      setImageSearchResults([]);
+      setImageSearchLoading(false);
+      setImageSearchError(null);
+      return;
+    }
+
+    const requestId = imageSearchRequestRef.current + 1;
+    imageSearchRequestRef.current = requestId;
+    setImageSearchLoading(true);
+    setImageSearchError(null);
+
+    const timer = window.setTimeout(() => {
+      void projectApi
+        .searchImages(deferredBuildImage, 8)
+        .then((response) => {
+          if (imageSearchRequestRef.current !== requestId) {
+            return;
+          }
+          setImageSearchResults(response.items);
+        })
+        .catch((error) => {
+          if (imageSearchRequestRef.current !== requestId) {
+            return;
+          }
+          setImageSearchResults([]);
+          setImageSearchError(error instanceof Error ? error.message : "官方镜像搜索失败");
+        })
+        .finally(() => {
+          if (imageSearchRequestRef.current === requestId) {
+            setImageSearchLoading(false);
+          }
+        });
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [activeTab, deferredBuildImage, dialogOpen]);
 
   const resetForm = () => {
     setFormData(createDefaultFormData());
@@ -1025,17 +1082,78 @@ export function Projects() {
               <TabsContent value="build" className="mt-4 space-y-4">
                 <div className="grid gap-2">
                   <Label>编译镜像</Label>
-                  <Input
-                    value={formData.deploy_config.build_image}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        deploy_config: { ...formData.deploy_config, build_image: e.target.value },
-                      })
-                    }
-                    placeholder="node:20"
-                    required
-                  />
+                  <div className="relative">
+                    <Input
+                      value={formData.deploy_config.build_image}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          deploy_config: { ...formData.deploy_config, build_image: e.target.value },
+                        })
+                      }
+                      onFocus={() => setShowImageSearchResults(true)}
+                      onBlur={() => {
+                        window.setTimeout(() => setShowImageSearchResults(false), 150);
+                      }}
+                      placeholder="node:20"
+                      required
+                    />
+                    <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                      {imageSearchLoading ? (
+                        <LoaderCircle className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Search className="h-4 w-4" />
+                      )}
+                    </div>
+                    {showImageSearchResults &&
+                    normalizeBuildImageInput(formData.deploy_config.build_image).length >= 2 ? (
+                      <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-border bg-background shadow-xl">
+                        {imageSearchError ? (
+                          <div className="px-3 py-2 text-sm text-destructive">{imageSearchError}</div>
+                        ) : imageSearchResults.length > 0 ? (
+                          <div className="max-h-64 overflow-y-auto py-1">
+                            {imageSearchResults.map((item) => (
+                              <button
+                                key={`${item.name}-${item.star_count}`}
+                                type="button"
+                                className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left transition-colors hover:bg-muted"
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  setFormData({
+                                    ...formData,
+                                    deploy_config: {
+                                      ...formData.deploy_config,
+                                      build_image: item.name,
+                                    },
+                                  });
+                                  setShowImageSearchResults(false);
+                                }}
+                              >
+                                <div className="min-w-0">
+                                  <div className="font-medium text-foreground">{item.display_name}</div>
+                                  {item.description ? (
+                                    <div className="truncate text-xs text-muted-foreground">
+                                      {item.description}
+                                    </div>
+                                  ) : null}
+                                </div>
+                                <div className="shrink-0 text-xs text-muted-foreground">
+                                  ★ {item.star_count}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="px-3 py-2 text-sm text-muted-foreground">
+                            没找到官方镜像，仍可直接输入完整镜像名。
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    仅搜索 Docker Hub 官方镜像，选择后仍可自行补充 tag，例如 `node:20`。
+                  </p>
                 </div>
                 <div className="grid gap-2">
                   <Label>编译命令</Label>
