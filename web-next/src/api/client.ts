@@ -133,6 +133,10 @@ export const projectApi = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
+  searchImages: (query: string, limit = 8) =>
+    request<import("@/types").ImageSearchResponse>(
+      `/images/search?q=${encodeURIComponent(query)}&limit=${limit}`
+    ),
   trigger: (id: number) =>
     request<import("@/types").PipelineRun>(`/projects/${id}/trigger`, { method: "POST" }),
 };
@@ -158,6 +162,28 @@ export const runApi = {
   getLog: (id: number) => request<import("@/types").PipelineRunLog>(`/runs/${id}/log`),
   cancel: (id: number) => request<import("@/types").PipelineRun>(`/runs/${id}/cancel`, { method: "POST" }),
   clear: () => request<{ cleared: number }>("/runs", { method: "DELETE" }),
+};
+
+function buildImageSearchPath(query: string, limit?: number): string {
+  const trimmedQuery = query.trim();
+
+  if (!trimmedQuery) {
+    throw new Error("Image search query must not be empty");
+  }
+
+  const params = new URLSearchParams();
+  params.set("q", trimmedQuery);
+
+  if (typeof limit === "number" && limit > 0) {
+    params.set("limit", String(limit));
+  }
+
+  return `/images/search?${params.toString()}`;
+}
+
+export const imageApi = {
+  search: (query: string, limit?: number) =>
+    request<import("@/types").ImageSearchResponse>(buildImageSearchPath(query, limit)),
 };
 
 // ==================== 通知渠道 API ====================

@@ -211,6 +211,17 @@ export interface UpdateResult {
   message: string;
 }
 
+export interface ImageSearchItem {
+  name: string;
+  display_name: string;
+  description?: string;
+  star_count?: number;
+}
+
+export interface ImageSearchResponse {
+  items: ImageSearchItem[];
+}
+
 // 登录请求
 export interface LoginRequest {
   username: string;
