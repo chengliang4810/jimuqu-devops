@@ -58,6 +58,7 @@ export function SettingAI({ settings, onSave }: SettingAIProps) {
   const [baseURL, setBaseURL] = useState(settings.base_url);
   const [apiKey, setAPIKey] = useState(settings.api_key);
   const [model, setModel] = useState(settings.model);
+  const [userAgent, setUserAgent] = useState(settings.user_agent);
   const [showAPIKey, setShowAPIKey] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -67,6 +68,7 @@ export function SettingAI({ settings, onSave }: SettingAIProps) {
     setBaseURL(settings.base_url);
     setAPIKey(settings.api_key);
     setModel(settings.model);
+    setUserAgent(settings.user_agent);
   }, [settings]);
 
   const normalizedSettings = useMemo<AISettings>(
@@ -76,8 +78,9 @@ export function SettingAI({ settings, onSave }: SettingAIProps) {
       base_url: baseURL.trim(),
       api_key: apiKey.trim(),
       model: model.trim(),
+      user_agent: userAgent.trim(),
     }),
-    [apiKey, baseURL, enabled, model, protocol]
+    [apiKey, baseURL, enabled, model, protocol, userAgent]
   );
   const protocolMeta = useMemo(
     () => PROTOCOL_OPTIONS.find((option) => option.value === protocol) ?? PROTOCOL_OPTIONS[0],
@@ -179,6 +182,18 @@ export function SettingAI({ settings, onSave }: SettingAIProps) {
           value={model}
           onChange={(event) => setModel(event.target.value)}
           placeholder={protocolMeta.modelPlaceholder}
+          className="rounded-xl"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="ai-user-agent">User-Agent（可选）</Label>
+        <Input
+          id="ai-user-agent"
+          aria-label="User-Agent"
+          value={userAgent}
+          onChange={(event) => setUserAgent(event.target.value)}
+          placeholder="Codex Desktop/0.115.0-alpha.11 (Windows 10.0.22621; x86_64) unknown (Codex Desktop; 26.311.21342)"
           className="rounded-xl"
         />
       </div>

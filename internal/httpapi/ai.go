@@ -233,6 +233,7 @@ func normalizeAISettingsInput(input model.AISettings) (model.AISettings, error) 
 	input.BaseURL = strings.TrimSpace(input.BaseURL)
 	input.APIKey = strings.TrimSpace(input.APIKey)
 	input.Model = strings.TrimSpace(input.Model)
+	input.UserAgent = strings.TrimSpace(input.UserAgent)
 
 	if input.Protocol == "" {
 		input.Protocol = model.AIProtocolOpenAI
@@ -315,6 +316,9 @@ func requestOpenAIInterpretation(ctx context.Context, client *http.Client, setti
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+settings.APIKey)
+	if settings.UserAgent != "" {
+		req.Header.Set("User-Agent", settings.UserAgent)
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -351,6 +355,7 @@ func requestOpenAIResponsesInterpretation(ctx context.Context, client *http.Clie
 		strings.TrimRight(strings.TrimSpace(settings.BaseURL), "/")+"/responses",
 		map[string]string{
 			"Authorization": "Bearer " + settings.APIKey,
+			"User-Agent":    settings.UserAgent,
 		},
 		openAIResponsesRequest{
 			Model:       settings.Model,
@@ -395,6 +400,7 @@ func requestAnthropicInterpretation(ctx context.Context, client *http.Client, se
 		map[string]string{
 			"x-api-key":         settings.APIKey,
 			"anthropic-version": "2023-06-01",
+			"User-Agent":        settings.UserAgent,
 		},
 		anthropicMessagesRequest{
 			Model:  settings.Model,
@@ -440,6 +446,7 @@ func requestGeminiInterpretation(ctx context.Context, client *http.Client, setti
 		strings.TrimRight(strings.TrimSpace(settings.BaseURL), "/")+"/models/"+url.PathEscape(settings.Model)+":generateContent",
 		map[string]string{
 			"x-goog-api-key": settings.APIKey,
+			"User-Agent":     settings.UserAgent,
 		},
 		geminiGenerateContentRequest{
 			SystemInstruction: &geminiContent{

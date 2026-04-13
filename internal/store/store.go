@@ -34,6 +34,9 @@ func (s *Store) Migrate(ctx context.Context) error {
 	if err := s.ensureDeployConfigCacheDirsColumn(ctx); err != nil {
 		return err
 	}
+	if err := s.ensureAISettingsUserAgentColumn(ctx); err != nil {
+		return err
+	}
 
 	if err := s.ensureSortOrderColumn(ctx, "hosts"); err != nil {
 		return err
@@ -1953,6 +1956,67 @@ func (s *Store) ensureDeployConfigCacheDirsColumn(ctx context.Context) error {
 
 	if _, err := s.db.ExecContext(ctx, `UPDATE deploy_configs SET cache_dirs_json = '[]' WHERE cache_dirs_json IS NULL OR cache_dirs_json = ''`); err != nil {
 		return fmt.Errorf("backfill cache_dirs_json: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) ensureAISettingsUserAgentColumn(ctx context.Context) error {
+	if s.isMySQL() {
+		var count int
+		if err := s.db.QueryRowContext(
+			ctx,
+			`SELECT COUNT(*) FROM information_schema.COLUMNS
+			 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ai_settings' AND COLUMN_NAME = 'user_agent'`,
+		).Scan(&count); err != nil {
+			return fmt.Errorf("read ai_settings columns: %w", err)
+		}
+		if count == 0 {
+			if _, err := s.db.ExecContext(ctx, `ALTER TABLE ai_settings ADD COLUMN user_agent TEXT NOT NULL DEFAULT ''`); err != nil {
+				return fmt.Errorf("add user_agent to ai_settings: %w", err)
+			}
+		}
+	} else {
+		rows, err := s.db.QueryContext(ctx, `PRAGMA table_info(ai_settings)`)
+		if err != nil {
+			return fmt.Errorf("read ai_settings columns: %w", err)
+		}
+
+		hasUserAgent := false
+
+		for rows.Next() {
+			var (
+				cid          int
+				name         string
+				columnType   string
+				notNull      int
+				defaultValue sql.NullString
+				primaryKey   int
+			)
+			if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+				rows.Close()
+				return fmt.Errorf("scan ai_settings columns: %w", err)
+			}
+			if name == "user_agent" {
+				hasUserAgent = true
+				break
+			}
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return fmt.Errorf("iterate ai_settings columns: %w", err)
+		}
+		if err := rows.Close(); err != nil {
+			return fmt.Errorf("close ai_settings columns rows: %w", err)
+		}
+		if !hasUserAgent {
+			if _, err := s.db.ExecContext(ctx, `ALTER TABLE ai_settings ADD COLUMN user_agent TEXT NOT NULL DEFAULT ''`); err != nil {
+				return fmt.Errorf("add user_agent to ai_settings: %w", err)
+			}
+		}
+	}
+
+	if _, err := s.db.ExecContext(ctx, `UPDATE ai_settings SET user_agent = '' WHERE user_agent IS NULL`); err != nil {
+		return fmt.Errorf("backfill ai_settings user_agent: %w", err)
 	}
 	return nil
 }

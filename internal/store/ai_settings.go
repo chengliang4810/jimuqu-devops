@@ -14,7 +14,7 @@ const aiSettingsSingletonID = 1
 func (s *Store) GetAISettings(ctx context.Context) (model.AISettings, error) {
 	row := s.db.QueryRowContext(
 		ctx,
-		`SELECT enabled, protocol, base_url, api_key, model, created_at, updated_at
+		`SELECT enabled, protocol, base_url, api_key, model, user_agent, created_at, updated_at
 		 FROM ai_settings
 		 WHERE id = ?`,
 		aiSettingsSingletonID,
@@ -29,24 +29,26 @@ func (s *Store) GetAISettings(ctx context.Context) (model.AISettings, error) {
 
 func (s *Store) SetAISettings(ctx context.Context, input model.AISettings) (model.AISettings, error) {
 	now := nowString()
-	query := `INSERT INTO ai_settings (id, enabled, protocol, base_url, api_key, model, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	query := `INSERT INTO ai_settings (id, enabled, protocol, base_url, api_key, model, user_agent, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			enabled = excluded.enabled,
 			protocol = excluded.protocol,
 			base_url = excluded.base_url,
 			api_key = excluded.api_key,
 			model = excluded.model,
+			user_agent = excluded.user_agent,
 			updated_at = excluded.updated_at`
 	if s.isMySQL() {
-		query = `INSERT INTO ai_settings (id, enabled, protocol, base_url, api_key, model, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		query = `INSERT INTO ai_settings (id, enabled, protocol, base_url, api_key, model, user_agent, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON DUPLICATE KEY UPDATE
 				enabled = VALUES(enabled),
 				protocol = VALUES(protocol),
 				base_url = VALUES(base_url),
 				api_key = VALUES(api_key),
 				model = VALUES(model),
+				user_agent = VALUES(user_agent),
 				updated_at = VALUES(updated_at)`
 	}
 
@@ -63,6 +65,7 @@ func (s *Store) SetAISettings(ctx context.Context, input model.AISettings) (mode
 		input.BaseURL,
 		input.APIKey,
 		input.Model,
+		input.UserAgent,
 		now,
 		now,
 	); err != nil {
@@ -86,6 +89,7 @@ func scanAISettings(scan scanner) (model.AISettings, error) {
 		&settings.BaseURL,
 		&settings.APIKey,
 		&settings.Model,
+		&settings.UserAgent,
 		&createdAtStr,
 		&updatedAtStr,
 	)

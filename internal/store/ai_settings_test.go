@@ -41,7 +41,7 @@ func TestAISettingsDefault(t *testing.T) {
 	if settings.Protocol != model.AIProtocolOpenAI {
 		t.Fatalf("expected default protocol %q, got %q", model.AIProtocolOpenAI, settings.Protocol)
 	}
-	if settings.BaseURL != "" || settings.APIKey != "" || settings.Model != "" {
+	if settings.BaseURL != "" || settings.APIKey != "" || settings.Model != "" || settings.UserAgent != "" {
 		t.Fatalf("expected default ai settings fields to be empty, got %+v", settings)
 	}
 }
@@ -55,12 +55,13 @@ func TestAISettingsRoundTrip(t *testing.T) {
 		BaseURL:  "https://example.com/v1",
 		APIKey:   "plain-api-key",
 		Model:    "gpt-4.1-mini",
+		UserAgent: "Codex Desktop/0.115.0-alpha.11 (Windows 10.0.22621; x86_64) unknown (Codex Desktop; 26.311.21342)",
 	})
 	if err != nil {
 		t.Fatalf("set ai settings: %v", err)
 	}
 
-	if !saved.Enabled || saved.BaseURL != "https://example.com/v1" || saved.APIKey != "plain-api-key" || saved.Model != "gpt-4.1-mini" {
+	if !saved.Enabled || saved.BaseURL != "https://example.com/v1" || saved.APIKey != "plain-api-key" || saved.Model != "gpt-4.1-mini" || saved.UserAgent == "" {
 		t.Fatalf("unexpected saved ai settings: %+v", saved)
 	}
 
@@ -84,6 +85,7 @@ func TestBackupExportImportIncludesAISettings(t *testing.T) {
 		BaseURL:  "https://proxy.example.com/openai",
 		APIKey:   "visible-key",
 		Model:    "gpt-5-mini",
+		UserAgent: "Codex Desktop/0.115.0-alpha.11 (Windows 10.0.22621; x86_64) unknown (Codex Desktop; 26.311.21342)",
 	})
 	if err != nil {
 		t.Fatalf("set ai settings: %v", err)
@@ -111,7 +113,7 @@ func TestBackupExportImportIncludesAISettings(t *testing.T) {
 		t.Fatalf("get restored ai settings: %v", err)
 	}
 
-	if restored.Enabled != saved.Enabled || restored.Protocol != saved.Protocol || restored.BaseURL != saved.BaseURL || restored.APIKey != saved.APIKey || restored.Model != saved.Model {
+	if restored.Enabled != saved.Enabled || restored.Protocol != saved.Protocol || restored.BaseURL != saved.BaseURL || restored.APIKey != saved.APIKey || restored.Model != saved.Model || restored.UserAgent != saved.UserAgent {
 		t.Fatalf("expected restored ai settings payload to match saved settings:\nwant: %+v\ngot:  %+v", saved, restored)
 	}
 	if restored.CreatedAt.IsZero() || restored.UpdatedAt.IsZero() {

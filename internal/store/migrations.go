@@ -107,6 +107,7 @@ func sqliteMigrationStatements() []string {
 			base_url TEXT NOT NULL DEFAULT '',
 			api_key TEXT NOT NULL DEFAULT '',
 			model TEXT NOT NULL DEFAULT '',
+			user_agent TEXT NOT NULL DEFAULT '',
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		);`,
@@ -214,6 +215,7 @@ func mysqlMigrationStatements() []string {
 			base_url TEXT NOT NULL,
 			api_key TEXT NOT NULL,
 			model VARCHAR(255) NOT NULL,
+			user_agent TEXT NOT NULL,
 			created_at VARCHAR(64) NOT NULL,
 			updated_at VARCHAR(64) NOT NULL
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,

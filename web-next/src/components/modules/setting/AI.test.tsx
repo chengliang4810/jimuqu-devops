@@ -15,6 +15,7 @@ function buildSettings(overrides: Partial<AISettings> = {}): AISettings {
     base_url: "",
     api_key: "",
     model: "",
+    user_agent: "",
     ...overrides,
   };
 }
@@ -48,6 +49,7 @@ describe("SettingAI", () => {
     fireEvent.change(screen.getByLabelText("Base URL"), { target: { value: "https://example.com/v1" } });
     fireEvent.change(screen.getByLabelText("API Key"), { target: { value: "plain-key" } });
     fireEvent.change(screen.getByLabelText("模型"), { target: { value: "gpt-4.1-mini" } });
+    fireEvent.change(screen.getByLabelText("User-Agent"), { target: { value: "Codex Desktop/0.115.0-alpha.11" } });
     fireEvent.click(screen.getByRole("button", { name: "保存 AI 配置" }));
 
     await waitFor(() => {
@@ -57,6 +59,7 @@ describe("SettingAI", () => {
         base_url: "https://example.com/v1",
         api_key: "plain-key",
         model: "gpt-4.1-mini",
+        user_agent: "Codex Desktop/0.115.0-alpha.11",
       });
     });
   });
@@ -80,6 +83,7 @@ describe("SettingAI", () => {
         base_url: "https://api.openai.com/v1",
         api_key: "plain-key",
         model: "gpt-5-mini",
+        user_agent: "",
       });
     });
   });

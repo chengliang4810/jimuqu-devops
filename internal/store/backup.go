@@ -207,14 +207,15 @@ func (s *Store) ImportBackup(ctx context.Context, backup model.BackupData) (mode
 		}
 		if _, err := tx.ExecContext(
 			ctx,
-			`INSERT INTO ai_settings (id, enabled, protocol, base_url, api_key, model, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO ai_settings (id, enabled, protocol, base_url, api_key, model, user_agent, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			aiSettingsSingletonID,
 			boolToInt(aiSettings.Enabled),
 			aiSettings.Protocol,
 			aiSettings.BaseURL,
 			aiSettings.APIKey,
 			aiSettings.Model,
+			aiSettings.UserAgent,
 			now,
 			now,
 		); err != nil {

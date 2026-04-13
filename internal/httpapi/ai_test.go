@@ -114,11 +114,13 @@ func TestTruncateAILog(t *testing.T) {
 func TestRequestOpenAIInterpretation(t *testing.T) {
 	var capturedPath string
 	var capturedAuth string
+	var capturedUserAgent string
 	var capturedRequest openAIChatCompletionRequest
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedPath = r.URL.Path
 		capturedAuth = r.Header.Get("Authorization")
+		capturedUserAgent = r.Header.Get("User-Agent")
 
 		if err := json.NewDecoder(r.Body).Decode(&capturedRequest); err != nil {
 			t.Fatalf("decode request: %v", err)
@@ -142,6 +144,7 @@ func TestRequestOpenAIInterpretation(t *testing.T) {
 		BaseURL:  server.URL + "/v1",
 		APIKey:   "plain-api-key",
 		Model:    "gpt-test",
+		UserAgent: "Codex Desktop/0.115.0-alpha.11 (Windows 10.0.22621; x86_64) unknown (Codex Desktop; 26.311.21342)",
 	}, aiInterpretationInput{
 		ProjectName:   "demo",
 		Branch:        "main",
@@ -159,6 +162,9 @@ func TestRequestOpenAIInterpretation(t *testing.T) {
 	}
 	if capturedAuth != "Bearer plain-api-key" {
 		t.Fatalf("expected bearer token header, got %q", capturedAuth)
+	}
+	if capturedUserAgent != "Codex Desktop/0.115.0-alpha.11 (Windows 10.0.22621; x86_64) unknown (Codex Desktop; 26.311.21342)" {
+		t.Fatalf("expected user agent header, got %q", capturedUserAgent)
 	}
 	if capturedRequest.Model != "gpt-test" {
 		t.Fatalf("expected request model gpt-test, got %q", capturedRequest.Model)
@@ -249,6 +255,40 @@ func TestRequestAIInterpretationOpenAIResponses(t *testing.T) {
 	}
 	if !strings.Contains(content, "失败摘要") {
 		t.Fatalf("expected returned interpretation content, got %q", content)
+	}
+}
+
+func TestRequestAIInterpretationOpenAIResponsesOmitsEmptyUserAgent(t *testing.T) {
+	var capturedUserAgents []string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedUserAgents = r.Header.Values("User-Agent")
+
+		writeJSON(w, http.StatusOK, map[string]any{
+			"output_text": "失败摘要\n部署失败\n\n可能原因\n脚本不存在\n\n建议操作\n检查脚本路径",
+		})
+	}))
+	defer server.Close()
+
+	_, err := requestAIInterpretation(context.Background(), server.Client(), model.AISettings{
+		Enabled:  true,
+		Protocol: model.AIProtocolOpenAIResponses,
+		BaseURL:  server.URL + "/v1",
+		APIKey:   "plain-api-key",
+		Model:    "gpt-5-mini",
+	}, aiInterpretationInput{
+		ProjectName:   "demo",
+		Branch:        "main",
+		Status:        model.RunStatusFailed,
+		ErrorMessage:  "build failed",
+		LogText:       "npm ERR! missing script: build",
+	})
+	if err != nil {
+		t.Fatalf("request ai interpretation: %v", err)
+	}
+
+	if len(capturedUserAgents) != 0 {
+		t.Fatalf("expected no user-agent header when configuration is empty, got %#v", capturedUserAgents)
 	}
 }
 

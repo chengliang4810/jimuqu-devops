@@ -30,6 +30,7 @@ const defaultAISettings: AISettings = {
   base_url: "",
   api_key: "",
   model: "",
+  user_agent: "",
 };
 
 function buildSettingsMap(settings: SettingItem[]) {

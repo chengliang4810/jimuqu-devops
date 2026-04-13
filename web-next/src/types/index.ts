@@ -183,6 +183,7 @@ export interface AISettings {
   base_url: string;
   api_key: string;
   model: string;
+  user_agent: string;
   created_at?: string;
   updated_at?: string;
 }

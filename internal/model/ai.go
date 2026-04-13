@@ -15,6 +15,7 @@ type AISettings struct {
 	BaseURL   string    `json:"base_url"`
 	APIKey    string    `json:"api_key"`
 	Model     string    `json:"model"`
+	UserAgent string    `json:"user_agent"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -37,4 +38,5 @@ var DefaultAISettings = AISettings{
 	BaseURL:  "",
 	APIKey:   "",
 	Model:    "",
+	UserAgent: "",
 }
