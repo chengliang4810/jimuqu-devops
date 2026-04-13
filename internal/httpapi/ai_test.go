@@ -171,6 +171,208 @@ func TestRequestOpenAIInterpretation(t *testing.T) {
 	}
 }
 
+func TestNormalizeAISettingsInputSupportsMultipleProtocols(t *testing.T) {
+	testCases := []string{
+		model.AIProtocolOpenAI,
+		model.AIProtocolOpenAIResponses,
+		model.AIProtocolAnthropic,
+		model.AIProtocolGemini,
+	}
+
+	for _, protocol := range testCases {
+		t.Run(protocol, func(t *testing.T) {
+			normalized, err := normalizeAISettingsInput(model.AISettings{
+				Enabled:  true,
+				Protocol: protocol,
+				BaseURL:  "https://example.com/v1",
+				APIKey:   "plain-api-key",
+				Model:    "demo-model",
+			})
+			if err != nil {
+				t.Fatalf("expected protocol %q to be accepted, got error %v", protocol, err)
+			}
+			if normalized.Protocol != protocol {
+				t.Fatalf("expected normalized protocol %q, got %q", protocol, normalized.Protocol)
+			}
+		})
+	}
+}
+
+func TestRequestAIInterpretationOpenAIResponses(t *testing.T) {
+	var capturedPath string
+	var capturedAuth string
+	var capturedRequest map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		capturedAuth = r.Header.Get("Authorization")
+
+		if err := json.NewDecoder(r.Body).Decode(&capturedRequest); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		writeJSON(w, http.StatusOK, map[string]any{
+			"output_text": "失败摘要\n部署失败\n\n可能原因\n脚本不存在\n\n建议操作\n检查脚本路径",
+		})
+	}))
+	defer server.Close()
+
+	content, err := requestAIInterpretation(context.Background(), server.Client(), model.AISettings{
+		Enabled:  true,
+		Protocol: model.AIProtocolOpenAIResponses,
+		BaseURL:  server.URL + "/v1",
+		APIKey:   "plain-api-key",
+		Model:    "gpt-5-mini",
+	}, aiInterpretationInput{
+		ProjectName:   "demo",
+		Branch:        "main",
+		Status:        model.RunStatusFailed,
+		CommitMessage: "fix: build",
+		ErrorMessage:  "build failed",
+		LogText:       "npm ERR! missing script: build",
+	})
+	if err != nil {
+		t.Fatalf("request ai interpretation: %v", err)
+	}
+
+	if capturedPath != "/v1/responses" {
+		t.Fatalf("expected request path /v1/responses, got %q", capturedPath)
+	}
+	if capturedAuth != "Bearer plain-api-key" {
+		t.Fatalf("expected bearer token header, got %q", capturedAuth)
+	}
+	if capturedRequest["model"] != "gpt-5-mini" {
+		t.Fatalf("expected request model gpt-5-mini, got %#v", capturedRequest["model"])
+	}
+	if strings.TrimSpace(capturedRequest["input"].(string)) == "" {
+		t.Fatalf("expected non-empty input prompt")
+	}
+	if !strings.Contains(content, "失败摘要") {
+		t.Fatalf("expected returned interpretation content, got %q", content)
+	}
+}
+
+func TestRequestAIInterpretationAnthropic(t *testing.T) {
+	var capturedPath string
+	var capturedAPIKey string
+	var capturedVersion string
+	var capturedRequest map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		capturedAPIKey = r.Header.Get("x-api-key")
+		capturedVersion = r.Header.Get("anthropic-version")
+
+		if err := json.NewDecoder(r.Body).Decode(&capturedRequest); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		writeJSON(w, http.StatusOK, map[string]any{
+			"content": []map[string]any{
+				{"type": "text", "text": "失败摘要\n构建失败\n\n可能原因\n依赖缺失\n\n建议操作\n补充依赖"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	content, err := requestAIInterpretation(context.Background(), server.Client(), model.AISettings{
+		Enabled:  true,
+		Protocol: model.AIProtocolAnthropic,
+		BaseURL:  server.URL + "/v1",
+		APIKey:   "plain-api-key",
+		Model:    "claude-sonnet-4-5",
+	}, aiInterpretationInput{
+		ProjectName:   "demo",
+		Branch:        "main",
+		Status:        model.RunStatusFailed,
+		CommitMessage: "fix: deploy",
+		ErrorMessage:  "deploy failed",
+		LogText:       "sh: npm: not found",
+	})
+	if err != nil {
+		t.Fatalf("request ai interpretation: %v", err)
+	}
+
+	if capturedPath != "/v1/messages" {
+		t.Fatalf("expected request path /v1/messages, got %q", capturedPath)
+	}
+	if capturedAPIKey != "plain-api-key" {
+		t.Fatalf("expected anthropic api key header, got %q", capturedAPIKey)
+	}
+	if capturedVersion != "2023-06-01" {
+		t.Fatalf("expected anthropic-version header, got %q", capturedVersion)
+	}
+	if capturedRequest["model"] != "claude-sonnet-4-5" {
+		t.Fatalf("expected request model claude-sonnet-4-5, got %#v", capturedRequest["model"])
+	}
+	if strings.TrimSpace(capturedRequest["system"].(string)) == "" {
+		t.Fatalf("expected non-empty system prompt")
+	}
+	if !strings.Contains(content, "失败摘要") {
+		t.Fatalf("expected returned interpretation content, got %q", content)
+	}
+}
+
+func TestRequestAIInterpretationGemini(t *testing.T) {
+	var capturedPath string
+	var capturedAPIKey string
+	var capturedRequest map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		capturedAPIKey = r.Header.Get("x-goog-api-key")
+
+		if err := json.NewDecoder(r.Body).Decode(&capturedRequest); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		writeJSON(w, http.StatusOK, map[string]any{
+			"candidates": []map[string]any{
+				{
+					"content": map[string]any{
+						"parts": []map[string]any{
+							{"text": "失败摘要\n构建失败\n\n可能原因\n环境变量缺失\n\n建议操作\n补齐变量"},
+						},
+					},
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	content, err := requestAIInterpretation(context.Background(), server.Client(), model.AISettings{
+		Enabled:  true,
+		Protocol: model.AIProtocolGemini,
+		BaseURL:  server.URL + "/v1beta",
+		APIKey:   "plain-api-key",
+		Model:    "gemini-2.5-flash",
+	}, aiInterpretationInput{
+		ProjectName:   "demo",
+		Branch:        "main",
+		Status:        model.RunStatusFailed,
+		CommitMessage: "fix: ci",
+		ErrorMessage:  "ci failed",
+		LogText:       "pnpm: command not found",
+	})
+	if err != nil {
+		t.Fatalf("request ai interpretation: %v", err)
+	}
+
+	if capturedPath != "/v1beta/models/gemini-2.5-flash:generateContent" {
+		t.Fatalf("expected gemini request path, got %q", capturedPath)
+	}
+	if capturedAPIKey != "plain-api-key" {
+		t.Fatalf("expected x-goog-api-key header, got %q", capturedAPIKey)
+	}
+	systemInstruction, ok := capturedRequest["systemInstruction"].(map[string]any)
+	if !ok || systemInstruction == nil {
+		t.Fatalf("expected systemInstruction object, got %#v", capturedRequest["systemInstruction"])
+	}
+	if !strings.Contains(content, "失败摘要") {
+		t.Fatalf("expected returned interpretation content, got %q", content)
+	}
+}
+
 func TestHandleInterpretRunRejectsNonFailedRun(t *testing.T) {
 	appStore := newTestHTTPStore(t)
 	server := newTestServer(t, appStore)

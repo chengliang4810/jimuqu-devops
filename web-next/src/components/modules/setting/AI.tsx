@@ -10,6 +10,43 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 
+const PROTOCOL_OPTIONS: Array<{
+  value: AISettings["protocol"];
+  label: string;
+  baseURLPlaceholder: string;
+  modelPlaceholder: string;
+  helperText: string;
+}> = [
+  {
+    value: "openai",
+    label: "OpenAI 兼容 / Chat Completions",
+    baseURLPlaceholder: "https://api.openai.com/v1",
+    modelPlaceholder: "gpt-4.1-mini",
+    helperText: "兼容 OpenAI Chat Completions 接口，适合 OpenAI 兼容网关或通用兼容服务。",
+  },
+  {
+    value: "openai_responses",
+    label: "OpenAI Responses",
+    baseURLPlaceholder: "https://api.openai.com/v1",
+    modelPlaceholder: "gpt-5-mini",
+    helperText: "使用 OpenAI Responses API，请填写包含 /v1 的根地址。",
+  },
+  {
+    value: "anthropic",
+    label: "Claude / Anthropic Messages",
+    baseURLPlaceholder: "https://api.anthropic.com/v1",
+    modelPlaceholder: "claude-sonnet-4-5",
+    helperText: "使用 Anthropic Messages API，后端会自动补充所需版本头。",
+  },
+  {
+    value: "gemini",
+    label: "Gemini GenerateContent",
+    baseURLPlaceholder: "https://generativelanguage.googleapis.com/v1beta",
+    modelPlaceholder: "gemini-2.5-flash",
+    helperText: "使用 Gemini GenerateContent 接口，请填写 API 根地址，后端会请求 models/{model}:generateContent。",
+  },
+];
+
 type SettingAIProps = {
   settings: AISettings;
   onSave: (settings: AISettings) => Promise<void>;
@@ -41,6 +78,10 @@ export function SettingAI({ settings, onSave }: SettingAIProps) {
       model: model.trim(),
     }),
     [apiKey, baseURL, enabled, model, protocol]
+  );
+  const protocolMeta = useMemo(
+    () => PROTOCOL_OPTIONS.find((option) => option.value === protocol) ?? PROTOCOL_OPTIONS[0],
+    [protocol]
   );
 
   const canSave = !enabled || Boolean(normalizedSettings.base_url && normalizedSettings.api_key && normalizedSettings.model);
@@ -85,7 +126,11 @@ export function SettingAI({ settings, onSave }: SettingAIProps) {
             <SelectValue placeholder="选择协议" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="openai">OpenAI 兼容协议</SelectItem>
+            {PROTOCOL_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -97,7 +142,7 @@ export function SettingAI({ settings, onSave }: SettingAIProps) {
           aria-label="Base URL"
           value={baseURL}
           onChange={(event) => setBaseURL(event.target.value)}
-          placeholder="https://api.openai.com/v1"
+          placeholder={protocolMeta.baseURLPlaceholder}
           className="rounded-xl"
         />
       </div>
@@ -133,13 +178,17 @@ export function SettingAI({ settings, onSave }: SettingAIProps) {
           aria-label="模型"
           value={model}
           onChange={(event) => setModel(event.target.value)}
-          placeholder="gpt-4.1-mini"
+          placeholder={protocolMeta.modelPlaceholder}
           className="rounded-xl"
         />
       </div>
 
       <p className="text-xs leading-5 text-muted-foreground">
-        关闭时保留已填写配置但不在部署失败详情中展示 AI 解读入口。当前仅支持 OpenAI 兼容的 Chat Completions 接口。
+        {protocolMeta.helperText}
+      </p>
+
+      <p className="text-xs leading-5 text-muted-foreground">
+        关闭时保留已填写配置但不在部署失败详情中展示 AI 解读入口。当前只会启用这一套配置。
       </p>
 
       <Button

@@ -175,7 +175,7 @@ export interface Setting {
   updated_at?: string;
 }
 
-export type AIProtocol = "openai";
+export type AIProtocol = "openai" | "openai_responses" | "anthropic" | "gemini";
 
 export interface AISettings {
   enabled: boolean;

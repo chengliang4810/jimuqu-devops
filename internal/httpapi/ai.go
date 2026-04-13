@@ -51,6 +51,76 @@ type openAIChatCompletionResponse struct {
 	} `json:"error,omitempty"`
 }
 
+type openAIResponsesRequest struct {
+	Model       string  `json:"model"`
+	Input       string  `json:"input"`
+	Temperature float64 `json:"temperature,omitempty"`
+}
+
+type openAIResponsesResponse struct {
+	OutputText string `json:"output_text"`
+	Output     []struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+	} `json:"output"`
+	Error *struct {
+		Message string `json:"message"`
+	} `json:"error,omitempty"`
+}
+
+type anthropicMessageRequest struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type anthropicMessagesRequest struct {
+	Model       string                    `json:"model"`
+	System      string                    `json:"system"`
+	Messages    []anthropicMessageRequest `json:"messages"`
+	Temperature float64                   `json:"temperature,omitempty"`
+	MaxTokens   int                       `json:"max_tokens"`
+}
+
+type anthropicMessagesResponse struct {
+	Content []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	} `json:"content"`
+	Error *struct {
+		Message string `json:"message"`
+	} `json:"error,omitempty"`
+}
+
+type geminiPart struct {
+	Text string `json:"text"`
+}
+
+type geminiContent struct {
+	Role  string       `json:"role,omitempty"`
+	Parts []geminiPart `json:"parts"`
+}
+
+type geminiGenerationConfig struct {
+	Temperature float64 `json:"temperature,omitempty"`
+}
+
+type geminiGenerateContentRequest struct {
+	SystemInstruction *geminiContent          `json:"systemInstruction,omitempty"`
+	Contents          []geminiContent         `json:"contents"`
+	GenerationConfig  *geminiGenerationConfig `json:"generationConfig,omitempty"`
+}
+
+type geminiGenerateContentResponse struct {
+	Candidates []struct {
+		Content geminiContent `json:"content"`
+	} `json:"candidates"`
+	Error *struct {
+		Message string `json:"message"`
+	} `json:"error,omitempty"`
+}
+
 func (s *Server) handleGetAISettings(w http.ResponseWriter, r *http.Request) {
 	settings, err := s.store.GetAISettings(r.Context())
 	if err != nil {
@@ -130,7 +200,7 @@ func (s *Server) handleInterpretRun(w http.ResponseWriter, r *http.Request) {
 	}
 	logText, logTruncated := truncateAILog(logText)
 
-	content, err := requestOpenAIInterpretation(
+	content, err := requestAIInterpretation(
 		r.Context(),
 		newAIHTTPClient(s.getProxyURL(r)),
 		settings,
@@ -167,7 +237,9 @@ func normalizeAISettingsInput(input model.AISettings) (model.AISettings, error) 
 	if input.Protocol == "" {
 		input.Protocol = model.AIProtocolOpenAI
 	}
-	if input.Protocol != model.AIProtocolOpenAI {
+	switch input.Protocol {
+	case model.AIProtocolOpenAI, model.AIProtocolOpenAIResponses, model.AIProtocolAnthropic, model.AIProtocolGemini:
+	default:
 		return model.AISettings{}, errors.New("unsupported ai protocol")
 	}
 
@@ -193,6 +265,21 @@ func truncateAILog(logText string) (string, bool) {
 		return logText, false
 	}
 	return string(runes[len(runes)-aiLogCharacterLimit:]), true
+}
+
+func requestAIInterpretation(ctx context.Context, client *http.Client, settings model.AISettings, input aiInterpretationInput) (string, error) {
+	switch settings.Protocol {
+	case "", model.AIProtocolOpenAI:
+		return requestOpenAIInterpretation(ctx, client, settings, input)
+	case model.AIProtocolOpenAIResponses:
+		return requestOpenAIResponsesInterpretation(ctx, client, settings, input)
+	case model.AIProtocolAnthropic:
+		return requestAnthropicInterpretation(ctx, client, settings, input)
+	case model.AIProtocolGemini:
+		return requestGeminiInterpretation(ctx, client, settings, input)
+	default:
+		return "", errors.New("unsupported ai protocol")
+	}
 }
 
 func requestOpenAIInterpretation(ctx context.Context, client *http.Client, settings model.AISettings, input aiInterpretationInput) (string, error) {
@@ -255,6 +342,191 @@ func requestOpenAIInterpretation(ctx context.Context, client *http.Client, setti
 	}
 
 	return parsed.Choices[0].Message.Content, nil
+}
+
+func requestOpenAIResponsesInterpretation(ctx context.Context, client *http.Client, settings model.AISettings, input aiInterpretationInput) (string, error) {
+	responseBody, err := doAIJSONRequest(
+		ctx,
+		client,
+		strings.TrimRight(strings.TrimSpace(settings.BaseURL), "/")+"/responses",
+		map[string]string{
+			"Authorization": "Bearer " + settings.APIKey,
+		},
+		openAIResponsesRequest{
+			Model:       settings.Model,
+			Input:       buildAIInterpretationPrompt(input),
+			Temperature: 0.2,
+		},
+	)
+	if err != nil {
+		return "", err
+	}
+
+	var parsed openAIResponsesResponse
+	if err := json.Unmarshal(responseBody, &parsed); err != nil {
+		return "", fmt.Errorf("decode ai response: %w", err)
+	}
+	if parsed.Error != nil && strings.TrimSpace(parsed.Error.Message) != "" {
+		return "", fmt.Errorf("ai response failed: %s", parsed.Error.Message)
+	}
+	if strings.TrimSpace(parsed.OutputText) != "" {
+		return parsed.OutputText, nil
+	}
+
+	var contentParts []string
+	for _, outputItem := range parsed.Output {
+		for _, content := range outputItem.Content {
+			if strings.TrimSpace(content.Text) != "" {
+				contentParts = append(contentParts, content.Text)
+			}
+		}
+	}
+	if len(contentParts) == 0 {
+		return "", errors.New("ai response did not include interpretation content")
+	}
+	return strings.Join(contentParts, "\n"), nil
+}
+
+func requestAnthropicInterpretation(ctx context.Context, client *http.Client, settings model.AISettings, input aiInterpretationInput) (string, error) {
+	responseBody, err := doAIJSONRequest(
+		ctx,
+		client,
+		strings.TrimRight(strings.TrimSpace(settings.BaseURL), "/")+"/messages",
+		map[string]string{
+			"x-api-key":         settings.APIKey,
+			"anthropic-version": "2023-06-01",
+		},
+		anthropicMessagesRequest{
+			Model:  settings.Model,
+			System: "你是一个 DevOps 部署故障分析助手。请始终使用中文回答，并严格输出以下三个小节：失败摘要、可能原因、建议操作。",
+			Messages: []anthropicMessageRequest{
+				{
+					Role:    "user",
+					Content: buildAIInterpretationPrompt(input),
+				},
+			},
+			Temperature: 0.2,
+			MaxTokens:   1200,
+		},
+	)
+	if err != nil {
+		return "", err
+	}
+
+	var parsed anthropicMessagesResponse
+	if err := json.Unmarshal(responseBody, &parsed); err != nil {
+		return "", fmt.Errorf("decode ai response: %w", err)
+	}
+	if parsed.Error != nil && strings.TrimSpace(parsed.Error.Message) != "" {
+		return "", fmt.Errorf("ai response failed: %s", parsed.Error.Message)
+	}
+
+	var contentParts []string
+	for _, content := range parsed.Content {
+		if strings.TrimSpace(content.Text) != "" {
+			contentParts = append(contentParts, content.Text)
+		}
+	}
+	if len(contentParts) == 0 {
+		return "", errors.New("ai response did not include interpretation content")
+	}
+	return strings.Join(contentParts, "\n"), nil
+}
+
+func requestGeminiInterpretation(ctx context.Context, client *http.Client, settings model.AISettings, input aiInterpretationInput) (string, error) {
+	responseBody, err := doAIJSONRequest(
+		ctx,
+		client,
+		strings.TrimRight(strings.TrimSpace(settings.BaseURL), "/")+"/models/"+url.PathEscape(settings.Model)+":generateContent",
+		map[string]string{
+			"x-goog-api-key": settings.APIKey,
+		},
+		geminiGenerateContentRequest{
+			SystemInstruction: &geminiContent{
+				Parts: []geminiPart{
+					{
+						Text: "你是一个 DevOps 部署故障分析助手。请始终使用中文回答，并严格输出以下三个小节：失败摘要、可能原因、建议操作。",
+					},
+				},
+			},
+			Contents: []geminiContent{
+				{
+					Role: "user",
+					Parts: []geminiPart{
+						{
+							Text: buildAIInterpretationPrompt(input),
+						},
+					},
+				},
+			},
+			GenerationConfig: &geminiGenerationConfig{
+				Temperature: 0.2,
+			},
+		},
+	)
+	if err != nil {
+		return "", err
+	}
+
+	var parsed geminiGenerateContentResponse
+	if err := json.Unmarshal(responseBody, &parsed); err != nil {
+		return "", fmt.Errorf("decode ai response: %w", err)
+	}
+	if parsed.Error != nil && strings.TrimSpace(parsed.Error.Message) != "" {
+		return "", fmt.Errorf("ai response failed: %s", parsed.Error.Message)
+	}
+	if len(parsed.Candidates) == 0 {
+		return "", errors.New("ai response did not include interpretation content")
+	}
+
+	var contentParts []string
+	for _, part := range parsed.Candidates[0].Content.Parts {
+		if strings.TrimSpace(part.Text) != "" {
+			contentParts = append(contentParts, part.Text)
+		}
+	}
+	if len(contentParts) == 0 {
+		return "", errors.New("ai response did not include interpretation content")
+	}
+	return strings.Join(contentParts, "\n"), nil
+}
+
+func doAIJSONRequest(ctx context.Context, client *http.Client, endpoint string, headers map[string]string, requestBody any) ([]byte, error) {
+	if client == nil {
+		client = newAIHTTPClient("")
+	}
+
+	body, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("marshal ai request: %w", err)
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, aiRequestTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create ai request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request ai interpretation: %w", err)
+	}
+	defer resp.Body.Close()
+
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read ai response: %w", err)
+	}
+	if resp.StatusCode >= http.StatusBadRequest {
+		return nil, fmt.Errorf("ai response failed with status %d: %s", resp.StatusCode, strings.TrimSpace(string(responseBody)))
+	}
+	return responseBody, nil
 }
 
 func buildAIInterpretationPrompt(input aiInterpretationInput) string {

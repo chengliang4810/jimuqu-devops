@@ -2,7 +2,12 @@ package model
 
 import "time"
 
-const AIProtocolOpenAI = "openai"
+const (
+	AIProtocolOpenAI          = "openai"
+	AIProtocolOpenAIResponses = "openai_responses"
+	AIProtocolAnthropic       = "anthropic"
+	AIProtocolGemini          = "gemini"
+)
 
 type AISettings struct {
 	Enabled   bool      `json:"enabled"`
