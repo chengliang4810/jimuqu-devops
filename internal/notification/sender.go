@@ -131,13 +131,13 @@ func (s *Sender) sendWeChat(channel model.NotificationChannel, payload model.Not
 	}
 
 	content := fmt.Sprintf(
-		"## 🚀 部署通知\n\n**项目**: %s\n**分支**: %s\n**状态**: %s\n%s\n%s**错误信息**: %s\n\n**时间**: %s",
+		"## 🚀 部署通知\n\n**项目**: %s\n**分支**: %s\n**状态**: %s\n%s\n%s%s**时间**: %s",
 		payload.ProjectName,
 		payload.Branch,
 		getStatusText(payload.Status),
 		executionInfo,
 		commitInfo,
-		notificationErrorText(payload.ErrorMessage),
+		buildNotificationErrorMarkdown(payload),
 		time.Now().Format("2006-01-02 15:04:05"),
 	)
 
@@ -202,13 +202,13 @@ func (s *Sender) sendDingTalk(channel model.NotificationChannel, payload model.N
 	}
 
 	text := fmt.Sprintf(
-		"【部署通知】\n项目: %s\n分支: %s\n状态: %s\n%s%s\n错误信息: %s\n时间: %s",
+		"【部署通知】\n项目: %s\n分支: %s\n状态: %s\n%s%s%s时间: %s",
 		payload.ProjectName,
 		payload.Branch,
 		getStatusText(payload.Status),
 		executionInfo,
 		commitInfo,
-		notificationErrorText(payload.ErrorMessage),
+		buildNotificationErrorPlain(payload),
 		time.Now().Format("2006-01-02 15:04:05"),
 	)
 
@@ -306,23 +306,17 @@ func (s *Sender) sendFeishu(channel model.NotificationChannel, payload model.Not
 		title = "部署成功通知"
 	}
 
+	contentLines := []string{
+		fmt.Sprintf("项目: %s", payload.ProjectName),
+		fmt.Sprintf("分支: %s", payload.Branch),
+		fmt.Sprintf("状态: %s", getStatusText(payload.Status)),
+	}
+	contentLines = append(contentLines, buildNotificationDetailsPlain(payload)...)
+	contentLines = append(contentLines, fmt.Sprintf("时间: %s", time.Now().Format("2006-01-02 15:04:05")))
+
 	content := map[string]any{
-		"tag": "div",
-		"text": fmt.Sprintf(
-			"项目: %s\n分支: %s\n状态: %s\n运行记录: %s\n触发方式: %s\n失败阶段: %s\n运行耗时: %s\n提交ID: %s\n提交者: %s\n提交信息: %s\n错误信息: %s\n时间: %s",
-			payload.ProjectName,
-			payload.Branch,
-			getStatusText(payload.Status),
-			buildRunLinkPlain(payload),
-			getTriggerText(payload.TriggerType),
-			emptyFallback(displayStageText(payload.Stage), "-"),
-			formatDuration(payload.DurationSeconds),
-			emptyFallback(shortCommit(payload.CommitID), "-"),
-			emptyFallback(payload.Author, "-"),
-			emptyFallback(payload.CommitMessage, "-"),
-			notificationErrorText(payload.ErrorMessage),
-			time.Now().Format("2006-01-02 15:04:05"),
-		),
+		"tag":  "div",
+		"text": strings.Join(contentLines, "\n"),
 	}
 
 	message := map[string]any{
@@ -398,26 +392,12 @@ func (s *Sender) sendEmail(channel model.NotificationChannel, payload model.Noti
 			"项目: %s\n"+
 			"分支: %s\n"+
 			"状态: %s\n"+
-			"运行记录: %s\n"+
-			"触发方式: %s\n"+
-			"失败阶段: %s\n"+
-			"运行耗时: %s\n"+
-			"提交ID: %s\n"+
-			"提交者: %s\n"+
-			"提交信息: %s\n"+
-			"错误信息: %s\n"+
+			"%s\n"+
 			"时间: %s\n",
 		payload.ProjectName,
 		payload.Branch,
 		getStatusText(payload.Status),
-		buildRunLinkPlain(payload),
-		getTriggerText(payload.TriggerType),
-		emptyFallback(displayStageText(payload.Stage), "-"),
-		formatDuration(payload.DurationSeconds),
-		emptyFallback(shortCommit(payload.CommitID), "-"),
-		emptyFallback(payload.Author, "-"),
-		emptyFallback(payload.CommitMessage, "-"),
-		notificationErrorText(payload.ErrorMessage),
+		strings.Join(buildNotificationDetailsPlain(payload), "\n"),
 		time.Now().Format("2006-01-02 15:04:05"),
 	)
 
@@ -515,13 +495,15 @@ func buildCommitInfoMarkdown(payload model.NotificationPayload) string {
 }
 
 func buildExecutionInfoMarkdown(payload model.NotificationPayload) string {
-	return fmt.Sprintf(
-		"**运行记录**: %s\n**触发方式**: %s\n**失败阶段**: %s\n**运行耗时**: %s\n\n",
-		buildRunLinkMarkdown(payload),
-		getTriggerText(payload.TriggerType),
-		emptyFallback(displayStageText(payload.Stage), "-"),
-		formatDuration(payload.DurationSeconds),
-	)
+	lines := []string{
+		fmt.Sprintf("**运行记录**: %s", buildRunLinkMarkdown(payload)),
+		fmt.Sprintf("**触发方式**: %s", getTriggerText(payload.TriggerType)),
+	}
+	if shouldIncludeFailureDetails(payload) {
+		lines = append(lines, fmt.Sprintf("**失败阶段**: %s", emptyFallback(displayStageText(payload.Stage), "-")))
+	}
+	lines = append(lines, fmt.Sprintf("**运行耗时**: %s", formatDuration(payload.DurationSeconds)))
+	return strings.Join(lines, "\n") + "\n\n"
 }
 
 func buildCommitInfoPlain(payload model.NotificationPayload) string {
@@ -539,13 +521,58 @@ func buildCommitInfoPlain(payload model.NotificationPayload) string {
 }
 
 func buildExecutionInfoPlain(payload model.NotificationPayload) string {
-	return fmt.Sprintf(
-		"运行记录: %s\n触发方式: %s\n失败阶段: %s\n运行耗时: %s\n",
-		buildRunLinkPlain(payload),
-		getTriggerText(payload.TriggerType),
-		emptyFallback(displayStageText(payload.Stage), "-"),
-		formatDuration(payload.DurationSeconds),
-	)
+	lines := []string{
+		fmt.Sprintf("运行记录: %s", buildRunLinkPlain(payload)),
+		fmt.Sprintf("触发方式: %s", getTriggerText(payload.TriggerType)),
+	}
+	if shouldIncludeFailureDetails(payload) {
+		lines = append(lines, fmt.Sprintf("失败阶段: %s", emptyFallback(displayStageText(payload.Stage), "-")))
+	}
+	lines = append(lines, fmt.Sprintf("运行耗时: %s", formatDuration(payload.DurationSeconds)))
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func buildNotificationErrorMarkdown(payload model.NotificationPayload) string {
+	if !shouldIncludeFailureDetails(payload) {
+		return ""
+	}
+	return fmt.Sprintf("**错误信息**: %s\n\n", notificationErrorText(payload.ErrorMessage))
+}
+
+func buildNotificationErrorPlain(payload model.NotificationPayload) string {
+	if !shouldIncludeFailureDetails(payload) {
+		return ""
+	}
+	return fmt.Sprintf("错误信息: %s\n", notificationErrorText(payload.ErrorMessage))
+}
+
+func buildNotificationDetailsPlain(payload model.NotificationPayload) []string {
+	lines := []string{
+		fmt.Sprintf("运行记录: %s", buildRunLinkPlain(payload)),
+		fmt.Sprintf("触发方式: %s", getTriggerText(payload.TriggerType)),
+	}
+	if shouldIncludeFailureDetails(payload) {
+		lines = append(lines, fmt.Sprintf("失败阶段: %s", emptyFallback(displayStageText(payload.Stage), "-")))
+	}
+	lines = append(lines, fmt.Sprintf("运行耗时: %s", formatDuration(payload.DurationSeconds)))
+
+	if payload.CommitID != "" {
+		lines = append(lines, fmt.Sprintf("提交ID: %s", shortCommit(payload.CommitID)))
+	}
+	if payload.Author != "" {
+		lines = append(lines, fmt.Sprintf("提交者: %s", payload.Author))
+	}
+	if payload.CommitMessage != "" {
+		lines = append(lines, fmt.Sprintf("提交信息: %s", payload.CommitMessage))
+	}
+	if shouldIncludeFailureDetails(payload) {
+		lines = append(lines, fmt.Sprintf("错误信息: %s", notificationErrorText(payload.ErrorMessage)))
+	}
+	return lines
+}
+
+func shouldIncludeFailureDetails(payload model.NotificationPayload) bool {
+	return strings.TrimSpace(payload.Status) == "failed"
 }
 
 func notificationErrorText(message string) string {

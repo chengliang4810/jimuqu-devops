@@ -59,6 +59,57 @@ type pipelineResult struct {
 	DurationSeconds int64
 }
 
+type commandFailureError struct {
+	err    error
+	detail string
+}
+
+func (e *commandFailureError) Error() string {
+	return e.err.Error()
+}
+
+func (e *commandFailureError) Unwrap() error {
+	return e.err
+}
+
+func (e *commandFailureError) UserVisibleMessage() string {
+	return e.detail
+}
+
+type recentCommandLines struct {
+	mu    sync.Mutex
+	max   int
+	lines []string
+}
+
+func newRecentCommandLines(max int) *recentCommandLines {
+	if max <= 0 {
+		max = 1
+	}
+	return &recentCommandLines{max: max}
+}
+
+func (b *recentCommandLines) Add(line string) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return
+	}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.lines = append(b.lines, line)
+	if len(b.lines) > b.max {
+		b.lines = append([]string(nil), b.lines[len(b.lines)-b.max:]...)
+	}
+}
+
+func (b *recentCommandLines) Lines() []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return append([]string(nil), b.lines...)
+}
+
 func NewExecutor(store *store.Store, logger *slog.Logger, workspaceRoot, artifactRoot, cacheRoot string) *Executor {
 	return &Executor{
 		store:         store,
@@ -242,7 +293,7 @@ func (e *Executor) execute(ctx context.Context, runID, projectID int64, triggerT
 			return
 		} else {
 			finalStatus = model.RunStatusFailed
-			finalError = execErr.Error()
+			finalError = userVisibleErrorMessage(execErr)
 			logf("pipeline failed at stage=%s: %v", displayStage(result.Stage), execErr)
 		}
 	} else {
@@ -361,11 +412,30 @@ func (e *Executor) runLocalCommandWithLogging(ctx context.Context, logf func(str
 		return fmt.Errorf("start command: %w", err)
 	}
 
-	go e.streamCommandOutput(stdoutPipe, logf)
-	go e.streamCommandOutput(stderrPipe, logf)
+	recentLines := newRecentCommandLines(50)
+	streamLogf := func(format string, args ...any) {
+		line := fmt.Sprintf(format, args...)
+		recentLines.Add(line)
+		if logf != nil {
+			logf(format, args...)
+		}
+	}
 
-	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("command failed: %w", err)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		e.streamCommandOutput(stdoutPipe, streamLogf)
+	}()
+	go func() {
+		defer wg.Done()
+		e.streamCommandOutput(stderrPipe, streamLogf)
+	}()
+
+	waitErr := cmd.Wait()
+	wg.Wait()
+	if waitErr != nil {
+		return newCommandFailureError(fmt.Errorf("command failed: %w", waitErr), recentLines.Lines())
 	}
 
 	return nil
@@ -1633,4 +1703,69 @@ func sanitizeCommandLogLine(line string) string {
 	}
 
 	return line
+}
+
+func newCommandFailureError(err error, lines []string) error {
+	detail := summarizeCommandFailureDetail(lines)
+	if detail == "" {
+		return err
+	}
+	return &commandFailureError{
+		err:    err,
+		detail: detail,
+	}
+}
+
+func summarizeCommandFailureDetail(lines []string) string {
+	var fallback string
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		if fallback == "" {
+			fallback = line
+		}
+		if isGenericCommandFailureLine(line) {
+			continue
+		}
+		return line
+	}
+	if isGenericCommandFailureLine(fallback) {
+		return ""
+	}
+	return fallback
+}
+
+func isGenericCommandFailureLine(line string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(line))
+	switch {
+	case normalized == "":
+		return true
+	case strings.Contains(normalized, "command failed: exit status"):
+		return true
+	case strings.HasPrefix(normalized, "exit status "):
+		return true
+	case strings.HasPrefix(normalized, "stage "):
+		return true
+	case strings.Contains(normalized, "image source failed="):
+		return true
+	default:
+		return false
+	}
+}
+
+func userVisibleErrorMessage(err error) string {
+	if err == nil {
+		return ""
+	}
+
+	var detailed interface{ UserVisibleMessage() string }
+	if errors.As(err, &detailed) {
+		if message := strings.TrimSpace(detailed.UserVisibleMessage()); message != "" {
+			return message
+		}
+	}
+
+	return strings.TrimSpace(err.Error())
 }
