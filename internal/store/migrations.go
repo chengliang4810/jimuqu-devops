@@ -228,3 +228,10 @@ func columnExistsQuery(driver, table, column string) (string, []any) {
 	}
 	return fmt.Sprintf(`PRAGMA table_info(%s)`, table), nil
 }
+
+func aiSettingsUserAgentAddColumnSQL(isMySQL bool) string {
+	if isMySQL {
+		return `ALTER TABLE ai_settings ADD COLUMN user_agent TEXT NULL`
+	}
+	return `ALTER TABLE ai_settings ADD COLUMN user_agent TEXT NOT NULL DEFAULT ''`
+}

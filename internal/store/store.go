@@ -1971,7 +1971,7 @@ func (s *Store) ensureAISettingsUserAgentColumn(ctx context.Context) error {
 			return fmt.Errorf("read ai_settings columns: %w", err)
 		}
 		if count == 0 {
-			if _, err := s.db.ExecContext(ctx, `ALTER TABLE ai_settings ADD COLUMN user_agent TEXT NOT NULL DEFAULT ''`); err != nil {
+			if _, err := s.db.ExecContext(ctx, aiSettingsUserAgentAddColumnSQL(true)); err != nil {
 				return fmt.Errorf("add user_agent to ai_settings: %w", err)
 			}
 		}
@@ -2009,7 +2009,7 @@ func (s *Store) ensureAISettingsUserAgentColumn(ctx context.Context) error {
 			return fmt.Errorf("close ai_settings columns rows: %w", err)
 		}
 		if !hasUserAgent {
-			if _, err := s.db.ExecContext(ctx, `ALTER TABLE ai_settings ADD COLUMN user_agent TEXT NOT NULL DEFAULT ''`); err != nil {
+			if _, err := s.db.ExecContext(ctx, aiSettingsUserAgentAddColumnSQL(false)); err != nil {
 				return fmt.Errorf("add user_agent to ai_settings: %w", err)
 			}
 		}
