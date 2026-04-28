@@ -24,15 +24,19 @@ import (
 const requestTimeout = 30 * time.Second
 
 func GetLatestRelease(ctx context.Context, proxyURL string) (model.ReleaseInfo, error) {
-	apiURL, err := latestReleaseAPIURL()
+	owner, repo, err := repoOwnerRepo()
 	if err != nil {
 		return model.ReleaseInfo{}, err
 	}
 
+	apiURL := latestReleaseAPIURL(owner, repo)
 	body, err := doRequest(ctx, apiURL, proxyURL)
 	if err != nil {
 		if strings.Contains(err.Error(), "Not Found") || strings.Contains(err.Error(), `"status":"404"`) || strings.Contains(err.Error(), `"status": "404"`) {
 			return model.ReleaseInfo{Message: "no published release found"}, nil
+		}
+		if tagName, tagErr := resolveLatestReleaseTag(ctx, owner, repo, proxyURL); tagErr == nil && tagName != "" {
+			return minimalReleaseInfo(owner, repo, tagName), nil
 		}
 		return model.ReleaseInfo{}, err
 	}
@@ -43,6 +47,14 @@ func GetLatestRelease(ctx context.Context, proxyURL string) (model.ReleaseInfo, 
 	}
 	if release.Message != "" {
 		return model.ReleaseInfo{}, fmt.Errorf("get latest release failed: %s", release.Message)
+	}
+
+	if tagName, err := resolveLatestReleaseTag(ctx, owner, repo, proxyURL); err == nil && isNewerVersion(tagName, release.TagName) {
+		tagRelease, err := getReleaseByTag(ctx, owner, repo, tagName, proxyURL)
+		if err == nil {
+			return tagRelease, nil
+		}
+		return minimalReleaseInfo(owner, repo, tagName), nil
 	}
 	return release, nil
 }
@@ -88,7 +100,11 @@ func ApplyUpdate(ctx context.Context, proxyURL string) (model.UpdateResult, erro
 		}
 	}
 	if downloadURL == "" {
-		return model.UpdateResult{}, fmt.Errorf("release asset not found: %s", assetName)
+		owner, repo, err := repoOwnerRepo()
+		if err != nil {
+			return model.UpdateResult{}, err
+		}
+		downloadURL = releaseDownloadURL(owner, repo, release.TagName, assetName)
 	}
 
 	archiveData, err := doRequest(ctx, downloadURL, proxyURL)
@@ -203,12 +219,147 @@ func buildHTTPClient(proxyURL string) (*http.Client, error) {
 	return &http.Client{Transport: transport}, nil
 }
 
-func latestReleaseAPIURL() (string, error) {
-	owner, repo, err := parseRepoOwnerRepo(version.RepoURL)
+func repoOwnerRepo() (string, string, error) {
+	return parseRepoOwnerRepo(version.RepoURL)
+}
+
+func latestReleaseAPIURL(owner, repo string) string {
+	return fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", owner, repo)
+}
+
+func releaseByTagAPIURL(owner, repo, tagName string) string {
+	return fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/tags/%s", owner, repo, url.PathEscape(tagName))
+}
+
+func latestReleaseWebURL(owner, repo string) string {
+	return fmt.Sprintf("https://github.com/%s/%s/releases/latest", owner, repo)
+}
+
+func releaseWebURL(owner, repo, tagName string) string {
+	return fmt.Sprintf("https://github.com/%s/%s/releases/tag/%s", owner, repo, url.PathEscape(tagName))
+}
+
+func releaseDownloadURL(owner, repo, tagName, assetName string) string {
+	return fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s", owner, repo, url.PathEscape(tagName), url.PathEscape(assetName))
+}
+
+func getReleaseByTag(ctx context.Context, owner, repo, tagName, proxyURL string) (model.ReleaseInfo, error) {
+	body, err := doRequest(ctx, releaseByTagAPIURL(owner, repo, tagName), proxyURL)
+	if err != nil {
+		return model.ReleaseInfo{}, err
+	}
+
+	var release model.ReleaseInfo
+	if err := json.Unmarshal(body, &release); err != nil {
+		return model.ReleaseInfo{}, fmt.Errorf("decode release by tag: %w", err)
+	}
+	if release.Message != "" {
+		return model.ReleaseInfo{}, fmt.Errorf("get release by tag failed: %s", release.Message)
+	}
+	return release, nil
+}
+
+func resolveLatestReleaseTag(ctx context.Context, owner, repo, proxyURL string) (string, error) {
+	reqCtx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	request, err := http.NewRequestWithContext(reqCtx, http.MethodGet, latestReleaseWebURL(owner, repo), nil)
+	if err != nil {
+		return "", fmt.Errorf("create latest release redirect request: %w", err)
+	}
+	request.Header.Set("User-Agent", version.AppName)
+
+	client, err := buildHTTPClient(proxyURL)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", owner, repo), nil
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	response, err := client.Do(request)
+	if err != nil {
+		return "", fmt.Errorf("request latest release redirect: %w", err)
+	}
+	defer response.Body.Close()
+
+	location := response.Header.Get("Location")
+	if location == "" && response.Request != nil && response.Request.URL != nil {
+		location = response.Request.URL.String()
+	}
+
+	tagName, err := releaseTagFromURL(location)
+	if err != nil {
+		return "", err
+	}
+	return tagName, nil
+}
+
+func releaseTagFromURL(rawURL string) (string, error) {
+	if strings.TrimSpace(rawURL) == "" {
+		return "", fmt.Errorf("latest release redirect did not include a release tag")
+	}
+
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "", fmt.Errorf("parse latest release redirect: %w", err)
+	}
+	segments := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	for index := 0; index+2 < len(segments); index++ {
+		if segments[index] == "releases" && segments[index+1] == "tag" && strings.TrimSpace(segments[index+2]) != "" {
+			return segments[index+2], nil
+		}
+	}
+	return "", fmt.Errorf("latest release redirect did not include a release tag")
+}
+
+func minimalReleaseInfo(owner, repo, tagName string) model.ReleaseInfo {
+	return model.ReleaseInfo{
+		TagName: tagName,
+		HTMLURL: releaseWebURL(owner, repo, tagName),
+	}
+}
+
+func isNewerVersion(candidate, current string) bool {
+	candidate = version.Normalize(candidate)
+	current = version.Normalize(current)
+	if candidate == "" || candidate == current {
+		return false
+	}
+
+	candidateParts, candidateOK := parseNumericVersion(candidate)
+	currentParts, currentOK := parseNumericVersion(current)
+	if !candidateOK || !currentOK {
+		return candidate != current
+	}
+	for i := range candidateParts {
+		if candidateParts[i] != currentParts[i] {
+			return candidateParts[i] > currentParts[i]
+		}
+	}
+	return false
+}
+
+func parseNumericVersion(value string) ([3]int, bool) {
+	var parts [3]int
+	segments := strings.Split(version.Normalize(value), ".")
+	if len(segments) != 3 {
+		return parts, false
+	}
+	for index, segment := range segments {
+		if segment == "" {
+			return parts, false
+		}
+		var parsed int
+		for _, r := range segment {
+			if r < '0' || r > '9' {
+				return parts, false
+			}
+			parsed = parsed*10 + int(r-'0')
+		}
+		parts[index] = parsed
+	}
+	return parts, true
 }
 
 func parseRepoOwnerRepo(repoURL string) (string, string, error) {
