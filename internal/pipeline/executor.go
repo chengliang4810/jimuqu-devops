@@ -273,6 +273,10 @@ func (e *Executor) execute(ctx context.Context, runID, projectID int64, triggerT
 	if timeout <= 0 {
 		timeout = 30 * time.Minute // 默认30分钟
 	}
+	done := make(chan struct{})
+	defer close(done)
+	e.watchRunTimeout(runID, timeout, done)
+
 	timeoutCtx, cancelTimeout := context.WithTimeout(ctx, timeout)
 	defer cancelTimeout()
 
@@ -309,12 +313,48 @@ func (e *Executor) execute(ctx context.Context, runID, projectID int64, triggerT
 		logf("notification stage completed")
 	}
 
-	if err := e.store.FinalizeRun(ctx, runID, finalStatus, finalError); err != nil {
+	finalized, err := e.store.FinalizeActiveRun(context.Background(), runID, finalStatus, finalError)
+	if err != nil {
 		e.logger.Error("finalize run failed", "run_id", runID, "error", err)
+		return
+	}
+	if !finalized {
+		e.logger.Info("skip finalize because run is no longer active", "run_id", runID, "status", finalStatus)
 		return
 	}
 
 	logf("pipeline finalized with status=%s", finalStatus)
+}
+
+func (e *Executor) watchRunTimeout(runID int64, timeout time.Duration, done <-chan struct{}) {
+	go func() {
+		timer := time.NewTimer(timeout)
+		defer timer.Stop()
+
+		select {
+		case <-done:
+			return
+		case <-timer.C:
+		}
+
+		message := fmt.Sprintf("deployment timeout after %d seconds", int(timeout.Seconds()))
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		finalized, err := e.store.FinalizeActiveRun(ctx, runID, model.RunStatusFailed, message)
+		if err != nil {
+			e.logger.Error("watchdog finalize timed out run failed", "run_id", runID, "error", err)
+			return
+		}
+		if !finalized {
+			return
+		}
+
+		logLine := fmt.Sprintf("[%s] %s\n", time.Now().Local().Format("2006-01-02 15:04:05"), message)
+		if err := e.store.AppendRunLog(ctx, runID, logLine); err != nil {
+			e.logger.Error("watchdog append timeout log failed", "run_id", runID, "error", err)
+		}
+	}()
 }
 
 func (e *Executor) runPipeline(ctx context.Context, runID int64, bundle model.ExecutionBundle, logf func(string, ...any)) (pipelineResult, error) {

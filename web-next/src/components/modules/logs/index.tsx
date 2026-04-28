@@ -382,7 +382,23 @@ export function Logs() {
         setSelectedRun(nextRun);
       }
     } catch (error: any) {
-      toast.error(error.message || "取消部署失败");
+      const message = error.message || "取消部署失败";
+      if (message.includes("只能取消")) {
+        try {
+          const latestRun = await runApi.get(run.id);
+          setRuns((currentRuns) =>
+            currentRuns.map((currentRun) => (currentRun.id === latestRun.id ? latestRun : currentRun))
+          );
+          if (selectedRun?.id === run.id) {
+            setSelectedRun(latestRun);
+          }
+          toast.error("部署任务状态已变化，已刷新记录");
+          return;
+        } catch (refreshError) {
+          console.error(refreshError);
+        }
+      }
+      toast.error(message);
     } finally {
       setCancellingRunId(null);
     }

@@ -706,6 +706,28 @@ func (s *Store) FinalizeRun(ctx context.Context, runID int64, status string, err
 	return nil
 }
 
+func (s *Store) FinalizeActiveRun(ctx context.Context, runID int64, status string, errorMessage string) (bool, error) {
+	now := nowString()
+	result, err := s.db.ExecContext(
+		ctx,
+		`UPDATE pipeline_runs
+		 SET status = ?, error_message = ?, finished_at = ?, updated_at = ?
+		 WHERE id = ? AND status IN (?, ?)`,
+		status, errorMessage, now, now, runID,
+		model.RunStatusQueued,
+		model.RunStatusRunning,
+	)
+	if err != nil {
+		return false, fmt.Errorf("finalize active run: %w", err)
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("read finalized active run count: %w", err)
+	}
+	return affected > 0, nil
+}
+
 func runSelectQuery(includeLog bool) string {
 	logField := "''"
 	if includeLog {
