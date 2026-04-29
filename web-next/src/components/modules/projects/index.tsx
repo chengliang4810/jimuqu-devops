@@ -60,6 +60,7 @@ import { cn, formatMultilineValue, parseMultilineInput } from "@/lib/utils";
 import { useNavStore } from "@/stores";
 import { useToolbarSearchStore } from "@/components/modules/toolbar/search-store";
 import { useToolbarViewOptionsStore } from "@/components/modules/toolbar/view-options-store";
+import { mergeProjectIntoList } from "./project-list";
 
 type GitAuthType = Project["git_auth_type"];
 
@@ -671,9 +672,11 @@ export function Projects() {
         name: cloneName,
         branch: cloneBranch,
       });
-      projectsCache = null;
-      await loadData(true);
+      const nextProjects = mergeProjectIntoList(projects, detail.project);
+      projectsCache = nextProjects;
+      setProjects(nextProjects);
       applyProjectDetailToForm(detail);
+      void loadData(true);
       toast.success("项目已复制，请按需调整分支或仓库");
     } catch (error: any) {
       toast.error(error.message || "复制项目失败");
