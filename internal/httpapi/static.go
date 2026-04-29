@@ -119,6 +119,22 @@ func serveFSFile(w http.ResponseWriter, r *http.Request, staticFS fs.FS, filenam
 	if contentType := mime.TypeByExtension(filepath.Ext(filename)); contentType != "" {
 		w.Header().Set("Content-Type", contentType)
 	}
+	setStaticCacheHeaders(w, filename)
 
 	http.ServeContent(w, r, path.Base(filename), time.Time{}, bytes.NewReader(data))
+}
+
+func setStaticCacheHeaders(w http.ResponseWriter, filename string) {
+	cleaned := path.Clean("/" + filename)
+	if strings.HasSuffix(cleaned, ".html") {
+		setNoStoreHeaders(w)
+		return
+	}
+
+	if strings.HasPrefix(cleaned, "/_next/static/") {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		return
+	}
+
+	w.Header().Set("Cache-Control", "no-cache, must-revalidate, max-age=0")
 }

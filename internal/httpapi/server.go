@@ -168,6 +168,14 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+func setNoStoreHeaders(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "private, no-store, no-cache, must-revalidate, max-age=0, s-maxage=0")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+	w.Header().Set("Surrogate-Control", "no-store")
+	w.Header().Set("CDN-Cache-Control", "no-store")
+}
+
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if err := s.store.ApplyRunRetention(ctx); err != nil {
@@ -715,6 +723,8 @@ func decodeJSON(body io.ReadCloser, target any) error {
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
+	setNoStoreHeaders(w)
+	w.Header().Add("Vary", "Authorization")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
