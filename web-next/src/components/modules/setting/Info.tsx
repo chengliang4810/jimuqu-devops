@@ -50,8 +50,8 @@ export function SettingInfo({ systemInfo }: SettingInfoProps) {
   }, []);
 
   const canApplyUpdate = useMemo(() => {
-    return !!updateStatus?.has_update && !updating;
-  }, [updateStatus?.has_update, updating]);
+    return !!updateStatus?.has_update && updateStatus?.can_update !== false && !updating;
+  }, [updateStatus?.can_update, updateStatus?.has_update, updating]);
 
   const waitForServiceRecovery = async () => {
     await sleep(1500);
@@ -165,6 +165,12 @@ export function SettingInfo({ systemInfo }: SettingInfoProps) {
       {!updateStatus?.has_update && updateStatus?.current_version === "dev" ? (
         <p className="text-xs text-muted-foreground">
           开发构建不支持在线更新，请使用发布版压缩包或 release 二进制。
+        </p>
+      ) : null}
+
+      {updateStatus?.has_update && updateStatus.can_update === false ? (
+        <p className="text-xs text-muted-foreground">
+          Docker 部署不支持在线替换程序，请拉取最新镜像并重建容器。
         </p>
       ) : null}
     </div>
