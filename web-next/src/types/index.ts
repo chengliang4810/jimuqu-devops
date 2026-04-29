@@ -230,9 +230,6 @@ export interface UpdateStatus {
   current_version: string;
   latest_version: string;
   has_update: boolean;
-  can_update?: boolean;
-  update_method?: "archive" | "docker" | string;
-  message?: string;
 }
 
 export interface UpdateResult {

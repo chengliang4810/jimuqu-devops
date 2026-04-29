@@ -22,7 +22,6 @@ import (
 )
 
 const requestTimeout = 30 * time.Second
-const dockerUpdateUnsupportedMessage = "Docker deployment does not support in-place online update; pull the latest image and recreate the container"
 
 func GetLatestRelease(ctx context.Context, proxyURL string) (model.ReleaseInfo, error) {
 	owner, repo, err := repoOwnerRepo()
@@ -68,30 +67,17 @@ func GetUpdateStatus(ctx context.Context, proxyURL string) (model.UpdateStatus, 
 
 	currentVersion := version.Current()
 	latestVersion := version.Normalize(release.TagName)
-	containerized := isContainerized()
-	canUpdate := currentVersion != "" && currentVersion != "dev" && !containerized
-	updateMethod := "archive"
-	message := ""
-	if containerized {
-		updateMethod = "docker"
-		message = dockerUpdateUnsupportedMessage
-	}
 	return model.UpdateStatus{
 		CurrentVersion: currentVersion,
 		LatestVersion:  latestVersion,
 		HasUpdate:      currentVersion != "" && currentVersion != "dev" && latestVersion != "" && currentVersion != latestVersion,
-		CanUpdate:      canUpdate,
-		UpdateMethod:   updateMethod,
-		Message:        message,
 	}, nil
 }
 
 func ApplyUpdate(ctx context.Context, proxyURL string) (model.UpdateResult, error) {
-	if version.Current() == "dev" {
+	currentVersion := version.Current()
+	if currentVersion == "dev" {
 		return model.UpdateResult{}, fmt.Errorf("online update requires a packaged release build")
-	}
-	if isContainerized() {
-		return model.UpdateResult{}, fmt.Errorf(dockerUpdateUnsupportedMessage)
 	}
 
 	release, err := GetLatestRelease(ctx, proxyURL)
@@ -100,6 +86,13 @@ func ApplyUpdate(ctx context.Context, proxyURL string) (model.UpdateResult, erro
 	}
 	if release.Message != "" {
 		return model.UpdateResult{}, fmt.Errorf("no published release found")
+	}
+	targetVersion := version.Normalize(release.TagName)
+	if targetVersion == "" {
+		return model.UpdateResult{}, fmt.Errorf("latest release does not include a version tag")
+	}
+	if !isNewerVersion(targetVersion, currentVersion) {
+		return model.UpdateResult{}, fmt.Errorf("latest release resolved to %s, current version is %s; no update applied", targetVersion, currentVersion)
 	}
 
 	assetName, err := releaseAssetName()
@@ -141,34 +134,14 @@ func ApplyUpdate(ctx context.Context, proxyURL string) (model.UpdateResult, erro
 		if err := applyWindowsUpdate(archiveData, targetDir, execPath); err != nil {
 			return model.UpdateResult{}, err
 		}
-		return model.UpdateResult{Message: "更新包已下载，应用即将自动重启"}, nil
+		return model.UpdateResult{Message: fmt.Sprintf("更新包 %s 已下载，应用即将自动重启", targetVersion)}, nil
 	}
 
 	if err := applyUnixUpdate(archiveData, targetDir, execPath); err != nil {
 		return model.UpdateResult{}, err
 	}
 
-	return model.UpdateResult{Message: "更新已应用，应用即将自动重启"}, nil
-}
-
-func isContainerized() bool {
-	if _, err := os.Stat("/.dockerenv"); err == nil {
-		return true
-	}
-
-	body, err := os.ReadFile("/proc/1/cgroup")
-	if err != nil {
-		return false
-	}
-	return cgroupLooksContainerized(string(body))
-}
-
-func cgroupLooksContainerized(value string) bool {
-	value = strings.ToLower(value)
-	return strings.Contains(value, "docker") ||
-		strings.Contains(value, "containerd") ||
-		strings.Contains(value, "kubepods") ||
-		strings.Contains(value, "libpod")
+	return model.UpdateResult{Message: fmt.Sprintf("更新 %s 已应用，应用即将自动重启", targetVersion)}, nil
 }
 
 func ScheduleRestartAndExit() {

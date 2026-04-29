@@ -18,9 +18,6 @@ type UpdateStatus struct {
 	CurrentVersion string `json:"current_version"`
 	LatestVersion  string `json:"latest_version"`
 	HasUpdate      bool   `json:"has_update"`
-	CanUpdate      bool   `json:"can_update"`
-	UpdateMethod   string `json:"update_method"`
-	Message        string `json:"message,omitempty"`
 }
 
 type UpdateResult struct {

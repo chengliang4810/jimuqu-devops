@@ -41,24 +41,3 @@ func TestReleaseDownloadURL(t *testing.T) {
 		t.Fatalf("unexpected download URL:\nwant: %s\ngot:  %s", want, got)
 	}
 }
-
-func TestCGroupLooksContainerized(t *testing.T) {
-	tests := []struct {
-		name  string
-		value string
-		want  bool
-	}{
-		{name: "docker", value: "0::/docker/abc123", want: true},
-		{name: "containerd", value: "0::/system.slice/containerd.service", want: true},
-		{name: "kubepods", value: "0::/kubepods.slice/pod123", want: true},
-		{name: "host", value: "0::/init.scope", want: false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := cgroupLooksContainerized(tt.value); got != tt.want {
-				t.Fatalf("cgroupLooksContainerized(%q) = %v, want %v", tt.value, got, tt.want)
-			}
-		})
-	}
-}
