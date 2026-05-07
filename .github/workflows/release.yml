@@ -5,22 +5,72 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
-  repository_dispatch:
+  workflow_run:
+    workflows:
+      - auto-tag-main
     types:
-      - release-tag
+      - completed
 
 permissions:
   contents: write
   packages: write
   id-token: write
 
-env:
-  RELEASE_REF: ${{ github.event.client_payload.ref || github.ref }}
-  RELEASE_TAG: ${{ github.event.client_payload.ref || github.ref_name }}
-
 jobs:
+  resolve-release:
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      sha: ${{ steps.resolve.outputs.sha }}
+      should_release: ${{ steps.resolve.outputs.should_release }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin --force --tags
+
+          should_release="false"
+          tag=""
+          sha=""
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
+            sha="${{ github.event.workflow_run.head_sha }}"
+            tag="$(git tag --points-at "${sha}" --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1 || true)"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            tag="${GITHUB_REF_NAME}"
+            sha="$(git rev-list -n 1 "${tag}")"
+          fi
+
+          if [[ -n "${tag}" && -n "${sha}" ]]; then
+            should_release="true"
+          fi
+
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "should_release=${should_release}" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Release Resolve"
+            echo ""
+            echo "- Event: \`${GITHUB_EVENT_NAME}\`"
+            echo "- Tag: \`${tag:-none}\`"
+            echo "- Commit: \`${sha:-none}\`"
+            echo "- Should release: \`${should_release}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   release:
-    if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.event.client_payload.ref, 'v')
+    needs: resolve-release
+    if: needs.resolve-release.outputs.should_release == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -29,14 +79,15 @@ jobs:
           echo "event=${GITHUB_EVENT_NAME}"
           echo "ref=${GITHUB_REF}"
           echo "ref_name=${GITHUB_REF_NAME}"
-          echo "release_ref=${RELEASE_REF}"
-          echo "release_tag=${RELEASE_TAG}"
+          echo "release_ref=${{ needs.resolve-release.outputs.tag }}"
+          echo "release_tag=${{ needs.resolve-release.outputs.tag }}"
+          echo "release_sha=${{ needs.resolve-release.outputs.sha }}"
           echo "sha=${GITHUB_SHA}"
 
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          ref: ${{ env.RELEASE_REF }}
+          ref: ${{ needs.resolve-release.outputs.tag }}
           fetch-depth: 0
 
       - name: Setup Go
@@ -64,7 +115,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          current_tag="${RELEASE_TAG}"
+          current_tag="${{ needs.resolve-release.outputs.tag }}"
           release_sha="$(git rev-parse HEAD)"
           previous_tag="$(git tag --merged "${release_sha}" --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -Fxv "${current_tag}" | head -n 1 || true)"
 
@@ -83,12 +134,12 @@ jobs:
           } > build-release-notes.md
 
       - name: Build release archives
-        run: bash scripts/build-release.sh "${RELEASE_TAG}"
+        run: bash scripts/build-release.sh "${{ needs.resolve-release.outputs.tag }}"
 
       - name: Upload release assets
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.RELEASE_TAG }}
+          tag_name: ${{ needs.resolve-release.outputs.tag }}
           body_path: build-release-notes.md
           files: build/archives/*
 
@@ -100,14 +151,15 @@ jobs:
             echo ""
             echo "- Event: \`${GITHUB_EVENT_NAME}\`"
             echo "- Ref: \`${GITHUB_REF}\`"
-            echo "- Release ref: \`${RELEASE_REF}\`"
-            echo "- Version: \`${RELEASE_TAG}\`"
+            echo "- Release ref: \`${{ needs.resolve-release.outputs.tag }}\`"
+            echo "- Version: \`${{ needs.resolve-release.outputs.tag }}\`"
             echo "- Commit: \`${release_sha}\`"
             echo "- Assets path: \`build/archives/*\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
   publish-npm:
-    if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.event.client_payload.ref, 'v')
+    needs: resolve-release
+    if: needs.resolve-release.outputs.should_release == 'true'
     runs-on: ubuntu-latest
 
     defaults:
@@ -118,7 +170,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          ref: ${{ env.RELEASE_REF }}
+          ref: ${{ needs.resolve-release.outputs.tag }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -136,7 +188,9 @@ jobs:
 
       - name: Sync CLI package version
         shell: bash
-        run: npm version "${RELEASE_TAG#v}" --no-git-tag-version --allow-same-version
+        run: |
+          release_tag="${{ needs.resolve-release.outputs.tag }}"
+          npm version "${release_tag#v}" --no-git-tag-version --allow-same-version
 
       - name: Build CLI
         run: npm run build
@@ -145,7 +199,8 @@ jobs:
         run: npm publish --access public --provenance
 
   publish-ghcr:
-    if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.event.client_payload.ref, 'v')
+    needs: resolve-release
+    if: needs.resolve-release.outputs.should_release == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -154,14 +209,15 @@ jobs:
           echo "event=${GITHUB_EVENT_NAME}"
           echo "ref=${GITHUB_REF}"
           echo "ref_name=${GITHUB_REF_NAME}"
-          echo "release_ref=${RELEASE_REF}"
-          echo "release_tag=${RELEASE_TAG}"
+          echo "release_ref=${{ needs.resolve-release.outputs.tag }}"
+          echo "release_tag=${{ needs.resolve-release.outputs.tag }}"
+          echo "release_sha=${{ needs.resolve-release.outputs.sha }}"
           echo "sha=${GITHUB_SHA}"
 
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          ref: ${{ env.RELEASE_REF }}
+          ref: ${{ needs.resolve-release.outputs.tag }}
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -179,7 +235,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=semver,pattern={{version}},value=${{ env.RELEASE_TAG }}
+            type=semver,pattern={{version}},value=${{ needs.resolve-release.outputs.tag }}
             type=raw,value=latest
 
       - name: Build metadata
@@ -195,7 +251,7 @@ jobs:
           file: ./Dockerfile
           push: true
           build-args: |
-            APP_VERSION=${{ env.RELEASE_TAG }}
+            APP_VERSION=${{ needs.resolve-release.outputs.tag }}
             APP_COMMIT=${{ steps.buildmeta.outputs.release_sha }}
             APP_BUILD_TIME=${{ steps.buildmeta.outputs.build_time }}
           tags: ${{ steps.meta.outputs.tags }}
@@ -209,8 +265,8 @@ jobs:
             echo ""
             echo "- Event: \`${GITHUB_EVENT_NAME}\`"
             echo "- Ref: \`${GITHUB_REF}\`"
-            echo "- Release ref: \`${RELEASE_REF}\`"
-            echo "- Version: \`${RELEASE_TAG}\`"
+            echo "- Release ref: \`${{ needs.resolve-release.outputs.tag }}\`"
+            echo "- Version: \`${{ needs.resolve-release.outputs.tag }}\`"
             echo "- Commit: \`${release_sha}\`"
             echo "- Images:"
             echo '```text'
