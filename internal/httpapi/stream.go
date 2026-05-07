@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"devops-pipeline/internal/model"
@@ -17,27 +16,17 @@ func (s *Server) handleStreamRun(w http.ResponseWriter, r *http.Request) {
 	// 支持从查询参数获取JWT token（用于EventSource）
 	token := r.URL.Query().Get("token")
 	if token != "" {
-		// 验证token
-		_, err := s.jwtManager.ValidateToken(token)
-		if err != nil {
+		if _, _, err := authenticateToken(r.Context(), s.jwtManager, s.store, token); err != nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
 		}
 	} else {
-		// 检查Authorization header
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
+		tokenString, ok := bearerTokenFromHeader(r)
+		if !ok {
 			http.Error(w, "Token required", http.StatusUnauthorized)
 			return
 		}
-		parts := strings.SplitN(authHeader, " ", 2)
-		if !(len(parts) == 2 && parts[0] == "Bearer") {
-			http.Error(w, "Invalid authorization header format", http.StatusUnauthorized)
-			return
-		}
-		tokenString := parts[1]
-		_, err := s.jwtManager.ValidateToken(tokenString)
-		if err != nil {
+		if _, _, err := authenticateToken(r.Context(), s.jwtManager, s.store, tokenString); err != nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
 		}

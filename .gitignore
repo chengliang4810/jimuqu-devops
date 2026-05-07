@@ -22,3 +22,5 @@ Thumbs.db
 *.swo
 coverage.html
 vendor/
+cli/node_modules/
+cli/dist/

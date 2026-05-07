@@ -60,7 +60,7 @@ func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, c
 
 		// 需要认证的接口
 		r.Group(func(r chi.Router) {
-			r.Use(AuthMiddleware(server.jwtManager))
+			r.Use(AuthMiddleware(server.jwtManager, server.store))
 
 			r.Route("/hosts", func(r chi.Router) {
 				r.Get("/", server.handleListHosts)
@@ -119,6 +119,9 @@ func New(store *store.Store, executor *pipeline.Executor, logger *slog.Logger, c
 				r.Get("/profile", server.handleGetAdminProfile)
 				r.Put("/username", server.handleChangeAdminUsername)
 				r.Put("/password", server.handleChangeAdminPassword)
+				r.Get("/tokens", server.handleListAPITokens)
+				r.Post("/tokens", server.handleCreateAPIToken)
+				r.Delete("/tokens/{tokenID}", server.handleRevokeAPIToken)
 			})
 
 			r.Get("/runs", server.handleListAllRuns)

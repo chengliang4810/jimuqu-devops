@@ -1,0 +1,40 @@
+{
+  "name": "@jimuqu/devops-cli",
+  "version": "0.0.1",
+  "description": "Command line client for Jimuqu DevOps.",
+  "license": "MIT",
+  "homepage": "https://github.com/chengliang4810/jimuqu-devops#readme",
+  "bugs": {
+    "url": "https://github.com/chengliang4810/jimuqu-devops/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chengliang4810/jimuqu-devops.git",
+    "directory": "cli"
+  },
+  "type": "module",
+  "bin": {
+    "jimuqu-devops": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.test.*",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run build && node --test dist/**/*.test.js",
+    "prepack": "npm run build"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.2"
+  }
+}
