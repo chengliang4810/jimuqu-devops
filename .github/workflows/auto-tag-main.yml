@@ -75,8 +75,8 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/release.yml/dispatches" \
-            -d "{\"ref\":\"${{ steps.version.outputs.tag }}\"}"
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/dispatches" \
+            -d "{\"event_type\":\"release-tag\",\"client_payload\":{\"ref\":\"${{ steps.version.outputs.tag }}\"}}"
 
       - name: Workflow summary
         shell: bash
@@ -85,5 +85,5 @@ jobs:
             echo "Current commit already matches latest release tag: \`${{ steps.version.outputs.tag }}\`." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "Created and pushed release tag: \`${{ steps.version.outputs.tag }}\`." >> "$GITHUB_STEP_SUMMARY"
-            echo "Triggered workflow: \`release.yml\` on ref \`${{ steps.version.outputs.tag }}\`." >> "$GITHUB_STEP_SUMMARY"
+            echo "Triggered repository dispatch: \`release-tag\` for ref \`${{ steps.version.outputs.tag }}\`." >> "$GITHUB_STEP_SUMMARY"
           fi

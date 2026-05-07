@@ -5,14 +5,22 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+  repository_dispatch:
+    types:
+      - release-tag
 
 permissions:
   contents: write
   packages: write
   id-token: write
 
+env:
+  RELEASE_REF: ${{ github.event.client_payload.ref || github.ref }}
+  RELEASE_TAG: ${{ github.event.client_payload.ref || github.ref_name }}
+
 jobs:
   release:
+    if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.event.client_payload.ref, 'v')
     runs-on: ubuntu-latest
 
     steps:
@@ -21,11 +29,14 @@ jobs:
           echo "event=${GITHUB_EVENT_NAME}"
           echo "ref=${GITHUB_REF}"
           echo "ref_name=${GITHUB_REF_NAME}"
+          echo "release_ref=${RELEASE_REF}"
+          echo "release_tag=${RELEASE_TAG}"
           echo "sha=${GITHUB_SHA}"
 
       - name: Checkout
         uses: actions/checkout@v5
         with:
+          ref: ${{ env.RELEASE_REF }}
           fetch-depth: 0
 
       - name: Setup Go
@@ -53,8 +64,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          current_tag="${GITHUB_REF_NAME}"
-          previous_tag="$(git tag --merged "${GITHUB_SHA}" --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -Fxv "${current_tag}" | head -n 1 || true)"
+          current_tag="${RELEASE_TAG}"
+          release_sha="$(git rev-parse HEAD)"
+          previous_tag="$(git tag --merged "${release_sha}" --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -Fxv "${current_tag}" | head -n 1 || true)"
 
           {
             echo "## 更新内容"
@@ -62,37 +74,40 @@ jobs:
             if [[ -n "${previous_tag}" ]]; then
               echo "范围: \`${previous_tag}..${current_tag}\`"
               echo ""
-              git log --no-merges --pretty='- %s (`%h`)' "${previous_tag}..${GITHUB_SHA}"
+              git log --no-merges --pretty='- %s (`%h`)' "${previous_tag}..${release_sha}"
             else
               echo "范围: 初始发布"
               echo ""
-              git log --no-merges --pretty='- %s (`%h`)' "${GITHUB_SHA}"
+              git log --no-merges --pretty='- %s (`%h`)' "${release_sha}"
             fi
           } > build-release-notes.md
 
       - name: Build release archives
-        run: bash scripts/build-release.sh "${GITHUB_REF_NAME}"
+        run: bash scripts/build-release.sh "${RELEASE_TAG}"
 
       - name: Upload release assets
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
           body_path: build-release-notes.md
           files: build/archives/*
 
       - name: Release summary
         run: |
+          release_sha="$(git rev-parse HEAD)"
           {
             echo "## Release"
             echo ""
             echo "- Event: \`${GITHUB_EVENT_NAME}\`"
             echo "- Ref: \`${GITHUB_REF}\`"
-            echo "- Version: \`${GITHUB_REF_NAME}\`"
-            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Release ref: \`${RELEASE_REF}\`"
+            echo "- Version: \`${RELEASE_TAG}\`"
+            echo "- Commit: \`${release_sha}\`"
             echo "- Assets path: \`build/archives/*\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
   publish-npm:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.event.client_payload.ref, 'v')
     runs-on: ubuntu-latest
 
     defaults:
@@ -102,11 +117,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ env.RELEASE_REF }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.14"
           registry-url: "https://registry.npmjs.org"
           cache: "npm"
           cache-dependency-path: cli/package-lock.json
@@ -114,9 +131,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Use npm with trusted publishing support
+        run: npm install -g npm@11.6.2
+
       - name: Sync CLI package version
         shell: bash
-        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
+        run: npm version "${RELEASE_TAG#v}" --no-git-tag-version --allow-same-version
 
       - name: Build CLI
         run: npm run build
@@ -125,7 +145,7 @@ jobs:
         run: npm publish --access public --provenance
 
   publish-ghcr:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.event.client_payload.ref, 'v')
     runs-on: ubuntu-latest
 
     steps:
@@ -134,10 +154,14 @@ jobs:
           echo "event=${GITHUB_EVENT_NAME}"
           echo "ref=${GITHUB_REF}"
           echo "ref_name=${GITHUB_REF_NAME}"
+          echo "release_ref=${RELEASE_REF}"
+          echo "release_tag=${RELEASE_TAG}"
           echo "sha=${GITHUB_SHA}"
 
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ env.RELEASE_REF }}
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -155,12 +179,14 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=semver,pattern={{version}}
+            type=semver,pattern={{version}},value=${{ env.RELEASE_TAG }}
             type=raw,value=latest
 
       - name: Build metadata
         id: buildmeta
-        run: echo "build_time=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "build_time=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+          echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Build and push image
         uses: docker/build-push-action@v6
@@ -169,21 +195,23 @@ jobs:
           file: ./Dockerfile
           push: true
           build-args: |
-            APP_VERSION=${{ github.ref_name }}
-            APP_COMMIT=${{ github.sha }}
+            APP_VERSION=${{ env.RELEASE_TAG }}
+            APP_COMMIT=${{ steps.buildmeta.outputs.release_sha }}
             APP_BUILD_TIME=${{ steps.buildmeta.outputs.build_time }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: GHCR summary
         run: |
+          release_sha="$(git rev-parse HEAD)"
           {
             echo "## GHCR Publish"
             echo ""
             echo "- Event: \`${GITHUB_EVENT_NAME}\`"
             echo "- Ref: \`${GITHUB_REF}\`"
-            echo "- Version: \`${GITHUB_REF_NAME}\`"
-            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Release ref: \`${RELEASE_REF}\`"
+            echo "- Version: \`${RELEASE_TAG}\`"
+            echo "- Commit: \`${release_sha}\`"
             echo "- Images:"
             echo '```text'
             printf '%s\n' "${{ steps.meta.outputs.tags }}"
