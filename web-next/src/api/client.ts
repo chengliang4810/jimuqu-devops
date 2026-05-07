@@ -258,6 +258,16 @@ export const settingApi = {
       method: "PUT",
       body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
     }),
+  listApiTokens: () => request<import("@/types").ApiToken[]>("/admin/tokens"),
+  createApiToken: (data: { name: string; expires_at?: string | null }) =>
+    request<import("@/types").ApiTokenCreateResponse>("/admin/tokens", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  revokeApiToken: (id: number) =>
+    request<void>(`/admin/tokens/${id}`, {
+      method: "DELETE",
+    }),
   getSystemInfo: () => request<import("@/types").SystemInfo>("/system/info"),
   getLatestRelease: () => request<import("@/types").ReleaseInfo>("/update"),
   getUpdateStatus: () => request<import("@/types").UpdateStatus>("/update/now-version"),

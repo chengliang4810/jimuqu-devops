@@ -9,6 +9,7 @@ on:
 permissions:
   contents: write
   packages: write
+  id-token: write
 
 jobs:
   release:
@@ -89,6 +90,39 @@ jobs:
             echo "- Commit: \`${GITHUB_SHA}\`"
             echo "- Assets path: \`build/archives/*\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  publish-npm:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: cli
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          cache: "npm"
+          cache-dependency-path: cli/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync CLI package version
+        shell: bash
+        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
+
+      - name: Build CLI
+        run: npm run build
+
+      - name: Publish CLI to npm
+        run: npm publish --access public --provenance
 
   publish-ghcr:
     if: startsWith(github.ref, 'refs/tags/v')

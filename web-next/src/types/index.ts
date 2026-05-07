@@ -204,6 +204,22 @@ export interface AccountProfile {
   username: string;
 }
 
+export interface ApiToken {
+  id: number;
+  name: string;
+  prefix: string;
+  expires_at?: string | null;
+  revoked_at?: string | null;
+  last_used_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiTokenCreateResponse {
+  api_token: ApiToken;
+  token: string;
+}
+
 export interface BackupRestoreResult {
   rows_affected: Record<string, number>;
 }

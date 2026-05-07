@@ -89,6 +89,48 @@ func (s *Server) handleGetAdminProfile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, model.AccountProfile{Username: admin.Username})
 }
 
+func (s *Server) handleListAPITokens(w http.ResponseWriter, r *http.Request) {
+	tokens, err := s.store.ListAPITokens(r.Context())
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, tokens)
+}
+
+func (s *Server) handleCreateAPIToken(w http.ResponseWriter, r *http.Request) {
+	var input model.APITokenCreateInput
+	if err := decodeJSON(r.Body, &input); err != nil {
+		s.writeBadRequest(w, err)
+		return
+	}
+	input.Name = strings.TrimSpace(input.Name)
+	if input.Name == "" {
+		s.writeBadRequest(w, errors.New("token name is required"))
+		return
+	}
+
+	response, err := s.store.CreateAPIToken(r.Context(), input)
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, response)
+}
+
+func (s *Server) handleRevokeAPIToken(w http.ResponseWriter, r *http.Request) {
+	tokenID, err := parseInt64Param(r, "tokenID")
+	if err != nil {
+		s.writeBadRequest(w, err)
+		return
+	}
+	if err = s.store.RevokeAPIToken(r.Context(), tokenID); err != nil {
+		s.writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) handleChangeAdminUsername(w http.ResponseWriter, r *http.Request) {
 	var input model.ChangeUsernameInput
 	if err := decodeJSON(r.Body, &input); err != nil {

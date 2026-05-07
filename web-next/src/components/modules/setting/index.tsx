@@ -10,6 +10,7 @@ import { SettingImage } from "./Image";
 import { SettingCache } from "./Cache";
 import { SettingSystem } from "./System";
 import { SettingAccount } from "./Account";
+import { SettingApiTokens } from "./ApiTokens";
 import { SettingLog } from "./Log";
 import { SettingBackup } from "./Backup";
 import { SettingAI } from "./AI";
@@ -97,6 +98,7 @@ export function Setting() {
       <PageWrapper className="columns-1 gap-4 pb-24 md:columns-2 md:pb-4 *:mb-4 *:break-inside-avoid">
         <SettingInfo key="setting-info" systemInfo={systemInfo} />
         <SettingAccount key="setting-account" />
+        <SettingApiTokens key="setting-api-tokens" />
         <SettingBackup key="setting-backup" />
         <SettingAI key="setting-ai" settings={aiSettings} onSave={handleSaveAISettings} />
         <SettingSystem key="setting-system" settings={settingMap} onSave={handleSaveSetting} />

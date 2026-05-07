@@ -94,6 +94,17 @@ func sqliteMigrationStatements() []string {
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		);`,
+		`CREATE TABLE IF NOT EXISTS api_tokens (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			token_hash TEXT NOT NULL UNIQUE,
+			token_prefix TEXT NOT NULL,
+			expires_at TEXT,
+			revoked_at TEXT,
+			last_used_at TEXT,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		);`,
 		`CREATE TABLE IF NOT EXISTS settings (
 			key TEXT PRIMARY KEY,
 			value TEXT NOT NULL,
@@ -201,6 +212,18 @@ func mysqlMigrationStatements() []string {
 			created_at VARCHAR(64) NOT NULL,
 			updated_at VARCHAR(64) NOT NULL,
 			UNIQUE KEY uniq_admin_users_username (username)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+		`CREATE TABLE IF NOT EXISTS api_tokens (
+			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+			name VARCHAR(191) NOT NULL,
+			token_hash VARCHAR(64) NOT NULL,
+			token_prefix VARCHAR(32) NOT NULL,
+			expires_at VARCHAR(64) NULL,
+			revoked_at VARCHAR(64) NULL,
+			last_used_at VARCHAR(64) NULL,
+			created_at VARCHAR(64) NOT NULL,
+			updated_at VARCHAR(64) NOT NULL,
+			UNIQUE KEY uniq_api_tokens_hash (token_hash)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
 		`CREATE TABLE IF NOT EXISTS settings (
 			` + "`key`" + ` VARCHAR(191) NOT NULL PRIMARY KEY,

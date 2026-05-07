@@ -12,17 +12,20 @@ const eslintConfig = [
   tseslint.configs["flat/base"],
   reactPlugin.configs.flat.recommended,
   reactPlugin.configs.flat["jsx-runtime"],
-  reactHooksPlugin.configs["recommended-latest"],
-  nextPlugin.flatConfig.coreWebVitals,
   {
     files: ["**/*.{js,jsx,ts,tsx}"],
     plugins: {
       import: importPlugin,
       "jsx-a11y": jsxA11yPlugin,
+      "@next/next": nextPlugin,
+      "react-hooks": reactHooksPlugin,
     },
     settings: {
       react: {
         version: "detect",
+      },
+      next: {
+        rootDir: ["web-next/"],
       },
       "import/resolver": {
         node: true,
@@ -34,6 +37,10 @@ const eslintConfig = [
       "react/no-unknown-property": "off",
       "react/prop-types": "off",
       "react/jsx-no-target-blank": "off",
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
+      ...nextPlugin.configs.recommended.rules,
+      ...nextPlugin.configs["core-web-vitals"].rules,
       "jsx-a11y/alt-text": [
         "warn",
         {

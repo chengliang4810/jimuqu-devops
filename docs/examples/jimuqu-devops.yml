@@ -1,0 +1,29 @@
+host:
+  name: prod-1
+  address: 127.0.0.1
+  port: 22
+  username: root
+  password: ${SSH_PASSWORD}
+
+project:
+  name: api-server
+  repo_url: https://github.com/example/api-server.git
+  branch: main
+  description: API server
+  git_auth_type: none
+
+deploy_config:
+  build_image: node:22-alpine
+  build_commands:
+    - npm install
+    - npm run build
+  artifact_filter_mode: include
+  artifact_rules:
+    - dist/**
+  remote_save_dir: /opt/releases/api-server
+  remote_deploy_dir: /opt/api-server
+  pre_deploy_commands: []
+  post_deploy_commands:
+    - pm2 restart api-server
+  version_count: 5
+  timeout_seconds: 1800
