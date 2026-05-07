@@ -2,6 +2,7 @@
   "name": "jimuqu-devops-web",
   "version": "0.0.1",
   "private": true,
+  "packageManager": "pnpm@10.31.0",
   "scripts": {
     "dev": "next dev",
     "dev:turbo": "next dev --turbopack",
