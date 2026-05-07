@@ -2,14 +2,16 @@ name: release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - auto-tag-main
-    types:
-      - completed
+    inputs:
+      tag:
+        description: Existing or new v* tag to release. Empty uses the current ref commit.
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -18,7 +20,6 @@ permissions:
 
 jobs:
   resolve-release:
-    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
 
     outputs:
@@ -35,6 +36,8 @@ jobs:
       - name: Resolve release tag
         id: resolve
         shell: bash
+        env:
+          DISPATCH_TAG: ${{ github.event.inputs.tag || '' }}
         run: |
           set -euo pipefail
           git fetch origin --force --tags
@@ -43,12 +46,52 @@ jobs:
           tag=""
           sha=""
 
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
-            sha="${{ github.event.workflow_run.head_sha }}"
-            tag="$(git tag --points-at "${sha}" --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1 || true)"
-          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+          create_next_tag() {
+            local target_sha="$1"
+            local existing_tag latest_tag version major minor patch next_tag
+
+            existing_tag="$(git tag --points-at "${target_sha}" --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1 || true)"
+            if [[ -n "${existing_tag}" ]]; then
+              echo "${existing_tag}"
+              return
+            fi
+
+            latest_tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1 || true)"
+            if [[ -z "${latest_tag}" ]]; then
+              next_tag="v0.0.1"
+            else
+              version="${latest_tag#v}"
+              IFS='.' read -r major minor patch <<< "${version}"
+              next_tag="v${major}.${minor}.$((patch + 1))"
+            fi
+
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "${next_tag}" "${target_sha}" -m "${next_tag}"
+            git push origin "${next_tag}" >&2
+            echo "${next_tag}"
+          }
+
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             tag="${GITHUB_REF_NAME}"
             sha="$(git rev-list -n 1 "${tag}")"
+          elif [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            sha="${GITHUB_SHA}"
+            tag="$(create_next_tag "${sha}")"
+          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "${DISPATCH_TAG}" ]]; then
+            tag="${DISPATCH_TAG}"
+            if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+              sha="$(git rev-list -n 1 "${tag}")"
+            else
+              sha="${GITHUB_SHA}"
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git tag -a "${tag}" "${sha}" -m "${tag}"
+              git push origin "${tag}"
+            fi
+          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            sha="${GITHUB_SHA}"
+            tag="$(create_next_tag "${sha}")"
           fi
 
           if [[ -n "${tag}" && -n "${sha}" ]]; then
