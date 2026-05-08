@@ -1,7 +1,15 @@
 {
   "name": "@jimuqu/devops-cli",
   "version": "0.0.1",
-  "description": "Command line client for Jimuqu DevOps.",
+  "description": "Jimuqu DevOps CLI for humans, CI, and AI Agents.",
+  "keywords": [
+    "jimuqu",
+    "devops",
+    "cli",
+    "deployment",
+    "ci-cd",
+    "ai-agent"
+  ],
   "license": "MIT",
   "homepage": "https://github.com/chengliang4810/jimuqu-devops#readme",
   "bugs": {
@@ -19,7 +27,8 @@
   "files": [
     "dist",
     "!dist/**/*.test.*",
-    "README.md"
+    "README.md",
+    "SKILL.md"
   ],
   "scripts": {
     "build": "tsc",
