@@ -114,6 +114,15 @@ host:
   username: root
   password: ${SSH_PASSWORD}
 
+notification_channel:
+  name: prod-dingtalk
+  type: dingtalk
+  is_default: true
+  remark: Production deploy alerts
+  config:
+    webhook_url: https://oapi.dingtalk.com/robot/send?access_token=xxx
+    secret: ${DINGTALK_SECRET}
+
 project:
   name: api-server
   repo_url: https://github.com/example/api-server.git
@@ -143,6 +152,42 @@ deploy_config:
 - host: `name`
 - notification channel: `name`
 - project: `repo_url + branch`
+
+## Notification Channel Body
+
+`notify create --file` and `notify update --file` accept the same body shape as the `notification_channel` block in `apply` files. Use this to define notification channels declaratively without inspecting server or frontend source code.
+
+### DingTalk JSON example:
+
+```json
+{
+  "name": "prod-dingtalk",
+  "type": "dingtalk",
+  "is_default": true,
+  "remark": "Production deploy alerts",
+  "config": {
+    "webhook_url": "https://oapi.dingtalk.com/robot/send?access_token=xxx",
+    "secret": "${DINGTALK_SECRET}"
+  }
+}
+```
+
+### Supported Notification Channel Types
+
+| type | required config fields | optional config fields |
+| --- | --- | --- |
+| webhook | `url` | `token`, `secret` |
+| wechat | `webhook_url` | `key` |
+| dingtalk | `webhook_url` | `secret` |
+| feishu | `webhook_url` | _none_ |
+| email | `smtp_host`, `smtp_port`, `username`, `password`, `from`, `to` | `subject` |
+
+### Command Examples
+
+```bash
+jimuqu-devops notify create --file dingtalk-channel.json --json
+jimuqu-devops notify test <channel-id> --json
+```
 
 ## Common Commands
 

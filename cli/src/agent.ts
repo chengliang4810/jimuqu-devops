@@ -23,11 +23,184 @@ export const agentCommands = {
   ],
 };
 
+const notificationConfigSchemas = {
+  webhook: {
+    type: "object",
+    required: ["url"],
+    properties: {
+      url: {
+        type: "string",
+        description: "Webhook endpoint URL",
+      },
+      token: {
+        type: "string",
+        description: "Optional bearer token or query token used by the webhook receiver",
+      },
+      secret: {
+        type: "string",
+        description: "Optional signing secret used to generate webhook signatures",
+      },
+    },
+    additionalProperties: false,
+  },
+  wechat: {
+    type: "object",
+    required: ["webhook_url"],
+    properties: {
+      webhook_url: {
+        type: "string",
+        description: "WeChat robot webhook URL",
+      },
+      key: {
+        type: "string",
+        description: "Optional robot key used by certain WeChat webhook formats",
+      },
+    },
+    additionalProperties: false,
+  },
+  dingtalk: {
+    type: "object",
+    required: ["webhook_url"],
+    properties: {
+      webhook_url: {
+        type: "string",
+        description: "DingTalk robot webhook URL",
+      },
+      secret: {
+        type: "string",
+        description: "DingTalk robot secret",
+      },
+    },
+    additionalProperties: false,
+  },
+  feishu: {
+    type: "object",
+    required: ["webhook_url"],
+    properties: {
+      webhook_url: {
+        type: "string",
+        description: "Feishu robot webhook URL",
+      },
+    },
+    additionalProperties: false,
+  },
+  email: {
+    type: "object",
+    required: ["smtp_host", "smtp_port", "username", "password", "from", "to"],
+    properties: {
+      smtp_host: {
+        type: "string",
+        description: "SMTP server host",
+      },
+      smtp_port: {
+        type: "integer",
+        description: "SMTP server port",
+      },
+      username: {
+        type: "string",
+        description: "SMTP login username",
+      },
+      password: {
+        type: "string",
+        description: "SMTP login password",
+      },
+      from: {
+        type: "string",
+        description: "Sender email address",
+      },
+      to: {
+        type: "string",
+        description: "Comma-separated recipient email addresses",
+      },
+      subject: {
+        type: "string",
+        description: "Optional default email subject",
+      },
+    },
+    additionalProperties: false,
+  },
+} as const;
+
 export const applySchema = {
   type: "object",
   properties: {
     host: { type: "object" },
-    notification_channel: { type: "object" },
+    notification_channel: {
+      type: "object",
+      required: ["name", "type", "config"],
+      properties: {
+        name: {
+          type: "string",
+          description: "apply upsert key",
+        },
+        type: {
+          type: "string",
+          enum: ["webhook", "wechat", "dingtalk", "feishu", "email"],
+          description: "Notification channel type",
+        },
+        is_default: {
+          type: "boolean",
+          description: "Whether this channel is the default notification target",
+        },
+        remark: {
+          type: "string",
+          description: "Human-readable note for the channel",
+        },
+        config: {
+          type: "object",
+          description: "Channel-specific configuration. See the notification_channel oneOf branches for fields by type.",
+        },
+      },
+      oneOf: [
+        {
+          properties: {
+            type: { const: "webhook" },
+            config: notificationConfigSchemas.webhook,
+          },
+          required: ["type", "config"],
+        },
+        {
+          properties: {
+            type: { const: "wechat" },
+            config: notificationConfigSchemas.wechat,
+          },
+          required: ["type", "config"],
+        },
+        {
+          properties: {
+            type: { const: "dingtalk" },
+            config: notificationConfigSchemas.dingtalk,
+          },
+          required: ["type", "config"],
+        },
+        {
+          properties: {
+            type: { const: "feishu" },
+            config: notificationConfigSchemas.feishu,
+          },
+          required: ["type", "config"],
+        },
+        {
+          properties: {
+            type: { const: "email" },
+            config: notificationConfigSchemas.email,
+          },
+          required: ["type", "config"],
+        },
+      ],
+      examples: [
+        {
+          name: "prod-dingtalk",
+          type: "dingtalk",
+          is_default: true,
+          remark: "Production deploy alerts",
+          config: {
+            webhook_url: "https://oapi.dingtalk.com/robot/send?access_token=xxx",
+            secret: "${DINGTALK_SECRET}",
+          },
+        },
+      ],
+    },
     project: { type: "object" },
     deploy_config: { type: "object" },
   },
@@ -40,6 +213,16 @@ export const applyExample = {
     port: 22,
     username: "root",
     password: "${SSH_PASSWORD}",
+  },
+  notification_channel: {
+    name: "prod-dingtalk",
+    type: "dingtalk",
+    is_default: true,
+    remark: "Production deploy alerts",
+    config: {
+      webhook_url: "https://oapi.dingtalk.com/robot/send?access_token=xxx",
+      secret: "${DINGTALK_SECRET}",
+    },
   },
   project: {
     name: "api-server",

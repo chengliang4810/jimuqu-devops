@@ -118,6 +118,40 @@ projectCommands();
 deployConfigCommands();
 runLikeCommands("run", "/runs");
 deployCommands();
+
+function notificationChannelHelp(commandExample: string): string {
+  return `
+Examples:
+  DingTalk JSON body:
+  {
+    "name": "研发群通知",
+    "type": "dingtalk",
+    "is_default": true,
+    "remark": "用于流水线失败告警",
+    "config": {
+      "webhook_url": "https://oapi.dingtalk.com/robot/send?access_token=xxx",
+      "secret": "\${DINGTALK_SECRET}"
+    }
+  }
+
+  ${commandExample}
+
+Fields:
+  name       Notification channel name.
+  type       Channel type, such as webhook, wechat, dingtalk, feishu, or email.
+  is_default Whether this channel is the default notification channel.
+  remark     Optional remark or note.
+  config     Type-specific configuration object.
+
+Config by type:
+  webhook  required: config.url; optional: config.token, config.secret
+  wechat   required: config.webhook_url; optional: config.key
+  dingtalk required: config.webhook_url; optional: config.secret
+  feishu   required: config.webhook_url
+  email    required: config.smtp_host, config.smtp_port, config.username, config.password (for example "\${SMTP_PASSWORD}"), config.from, config.to; optional: config.subject
+`;
+}
+
 notifyCommands();
 settingCommands();
 apiCommands();
@@ -275,14 +309,18 @@ function notifyCommands(): void {
   });
   command.command("get").argument("<id>").action(async (id: string) => output(await client().request(`/notification-channels/${id}`), globals()));
   command.command("create")
-    .option("--file <path>", "JSON file body")
+    .description("Create a notification channel")
+    .option("--file <path>", "JSON or YAML notification channel body")
+    .addHelpText("after", notificationChannelHelp("jimuqu-devops notify create --file dingtalk-channel.json --json"))
     .allowUnknownOption(true)
     .action(async (options: { file?: string }, cmd: Command) => {
       output(await client().request("/notification-channels", { method: "POST", body: bodyFromOptions(options.file, cmd.args) }), globals());
     });
   command.command("update")
+    .description("Update a notification channel")
     .argument("<id>")
-    .option("--file <path>", "JSON file body")
+    .option("--file <path>", "JSON or YAML notification channel body")
+    .addHelpText("after", notificationChannelHelp("jimuqu-devops notify update <id> --file dingtalk-channel.json --json"))
     .allowUnknownOption(true)
     .action(async (id: string, options: { file?: string }, cmd: Command) => {
       output(await client().request(`/notification-channels/${id}`, { method: "PUT", body: bodyFromOptions(options.file, cmd.args) }), globals());
