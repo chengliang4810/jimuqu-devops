@@ -17,6 +17,12 @@ func TestDeployConfigUpsertQuerySQLite(t *testing.T) {
 	if !strings.Contains(query, "cache_dirs_json = excluded.cache_dirs_json") {
 		t.Fatalf("expected cache dirs to be updated, got %q", query)
 	}
+	if !strings.Contains(query, "deploy_sync_mode = excluded.deploy_sync_mode") {
+		t.Fatalf("expected deploy sync mode to be updated, got %q", query)
+	}
+	if got, want := strings.Count(query, "?"), 19; got != want {
+		t.Fatalf("unexpected placeholder count: got %d want %d; query=%q", got, want, query)
+	}
 }
 
 func TestDeployConfigUpsertQueryMySQL(t *testing.T) {
@@ -34,15 +40,24 @@ func TestDeployConfigUpsertQueryMySQL(t *testing.T) {
 	if !strings.Contains(query, "cache_dirs_json = VALUES(cache_dirs_json)") {
 		t.Fatalf("expected cache dirs to be updated, got %q", query)
 	}
+	if !strings.Contains(query, "deploy_sync_mode = VALUES(deploy_sync_mode)") {
+		t.Fatalf("expected deploy sync mode to be updated, got %q", query)
+	}
+	if got, want := strings.Count(query, "?"), 19; got != want {
+		t.Fatalf("unexpected placeholder count: got %d want %d; query=%q", got, want, query)
+	}
 }
 
 func TestCloneDeployConfigInsertQuery(t *testing.T) {
 	query := cloneDeployConfigInsertQuery()
 
-	if got, want := strings.Count(query, "?"), 18; got != want {
+	if got, want := strings.Count(query, "?"), 19; got != want {
 		t.Fatalf("unexpected placeholder count: got %d want %d; query=%q", got, want, query)
 	}
 	if !strings.Contains(query, "cache_dirs_json") {
 		t.Fatalf("expected cache dirs column in clone insert query, got %q", query)
+	}
+	if !strings.Contains(query, "deploy_sync_mode") {
+		t.Fatalf("expected deploy sync mode column in clone insert query, got %q", query)
 	}
 }

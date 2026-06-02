@@ -92,6 +92,7 @@ func (s *Store) ExportBackup(ctx context.Context, repoURL, version string) (mode
 				ArtifactRules:         detail.DeployConfig.ArtifactRules,
 				RemoteSaveDir:         detail.DeployConfig.RemoteSaveDir,
 				RemoteDeployDir:       detail.DeployConfig.RemoteDeployDir,
+				DeploySyncMode:        model.NormalizeDeploySyncMode(detail.DeployConfig.DeploySyncMode),
 				PreDeployCommands:     detail.DeployConfig.PreDeployCommands,
 				PostDeployCommands:    detail.DeployConfig.PostDeployCommands,
 				VersionCount:          detail.DeployConfig.VersionCount,
@@ -273,14 +274,15 @@ func (s *Store) ImportBackup(ctx context.Context, backup model.BackupData) (mode
 		if versionCount <= 0 {
 			versionCount = 5
 		}
+		deploySyncMode := model.NormalizeDeploySyncMode(bundle.DeployConfig.DeploySyncMode)
 
 		if _, err := tx.ExecContext(
 			ctx,
 			`INSERT INTO deploy_configs (
 				project_id, host_id, build_image, build_commands_json, artifact_filter_mode,
-				artifact_rules_json, remote_save_dir, remote_deploy_dir, pre_deploy_commands_json,
+				artifact_rules_json, remote_save_dir, remote_deploy_dir, deploy_sync_mode, pre_deploy_commands_json,
 				post_deploy_commands_json, version_count, timeout_seconds, notify_webhook_url, notify_token_cipher, notification_channel_id, created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			bundle.DeployConfig.ProjectID,
 			bundle.DeployConfig.HostID,
 			bundle.DeployConfig.BuildImage,
@@ -289,6 +291,7 @@ func (s *Store) ImportBackup(ctx context.Context, backup model.BackupData) (mode
 			mustMarshal(bundle.DeployConfig.ArtifactRules),
 			bundle.DeployConfig.RemoteSaveDir,
 			bundle.DeployConfig.RemoteDeployDir,
+			deploySyncMode,
 			mustMarshal(bundle.DeployConfig.PreDeployCommands),
 			mustMarshal(bundle.DeployConfig.PostDeployCommands),
 			versionCount,

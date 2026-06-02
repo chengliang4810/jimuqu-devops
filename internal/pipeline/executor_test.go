@@ -3,7 +3,10 @@ package pipeline
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
+
+	"devops-pipeline/internal/model"
 )
 
 func TestUserVisibleErrorMessagePrefersDetailedCommandOutput(t *testing.T) {
@@ -43,5 +46,27 @@ func TestSummarizeCommandFailureDetailSkipsGenericLines(t *testing.T) {
 
 	if got != "docker: Error response from daemon: pull access denied for private-image" {
 		t.Fatalf("expected concrete docker error, got %q", got)
+	}
+}
+
+func TestDeploySyncCommandOverwriteKeepsExistingTargetFiles(t *testing.T) {
+	command := buildDeploySyncCommand(model.DeploySyncModeOverwrite, "/tmp/run", "/data/app")
+
+	if strings.Contains(command, "rm -rf") || strings.Contains(command, "find ") {
+		t.Fatalf("overwrite mode must not delete target contents, got %q", command)
+	}
+	if !strings.Contains(command, "cp -a '/tmp/run'/. '/data/app'/") {
+		t.Fatalf("expected overwrite mode to copy artifacts into target, got %q", command)
+	}
+}
+
+func TestDeploySyncCommandCleanRemovesExistingTargetFiles(t *testing.T) {
+	command := buildDeploySyncCommand(model.DeploySyncModeClean, "/tmp/run", "/data/app")
+
+	if !strings.Contains(command, "find '/data/app' -mindepth 1 -maxdepth 1 -exec rm -rf {} +") {
+		t.Fatalf("expected clean mode to delete target contents, got %q", command)
+	}
+	if !strings.Contains(command, "cp -a '/tmp/run'/. '/data/app'/") {
+		t.Fatalf("expected clean mode to copy artifacts into target, got %q", command)
 	}
 }

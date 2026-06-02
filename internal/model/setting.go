@@ -92,6 +92,7 @@ type BackupDeployConfig struct {
 	ArtifactRules         []string `json:"artifact_rules"`
 	RemoteSaveDir         string   `json:"remote_save_dir"`
 	RemoteDeployDir       string   `json:"remote_deploy_dir"`
+	DeploySyncMode        string   `json:"deploy_sync_mode"`
 	PreDeployCommands     []string `json:"pre_deploy_commands"`
 	PostDeployCommands    []string `json:"post_deploy_commands"`
 	VersionCount          int      `json:"version_count"`

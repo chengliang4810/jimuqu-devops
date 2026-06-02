@@ -37,6 +37,7 @@ export interface DeployConfig {
   host_id: number;
   remote_save_dir: string;
   remote_deploy_dir: string;
+  deploy_sync_mode?: "overwrite" | "clean";
   pre_deploy_commands: string[];
   post_deploy_commands: string[];
   version_count?: number;

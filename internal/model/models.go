@@ -11,6 +11,9 @@ const (
 	ArtifactFilterInclude = "include"
 	ArtifactFilterExclude = "exclude"
 
+	DeploySyncModeOverwrite = "overwrite"
+	DeploySyncModeClean     = "clean"
+
 	RunStatusQueued  = "queued"
 	RunStatusRunning = "running"
 	RunStatusSuccess = "success"
@@ -24,6 +27,24 @@ const (
 	GitAuthTypeToken    = "token"    // Token认证
 	GitAuthTypeSSH      = "ssh"      // SSH密钥认证
 )
+
+func IsValidDeploySyncMode(mode string) bool {
+	switch strings.TrimSpace(mode) {
+	case "", DeploySyncModeOverwrite, DeploySyncModeClean:
+		return true
+	default:
+		return false
+	}
+}
+
+func NormalizeDeploySyncMode(mode string) string {
+	switch strings.TrimSpace(mode) {
+	case DeploySyncModeClean:
+		return DeploySyncModeClean
+	default:
+		return DeploySyncModeOverwrite
+	}
+}
 
 type Host struct {
 	ID          int64     `json:"id"`
@@ -119,6 +140,7 @@ type DeployConfig struct {
 	ArtifactRules         []string  `json:"artifact_rules"`
 	RemoteSaveDir         string    `json:"remote_save_dir"`
 	RemoteDeployDir       string    `json:"remote_deploy_dir"`
+	DeploySyncMode        string    `json:"deploy_sync_mode"`
 	PreDeployCommands     []string  `json:"pre_deploy_commands"`
 	PostDeployCommands    []string  `json:"post_deploy_commands"`
 	VersionCount          int       `json:"version_count"`
@@ -140,6 +162,7 @@ type DeployConfigUpsert struct {
 	ArtifactRules         []string `json:"artifact_rules"`
 	RemoteSaveDir         string   `json:"remote_save_dir"`
 	RemoteDeployDir       string   `json:"remote_deploy_dir"`
+	DeploySyncMode        string   `json:"deploy_sync_mode"`
 	PreDeployCommands     []string `json:"pre_deploy_commands"`
 	PostDeployCommands    []string `json:"post_deploy_commands"`
 	VersionCount          int      `json:"version_count"`

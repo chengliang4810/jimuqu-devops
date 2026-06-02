@@ -72,6 +72,7 @@ type DeployConfigFormState = {
   artifact_rules: string;
   remote_save_dir: string;
   remote_deploy_dir: string;
+  deploy_sync_mode: "overwrite" | "clean";
   pre_deploy_commands: string;
   post_deploy_commands: string;
   version_count: number;
@@ -110,6 +111,7 @@ const defaultDeployConfig: DeployConfigFormState = {
   artifact_rules: "",
   remote_save_dir: "/data/jimuqu/projects",
   remote_deploy_dir: "",
+  deploy_sync_mode: "overwrite",
   pre_deploy_commands: "",
   post_deploy_commands: "",
   version_count: 5,
@@ -149,6 +151,7 @@ function mapDeployConfigToForm(config?: DeployConfig | null): DeployConfigFormSt
     artifact_rules: formatMultilineValue(config.artifact_rules),
     remote_save_dir: config.remote_save_dir || defaultDeployConfig.remote_save_dir,
     remote_deploy_dir: config.remote_deploy_dir || "",
+    deploy_sync_mode: config.deploy_sync_mode === "clean" ? "clean" : "overwrite",
     pre_deploy_commands: formatMultilineValue(config.pre_deploy_commands),
     post_deploy_commands: formatMultilineValue(config.post_deploy_commands),
     version_count: Math.max(1, config.version_count || defaultDeployConfig.version_count),
@@ -255,6 +258,7 @@ function buildDeployConfigPayload(formData: DeployConfigFormState) {
     artifact_rules: artifactRules,
     remote_save_dir: formData.remote_save_dir.trim(),
     remote_deploy_dir: formData.remote_deploy_dir.trim(),
+    deploy_sync_mode: formData.deploy_sync_mode,
     pre_deploy_commands: parseMultilineInput(formData.pre_deploy_commands),
     post_deploy_commands: parseMultilineInput(formData.post_deploy_commands),
     version_count: Math.max(1, formData.version_count),
@@ -1263,6 +1267,29 @@ export function Projects() {
                       placeholder="/data/apps/portal"
                     />
                   </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label>部署同步方式</Label>
+                  <Select
+                    value={formData.deploy_config.deploy_sync_mode}
+                    onValueChange={(value) =>
+                      setFormData({
+                        ...formData,
+                        deploy_config: {
+                          ...formData.deploy_config,
+                          deploy_sync_mode: value as DeployConfigFormState["deploy_sync_mode"],
+                        },
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="overwrite">覆盖复制（保留目标目录其他文件）</SelectItem>
+                      <SelectItem value="clean">清空后复制</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="grid gap-2">

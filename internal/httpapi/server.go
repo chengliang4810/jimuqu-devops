@@ -878,6 +878,9 @@ func validateDeployConfigInput(input model.DeployConfigUpsert) error {
 	if strings.TrimSpace(input.RemoteDeployDir) == "" {
 		return errors.New("remote_deploy_dir is required")
 	}
+	if !model.IsValidDeploySyncMode(input.DeploySyncMode) {
+		return errors.New("deploy_sync_mode must be one of overwrite/clean")
+	}
 	if input.VersionCount < 0 {
 		return errors.New("version_count cannot be negative")
 	}

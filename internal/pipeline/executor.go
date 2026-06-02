@@ -826,14 +826,9 @@ func (e *Executor) deployToRemote(bundle model.ExecutionBundle, artifactDir stri
 		}
 	}
 
-	deployCommand := fmt.Sprintf(
-		"mkdir -p %s && find %s -mindepth 1 -maxdepth 1 -exec rm -rf {} + && cp -a %s/. %s/",
-		shellQuote(bundle.DeployConfig.RemoteDeployDir),
-		shellQuote(bundle.DeployConfig.RemoteDeployDir),
-		shellQuote(saveRunDir),
-		shellQuote(bundle.DeployConfig.RemoteDeployDir),
-	)
-	logf("deploy syncing save dir to target dir")
+	deploySyncMode := model.NormalizeDeploySyncMode(bundle.DeployConfig.DeploySyncMode)
+	deployCommand := buildDeploySyncCommand(deploySyncMode, saveRunDir, bundle.DeployConfig.RemoteDeployDir)
+	logf("deploy syncing save dir to target dir: mode=%s", deploySyncMode)
 	if err := runRemoteCommandWithLogging(client, deployCommand, logf); err != nil {
 		return fmt.Errorf("deploy copy failed: %w", err)
 	}
@@ -977,6 +972,26 @@ func uploadFile(client *sftp.Client, localPath, remotePath string, logf func(str
 	}
 	logf("uploaded artifact archive: %s (completed)", filepath.Base(localPath))
 	return nil
+}
+
+func buildDeploySyncCommand(mode, saveRunDir, remoteDeployDir string) string {
+	quotedSaveRunDir := shellQuote(saveRunDir)
+	quotedRemoteDeployDir := shellQuote(remoteDeployDir)
+	if model.NormalizeDeploySyncMode(mode) == model.DeploySyncModeClean {
+		return fmt.Sprintf(
+			"mkdir -p %s && find %s -mindepth 1 -maxdepth 1 -exec rm -rf {} + && cp -a %s/. %s/",
+			quotedRemoteDeployDir,
+			quotedRemoteDeployDir,
+			quotedSaveRunDir,
+			quotedRemoteDeployDir,
+		)
+	}
+	return fmt.Sprintf(
+		"mkdir -p %s && cp -a %s/. %s/",
+		quotedRemoteDeployDir,
+		quotedSaveRunDir,
+		quotedRemoteDeployDir,
+	)
 }
 
 func pruneRemoteRunDirs(client *sftp.Client, projectSaveDir string, currentRunID int64, keepCount int, logf func(string, ...any)) error {
