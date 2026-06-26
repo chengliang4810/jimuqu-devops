@@ -17,6 +17,7 @@ import { settingApi } from "@/api/client";
 import { FailedRunAIInterpretation } from "./AIInterpretation";
 
 const RUN_LIMIT = 50;
+const RUN_AUTO_REFRESH_MS = 10_000;
 
 // 全局缓存
 let runsCache: PipelineRun[] | null = null;
@@ -317,6 +318,15 @@ export function Logs() {
     window.addEventListener("refresh-logs", handleRefresh);
     return () => window.removeEventListener("refresh-logs", handleRefresh);
   }, [pendingRunId]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      runsCache = null;
+      void loadRuns(true);
+    }, RUN_AUTO_REFRESH_MS);
+
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!pendingRunId || openingRunIdRef.current === pendingRunId) {

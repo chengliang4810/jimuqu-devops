@@ -51,6 +51,7 @@ import type {
   DeployConfig,
   ProjectDetail,
   ImageSearchItem,
+  PipelineRun,
 } from "@/types";
 import { toast } from "sonner";
 import { Copy, CopyPlus, GripVertical, LoaderCircle, Pencil, Play, Search, Trash2, X } from "lucide-react";
@@ -515,6 +516,7 @@ export function Projects() {
   const [hosts, setHosts] = useState<Host[]>(hostsCache || []);
   const [channels, setChannels] = useState<NotifyChannel[]>(channelsCache || []);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [triggeredRun, setTriggeredRun] = useState<PipelineRun | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [deletingProject, setDeletingProject] = useState<Project | null>(null);
   const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
@@ -737,12 +739,20 @@ export function Projects() {
   const handleTrigger = async (id: number) => {
     try {
       const run = await projectApi.trigger(id);
-      setPendingRunId(run.id);
-      setActiveView("logs");
+      setTriggeredRun(run);
       toast.success("构建已触发");
     } catch (error: any) {
       toast.error(error.message || "触发失败");
     }
+  };
+
+  const openTriggeredRun = () => {
+    if (!triggeredRun) {
+      return;
+    }
+    setPendingRunId(triggeredRun.id);
+    setTriggeredRun(null);
+    setActiveView("logs");
   };
 
   const copyWebhook = (token: string) => {
@@ -1394,6 +1404,25 @@ export function Projects() {
               </TabsContent>
             </Tabs>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!triggeredRun} onOpenChange={(open) => !open && setTriggeredRun(null)}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>部署已触发</DialogTitle>
+            <DialogDescription>
+              部署任务已创建，可查看执行进度。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setTriggeredRun(null)}>
+              关闭
+            </Button>
+            <Button type="button" onClick={openTriggeredRun}>
+              查看详情
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
