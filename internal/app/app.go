@@ -82,9 +82,14 @@ func (a *App) Close() error {
 
 // FixRunningRuns 修复所有卡在运行中的部署记录
 func (a *App) FixRunningRuns(ctx context.Context) error {
+	cleanupErr := a.executor.CleanupBuildContainers(ctx)
+
 	// 获取最近1000条记录进行修复，避免数据量过大
 	runs, err := a.store.ListAllRuns(ctx, 0, 1000)
 	if err != nil {
+		if cleanupErr != nil {
+			return fmt.Errorf("cleanup build containers: %v; list runs: %w", cleanupErr, err)
+		}
 		return err
 	}
 
@@ -102,7 +107,7 @@ func (a *App) FixRunningRuns(ctx context.Context) error {
 		fmt.Printf("Fixed %d interrupted deployment records\n", fixedCount)
 	}
 
-	return nil
+	return cleanupErr
 }
 
 func initializeAdminUser(ctx context.Context, store *store.Store, cfg config.Config) error {

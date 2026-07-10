@@ -47,7 +47,10 @@ type Executor struct {
 	notifySender  *notification.Sender
 }
 
-const maxCommandLogTokenSize = 1024 * 1024
+const (
+	maxCommandLogTokenSize = 1024 * 1024
+	buildContainerLabel    = "jimuqu-devops.build=true"
+)
 
 var ansiEscapePattern = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
 
@@ -399,7 +402,7 @@ func (e *Executor) runPipeline(ctx context.Context, runID int64, bundle model.Ex
 	if err != nil {
 		return result, fmt.Errorf("load build cache dirs: %w", err)
 	}
-	if err := e.runDockerBuildWithLogging(ctx, sourceDir, bundle.DeployConfig.BuildImage, bundle.DeployConfig.BuildCommands, cacheDirs, logf); err != nil {
+	if err := e.runDockerBuildWithLogging(ctx, runID, sourceDir, bundle.DeployConfig.BuildImage, bundle.DeployConfig.BuildCommands, cacheDirs, logf); err != nil {
 		return result, fmt.Errorf("docker build stage failed: %w", err)
 	}
 
@@ -519,7 +522,7 @@ func (e *Executor) runDockerBuild(ctx context.Context, sourceDir, image string, 
 	return combinedOutput.String(), fmt.Errorf("all docker mirror candidates failed")
 }
 
-func (e *Executor) runDockerBuildWithLogging(ctx context.Context, sourceDir, image string, commands, cacheDirs []string, logf func(string, ...any)) error {
+func (e *Executor) runDockerBuildWithLogging(ctx context.Context, runID int64, sourceDir, image string, commands, cacheDirs []string, logf func(string, ...any)) error {
 	script := "set -eu\n" + strings.Join(commands, "\n")
 	absSourceDir, err := filepath.Abs(sourceDir)
 	if err != nil {
@@ -541,7 +544,7 @@ func (e *Executor) runDockerBuildWithLogging(ctx context.Context, sourceDir, ima
 	var lastErr error
 	for _, candidateImage := range candidateImages {
 		logf("stage build: trying image source=%s", candidateImage)
-		runErr := e.runDockerCommandWithLogging(ctx, absSourceDir, candidateImage, script, envArgs, cacheArgs, logf)
+		runErr := e.runDockerCommandWithLogging(ctx, runID, absSourceDir, candidateImage, script, envArgs, cacheArgs, logf)
 		if runErr == nil {
 			return nil
 		}
@@ -568,17 +571,51 @@ func (e *Executor) runDockerCommand(ctx context.Context, absSourceDir, image, sc
 	return e.runLocalCommand(ctx, "docker", args)
 }
 
-func (e *Executor) runDockerCommandWithLogging(ctx context.Context, absSourceDir, image, script string, envArgs, cacheArgs []string, logf func(string, ...any)) error {
-	mountDir := filepath.ToSlash(absSourceDir)
+func (e *Executor) runDockerCommandWithLogging(ctx context.Context, runID int64, absSourceDir, image, script string, envArgs, cacheArgs []string, logf func(string, ...any)) error {
+	containerName := buildContainerName(runID)
+	defer e.removeBuildContainer(containerName)
+	return e.runLocalCommandWithLogging(ctx, logf, "docker", dockerBuildRunArgs(runID, absSourceDir, image, script, envArgs, cacheArgs))
+}
+
+func buildContainerName(runID int64) string {
+	return fmt.Sprintf("jimuqu-devops-build-%d", runID)
+}
+
+func dockerBuildRunArgs(runID int64, absSourceDir, image, script string, envArgs, cacheArgs []string) []string {
 	args := []string{
 		"run", "--rm",
-		"-v", fmt.Sprintf("%s:/workspace", mountDir),
+		"--name", buildContainerName(runID),
+		"--label", buildContainerLabel,
+		"-v", fmt.Sprintf("%s:/workspace", filepath.ToSlash(absSourceDir)),
 		"-w", "/workspace",
 	}
 	args = append(args, cacheArgs...)
 	args = append(args, envArgs...)
-	args = append(args, image, "sh", "-lc", script)
-	return e.runLocalCommandWithLogging(ctx, logf, "docker", args)
+	return append(args, image, "sh", "-lc", script)
+}
+
+func (e *Executor) removeBuildContainer(containerName string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	output, err := e.runLocalCommand(ctx, "docker", []string{"rm", "-f", containerName})
+	if err != nil && !strings.Contains(output, "No such container") {
+		e.logger.Warn("remove build container failed", "container", containerName, "error", err)
+	}
+}
+
+func (e *Executor) CleanupBuildContainers(ctx context.Context) error {
+	output, err := e.runLocalCommand(ctx, "docker", []string{"ps", "-aq", "--filter", "label=" + buildContainerLabel})
+	if err != nil {
+		return fmt.Errorf("list build containers: %w", err)
+	}
+	containerIDs := strings.Fields(output)
+	if len(containerIDs) == 0 {
+		return nil
+	}
+	if _, err := e.runLocalCommand(ctx, "docker", append([]string{"rm", "-f"}, containerIDs...)); err != nil {
+		return fmt.Errorf("remove build containers: %w", err)
+	}
+	return nil
 }
 
 func (e *Executor) dockerCacheArgs(cacheDirs []string) ([]string, error) {
