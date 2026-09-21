@@ -15,6 +15,9 @@ WORKDIR /app
 ARG APP_VERSION=dev
 ARG APP_COMMIT=
 ARG APP_BUILD_TIME=
+ARG GOPROXY=https://goproxy.cn,direct
+
+ENV GOPROXY=${GOPROXY}
 
 COPY go.mod go.sum ./
 RUN go mod download
