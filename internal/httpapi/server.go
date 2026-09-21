@@ -676,7 +676,14 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		s.writeBadRequest(w, err)
 		return
 	}
-	if branch != "" && branch != project.Branch {
+	if branch == "" {
+		writeJSON(w, http.StatusOK, map[string]string{
+			"status": "ignored",
+			"reason": "webhook payload does not contain a branch",
+		})
+		return
+	}
+	if branch != project.Branch {
 		s.writeBadRequest(w, fmt.Errorf("branch mismatch: expected %s got %s", project.Branch, branch))
 		return
 	}

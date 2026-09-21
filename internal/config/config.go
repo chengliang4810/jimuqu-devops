@@ -8,6 +8,7 @@ import (
 type Config struct {
 	Addr          string
 	DataDir       string
+	DockerDataDir string
 	DBDriver      string
 	DBSource      string
 	WorkspaceDir  string
@@ -25,6 +26,7 @@ func Load() Config {
 	return Config{
 		Addr:          env("APP_ADDR", ":18080"),
 		DataDir:       dataDir,
+		DockerDataDir: env("APP_DOCKER_DATA_DIR", ""),
 		DBDriver:      dbDriver,
 		DBSource:      dbSource,
 		WorkspaceDir:  env("APP_WORKSPACE_DIR", filepath.Join(dataDir, "workspaces")),

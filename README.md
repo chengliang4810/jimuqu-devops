@@ -250,6 +250,7 @@ export ADMIN_PASSWORD="admin123"
 | --- | --- | --- |
 | `APP_ADDR` | `:18080` | 后端监听地址，不是对外访问 URL |
 | `APP_DATA_DIR` | `./data` | 数据目录 |
+| `APP_DOCKER_DATA_DIR` | 空 | 通过宿主机 Docker Socket 启动构建容器时，`APP_DATA_DIR` 在 Docker 宿主机上的实际路径 |
 | `APP_DB_DRIVER` | `sqlite` | 数据库驱动，支持 `sqlite` / `mysql` |
 | `APP_DB_SOURCE` | `APP_DATA_DIR/pipeline.db` | SQLite 文件路径或 MySQL DSN；SQLite 默认跟随 `APP_DATA_DIR` |
 | `APP_WORKSPACE_DIR` | `APP_DATA_DIR/workspaces` | 构建工作目录；通常不需要单独配置 |

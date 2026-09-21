@@ -63,7 +63,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		return nil, fmt.Errorf("apply run retention: %w", err)
 	}
 
-	executor := pipeline.NewExecutor(appStore, logger, cfg.WorkspaceDir, artifactDir, cacheDir)
+	executor := pipeline.NewExecutor(appStore, logger, cfg.DataDir, cfg.DockerDataDir, cfg.WorkspaceDir, artifactDir, cacheDir)
 
 	return &App{
 		store:    appStore,

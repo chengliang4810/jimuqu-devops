@@ -36,15 +36,17 @@ import (
 )
 
 type Executor struct {
-	store         *store.Store
-	logger        *slog.Logger
-	workspaceRoot string
-	artifactRoot  string
-	cacheRoot     string
-	httpClient    *http.Client
-	cancelFuncs   map[int64]context.CancelFunc
-	cancelMutex   sync.Mutex
-	notifySender  *notification.Sender
+	store          *store.Store
+	logger         *slog.Logger
+	dataRoot       string
+	dockerDataRoot string
+	workspaceRoot  string
+	artifactRoot   string
+	cacheRoot      string
+	httpClient     *http.Client
+	cancelFuncs    map[int64]context.CancelFunc
+	cancelMutex    sync.Mutex
+	notifySender   *notification.Sender
 }
 
 const (
@@ -113,13 +115,15 @@ func (b *recentCommandLines) Lines() []string {
 	return append([]string(nil), b.lines...)
 }
 
-func NewExecutor(store *store.Store, logger *slog.Logger, workspaceRoot, artifactRoot, cacheRoot string) *Executor {
+func NewExecutor(store *store.Store, logger *slog.Logger, dataRoot, dockerDataRoot, workspaceRoot, artifactRoot, cacheRoot string) *Executor {
 	return &Executor{
-		store:         store,
-		logger:        logger,
-		workspaceRoot: workspaceRoot,
-		artifactRoot:  artifactRoot,
-		cacheRoot:     cacheRoot,
+		store:          store,
+		logger:         logger,
+		dataRoot:       dataRoot,
+		dockerDataRoot: dockerDataRoot,
+		workspaceRoot:  workspaceRoot,
+		artifactRoot:   artifactRoot,
+		cacheRoot:      cacheRoot,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -559,7 +563,7 @@ func (e *Executor) runDockerBuildWithLogging(ctx context.Context, runID int64, s
 }
 
 func (e *Executor) runDockerCommand(ctx context.Context, absSourceDir, image, script string, envArgs, cacheArgs []string) (string, error) {
-	mountDir := filepath.ToSlash(absSourceDir)
+	mountDir := filepath.ToSlash(e.dockerHostPath(absSourceDir))
 	args := []string{
 		"run", "--rm",
 		"-v", fmt.Sprintf("%s:/workspace", mountDir),
@@ -574,7 +578,7 @@ func (e *Executor) runDockerCommand(ctx context.Context, absSourceDir, image, sc
 func (e *Executor) runDockerCommandWithLogging(ctx context.Context, runID int64, absSourceDir, image, script string, envArgs, cacheArgs []string, logf func(string, ...any)) error {
 	containerName := buildContainerName(runID)
 	defer e.removeBuildContainer(containerName)
-	return e.runLocalCommandWithLogging(ctx, logf, "docker", dockerBuildRunArgs(runID, absSourceDir, image, script, envArgs, cacheArgs))
+	return e.runLocalCommandWithLogging(ctx, logf, "docker", dockerBuildRunArgs(runID, e.dockerHostPath(absSourceDir), image, script, envArgs, cacheArgs))
 }
 
 func buildContainerName(runID int64) string {
@@ -629,7 +633,7 @@ func (e *Executor) dockerCacheArgs(cacheDirs []string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		args = append(args, "-v", fmt.Sprintf("%s:%s", filepath.ToSlash(hostDir), containerDir))
+		args = append(args, "-v", fmt.Sprintf("%s:%s", filepath.ToSlash(e.dockerHostPath(hostDir)), containerDir))
 	}
 
 	return args, nil
@@ -656,6 +660,26 @@ func (e *Executor) ensureCacheDir(containerDir string) (string, error) {
 	}
 
 	return hostDir, nil
+}
+
+func (e *Executor) dockerHostPath(containerPath string) string {
+	if strings.TrimSpace(e.dockerDataRoot) == "" || strings.TrimSpace(e.dataRoot) == "" {
+		return containerPath
+	}
+
+	absDataRoot, err := filepath.Abs(e.dataRoot)
+	if err != nil {
+		return containerPath
+	}
+	absPath, err := filepath.Abs(containerPath)
+	if err != nil {
+		return containerPath
+	}
+	rel, err := filepath.Rel(absDataRoot, absPath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return containerPath
+	}
+	return filepath.Join(e.dockerDataRoot, rel)
 }
 
 func (e *Executor) buildCommandEnv(ctx context.Context) ([]string, error) {
@@ -1456,7 +1480,15 @@ func normalizeRules(rules []string) []string {
 		cleaned := strings.TrimSpace(filepath.ToSlash(rule))
 		cleaned = strings.TrimPrefix(cleaned, "./")
 		cleaned = path.Clean(cleaned)
+		if cleaned == "**" {
+			cleaned = "."
+		} else {
+			cleaned = strings.TrimSuffix(cleaned, "/**")
+		}
 		if cleaned == "." || cleaned == "" {
+			if cleaned == "." {
+				normalized = append(normalized, cleaned)
+			}
 			continue
 		}
 		normalized = append(normalized, cleaned)
@@ -1466,6 +1498,9 @@ func normalizeRules(rules []string) []string {
 
 func matchesRule(rel string, rules []string) bool {
 	for _, rule := range rules {
+		if rule == "." {
+			return true
+		}
 		if rel == rule || strings.HasPrefix(rel, rule+"/") {
 			return true
 		}
@@ -1626,7 +1661,7 @@ func (e *Executor) createTempSSHKeyFile(privateKey string) (string, error) {
 }
 
 func (e *Executor) runDockerGitCommandWithLogging(ctx context.Context, absWorkspaceDir, image string, gitArgs, envArgs, extraArgs []string, logf func(string, ...any)) error {
-	mountDir := filepath.ToSlash(absWorkspaceDir)
+	mountDir := filepath.ToSlash(e.dockerHostPath(absWorkspaceDir))
 	args := []string{
 		"run", "--rm",
 		"-v", fmt.Sprintf("%s:/workspace", mountDir),
@@ -1691,7 +1726,7 @@ func (e *Executor) readGitMetadata(ctx context.Context, sourceDir string) (gitMe
 }
 
 func (e *Executor) runDockerGitReadOnly(ctx context.Context, absSourceDir, image string, gitArgs, envArgs []string) (string, error) {
-	mountDir := filepath.ToSlash(absSourceDir)
+	mountDir := filepath.ToSlash(e.dockerHostPath(absSourceDir))
 	args := []string{
 		"run", "--rm",
 		"-v", fmt.Sprintf("%s:/workspace", mountDir),

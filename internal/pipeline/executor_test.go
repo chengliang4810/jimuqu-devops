@@ -3,6 +3,8 @@ package pipeline
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -80,5 +82,48 @@ func TestDeploySyncCommandCleanRemovesExistingTargetFiles(t *testing.T) {
 	}
 	if !strings.Contains(command, "cp -a '/tmp/run'/. '/data/app'/") {
 		t.Fatalf("expected clean mode to copy artifacts into target, got %q", command)
+	}
+}
+
+func TestFilterArtifactsSupportsRecursiveDirectoryRule(t *testing.T) {
+	sourceDir := t.TempDir()
+	artifactDir := t.TempDir()
+	assetPath := filepath.Join(sourceDir, "dist", "build", "h5", "assets", "app.js")
+	if err := os.MkdirAll(filepath.Dir(assetPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(assetPath, []byte("ok"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := filterArtifacts(sourceDir, artifactDir, model.ArtifactFilterInclude, []string{"dist/build/h5/**"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(artifactDir, "dist", "build", "h5", "assets", "app.js")); err != nil {
+		t.Fatalf("expected recursive artifact rule to copy nested file: %v", err)
+	}
+}
+
+func TestDockerHostPathMapsContainerDataDirToHostDataDir(t *testing.T) {
+	executor := &Executor{
+		dataRoot:       "/app/data",
+		dockerDataRoot: "/opt/1panel/docker/compose/jimuqu-devops/data",
+	}
+
+	got := executor.dockerHostPath("/app/data/workspaces/run-1/source")
+	want := "/opt/1panel/docker/compose/jimuqu-devops/data/workspaces/run-1/source"
+	if got != want {
+		t.Fatalf("expected docker host path %q, got %q", want, got)
+	}
+}
+
+func TestDockerHostPathLeavesExternalPathUnchanged(t *testing.T) {
+	executor := &Executor{
+		dataRoot:       "/app/data",
+		dockerDataRoot: "/srv/jimuqu-devops/data",
+	}
+
+	if got := executor.dockerHostPath("/tmp/git-key"); got != "/tmp/git-key" {
+		t.Fatalf("expected external path to remain unchanged, got %q", got)
 	}
 }

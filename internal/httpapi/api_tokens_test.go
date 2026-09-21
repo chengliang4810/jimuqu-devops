@@ -35,7 +35,7 @@ func TestAPITokenAuthenticatesProtectedRoutesAndRevocation(t *testing.T) {
 	}
 
 	logger := slog.New(slog.DiscardHandler)
-	executor := pipeline.NewExecutor(appStore, logger, t.TempDir(), t.TempDir(), t.TempDir())
+	executor := pipeline.NewExecutor(appStore, logger, t.TempDir(), "", t.TempDir(), t.TempDir(), t.TempDir())
 	handler := New(appStore, executor, logger, config.Config{Secret: "test-secret"})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/hosts", nil)
